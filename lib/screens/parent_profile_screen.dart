@@ -45,20 +45,24 @@ class _ParentProfileScreenState extends State<ParentProfileScreen>
   }
 
   Animation<double> _fade(double start, double end) {
-    return Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: Interval(start, end, curve: Curves.easeOut),
-    ));
+    return Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _entranceCtrl,
+        curve: Interval(start, end, curve: Curves.easeOut),
+      ),
+    );
   }
 
   Animation<Offset> _slide(double start, double end) {
     return Tween<Offset>(
       begin: const Offset(0, 0.12),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: Interval(start, end, curve: Curves.easeOutCubic),
-    ));
+    ).animate(
+      CurvedAnimation(
+        parent: _entranceCtrl,
+        curve: Interval(start, end, curve: Curves.easeOutCubic),
+      ),
+    );
   }
 
   Widget _animated(int step, Widget child) {
@@ -66,10 +70,7 @@ class _ParentProfileScreenState extends State<ParentProfileScreen>
     final e = (s + 0.3).clamp(0.0, 1.0);
     return SlideTransition(
       position: _slide(s, e),
-      child: FadeTransition(
-        opacity: _fade(s, e),
-        child: child,
-      ),
+      child: FadeTransition(opacity: _fade(s, e), child: child),
     );
   }
 
@@ -106,75 +107,91 @@ class _ParentProfileScreenState extends State<ParentProfileScreen>
                   const SizedBox(height: 28),
 
                   // ── First Name ──
-                  _animated(1, Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildLabel('Your first name'),
-                      const SizedBox(height: 8),
-                      _buildTextField(
-                        controller: _nameController,
-                        hint: 'Enter your name',
-                        keyboardType: TextInputType.name,
-                        textCapitalization: TextCapitalization.words,
-                      ),
-                    ],
-                  )),
+                  _animated(
+                    1,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLabel('Your first name'),
+                        const SizedBox(height: 8),
+                        _buildTextField(
+                          controller: _nameController,
+                          hint: 'Enter your name',
+                          keyboardType: TextInputType.name,
+                          textCapitalization: TextCapitalization.words,
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 24),
 
                   // ── WhatsApp Number ──
-                  _animated(2, Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildLabel('Your WhatsApp number'),
-                      const SizedBox(height: 8),
-                      _buildTextField(
-                        controller: _phoneController,
-                        hint: '+237',
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
-                        ],
-                      ),
-                    ],
-                  )),
+                  _animated(
+                    2,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLabel('Your WhatsApp number'),
+                        const SizedBox(height: 8),
+                        _buildTextField(
+                          controller: _phoneController,
+                          hint: '+237',
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'[0-9+]'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 24),
 
                   // ── Create PIN ──
-                  _animated(3, Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildLabel('Create a 4-digit PIN'),
-                      const SizedBox(height: 8),
-                      _buildPinField(
-                        controller: _pinController,
-                        visible: _pinVisible,
-                        onToggleVisibility: () {
-                          setState(() => _pinVisible = !_pinVisible);
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      _buildPinDots(_pinController),
-                    ],
-                  )),
+                  _animated(
+                    3,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLabel('Create a 4-digit PIN'),
+                        const SizedBox(height: 8),
+                        _buildPinField(
+                          controller: _pinController,
+                          visible: _pinVisible,
+                          onToggleVisibility: () {
+                            setState(() => _pinVisible = !_pinVisible);
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        _buildPinDots(_pinController),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 24),
 
                   // ── Confirm PIN ──
-                  _animated(4, Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildLabel('Confirm PIN'),
-                      const SizedBox(height: 8),
-                      _buildPinField(
-                        controller: _confirmPinController,
-                        visible: _confirmPinVisible,
-                        onToggleVisibility: () {
-                          setState(() => _confirmPinVisible = !_confirmPinVisible);
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      _buildPinDots(_confirmPinController),
-                    ],
-                  )),
+                  _animated(
+                    4,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLabel('Confirm PIN'),
+                        const SizedBox(height: 8),
+                        _buildPinField(
+                          controller: _confirmPinController,
+                          visible: _confirmPinVisible,
+                          onToggleVisibility: () {
+                            setState(
+                              () => _confirmPinVisible = !_confirmPinVisible,
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        _buildPinDots(_confirmPinController),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 20),
 
                   // ── Info text ──
@@ -204,7 +221,9 @@ class _ParentProfileScreenState extends State<ParentProfileScreen>
                           backgroundColor: KovaColors.primary,
                           foregroundColor: KovaColors.textOnDark,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(KovaRadius.pill),
+                            borderRadius: BorderRadius.circular(
+                              KovaRadius.pill,
+                            ),
                           ),
                           elevation: 0,
                         ),
@@ -273,24 +292,15 @@ class _ParentProfileScreenState extends State<ParentProfileScreen>
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(KovaRadius.button),
-          borderSide: BorderSide(
-            color: KovaColors.divider,
-            width: 1,
-          ),
+          borderSide: BorderSide(color: KovaColors.divider, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(KovaRadius.button),
-          borderSide: BorderSide(
-            color: KovaColors.divider,
-            width: 1,
-          ),
+          borderSide: BorderSide(color: KovaColors.divider, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(KovaRadius.button),
-          borderSide: BorderSide(
-            color: KovaColors.primary,
-            width: 1.5,
-          ),
+          borderSide: BorderSide(color: KovaColors.primary, width: 1.5),
         ),
       ),
     );
@@ -364,9 +374,7 @@ class _ParentProfileScreenState extends State<ParentProfileScreen>
           height: 14,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isFilled
-                ? KovaColors.primary
-                : Colors.transparent,
+            color: isFilled ? KovaColors.primary : Colors.transparent,
             border: Border.all(
               color: KovaColors.primary.withValues(alpha: isFilled ? 1.0 : 0.3),
               width: 1.5,

@@ -60,6 +60,7 @@ class KovaSpacing {
   static const double lg = 24.0;
   static const double xl = 32.0;
   static const double xxl = 48.0;
+  static const double xxxl = 64.0;
 }
 
 /// KOVA Asset Paths
@@ -80,14 +81,9 @@ class KovaRoutes {
   static const String whatsappConnect = '/whatsapp-connect';
   static const String monitoredApps = '/monitored-apps';
   static const String accessibilitySetup = '/accessibility-setup';
-  static const String setupComplete = '/setup-complete';
+  static const String success = '/success';
   static const String dashboard = '/dashboard';
-  static const String dashboardAlert = '/dashboard-alert';
-  static const String alertDetail = '/alert-detail';
-  static const String pinOverlay = '/pin-overlay';
   static const String alertHistory = '/alert-history';
-  static const String appControl = '/app-control';
+  static const String alertDetail = '/alert-detail';
   static const String settings = '/settings';
-  static const String childBlock = '/child-block';
-  static const String childStats = '/child-stats';
 }

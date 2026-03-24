@@ -34,15 +34,14 @@ class _ChildProfileScreenState extends State<ChildProfileScreen>
       duration: const Duration(milliseconds: 600),
     );
 
-    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
-    );
+    _fadeAnimation = Tween<double>(
+      begin: 0,
+      end: 1,
+    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.1),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
-    );
+    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
 
     // Start animation
     _animController.forward();
@@ -250,7 +249,7 @@ class _ChildProfileScreenState extends State<ChildProfileScreen>
                             color: KovaColors.primary.withValues(alpha: 0.05),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
-                          )
+                          ),
                         ],
                       ),
                       child: Column(
@@ -263,8 +262,9 @@ class _ChildProfileScreenState extends State<ChildProfileScreen>
                             ),
                             decoration: BoxDecoration(
                               color: _modeColor.withValues(alpha: 0.1),
-                              borderRadius:
-                                  BorderRadius.circular(KovaRadius.pill),
+                              borderRadius: BorderRadius.circular(
+                                KovaRadius.pill,
+                              ),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -388,24 +388,15 @@ class _ChildProfileScreenState extends State<ChildProfileScreen>
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(KovaRadius.button),
-          borderSide: const BorderSide(
-            color: KovaColors.divider,
-            width: 1,
-          ),
+          borderSide: const BorderSide(color: KovaColors.divider, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(KovaRadius.button),
-          borderSide: const BorderSide(
-            color: KovaColors.divider,
-            width: 1,
-          ),
+          borderSide: const BorderSide(color: KovaColors.divider, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(KovaRadius.button),
-          borderSide: const BorderSide(
-            color: KovaColors.primary,
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: KovaColors.primary, width: 1.5),
         ),
       ),
     );

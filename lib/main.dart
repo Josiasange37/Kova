@@ -9,6 +9,13 @@ import 'package:kova/screens/parent_profile_screen.dart';
 import 'package:kova/screens/child_profile_screen.dart';
 import 'package:kova/screens/whatsapp_connect_screen.dart';
 import 'package:kova/screens/monitored_apps_screen.dart';
+import 'package:kova/screens/welcome_screen.dart';
+import 'package:kova/screens/accessibility_setup_screen.dart';
+import 'package:kova/screens/success_screen.dart';
+import 'package:kova/screens/dashboard_screen.dart';
+import 'package:kova/screens/alert_history_screen.dart';
+import 'package:kova/screens/alert_detail_screen.dart';
+import 'package:kova/screens/settings_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,10 +27,12 @@ void main() {
   ]);
 
   // Transparent status bar to blend with background
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+    ),
+  );
 
   runApp(const KovaApp());
 }
@@ -33,10 +42,17 @@ class KovaApp extends StatelessWidget {
 
   // ── Route → Screen mapping ──
   static final _routeBuilders = <String, Widget Function()>{
+    KovaRoutes.welcome: () => const WelcomeScreen(),
     KovaRoutes.parentProfile: () => const ParentProfileScreen(),
     KovaRoutes.childProfile: () => const ChildProfileScreen(),
     KovaRoutes.whatsappConnect: () => const WhatsappConnectScreen(),
     KovaRoutes.monitoredApps: () => const MonitoredAppsScreen(),
+    KovaRoutes.accessibilitySetup: () => const AccessibilitySetupScreen(),
+    KovaRoutes.success: () => const SuccessScreen(),
+    KovaRoutes.dashboard: () => const DashboardScreen(),
+    KovaRoutes.alertHistory: () => const AlertHistoryScreen(),
+    KovaRoutes.alertDetail: () => const AlertDetailScreen(),
+    KovaRoutes.settings: () => const SettingsScreen(),
   };
 
   @override

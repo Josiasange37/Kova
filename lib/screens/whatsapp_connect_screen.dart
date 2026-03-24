@@ -1,6 +1,7 @@
-// whatsapp_connect_screen.dart — KOVA WhatsApp Connection (Redesigned)
-// Two modes: QR Code scan or Pairing Code — matching mockup exactly
+// whatsapp_connect_screen.dart — KOVA Child Device Connection
+// Two modes: QR Code scan or Pairing Code — for pairing parent with child device
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:kova/core/constants.dart';
@@ -18,6 +19,8 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
   int _activeTab = 0;
   bool _isConnected = false;
   bool _isConnecting = false;
+
+  static const String _pairingCode = 'KOVA-7X4Q-9N2P';
 
   // ── Entrance animations ──
   late AnimationController _entranceCtrl;
@@ -54,83 +57,95 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
       duration: const Duration(milliseconds: 1000),
     );
 
-    _titleFade = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
-    ));
-    _titleSlide = Tween<Offset>(
-      begin: const Offset(0, 0.15),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: const Interval(0.0, 0.3, curve: Curves.easeOutCubic),
-    ));
+    _titleFade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _entranceCtrl,
+        curve: const Interval(0.0, 0.3, curve: Curves.easeOut),
+      ),
+    );
+    _titleSlide = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _entranceCtrl,
+            curve: const Interval(0.0, 0.3, curve: Curves.easeOutCubic),
+          ),
+        );
 
-    _tabsFade = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: const Interval(0.15, 0.45, curve: Curves.easeOut),
-    ));
-    _tabsSlide = Tween<Offset>(
-      begin: const Offset(0, 0.15),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: const Interval(0.15, 0.45, curve: Curves.easeOutCubic),
-    ));
+    _tabsFade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _entranceCtrl,
+        curve: const Interval(0.15, 0.45, curve: Curves.easeOut),
+      ),
+    );
+    _tabsSlide = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _entranceCtrl,
+            curve: const Interval(0.15, 0.45, curve: Curves.easeOutCubic),
+          ),
+        );
 
-    _contentFade = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: const Interval(0.3, 0.65, curve: Curves.easeOut),
-    ));
-    _contentSlide = Tween<Offset>(
-      begin: const Offset(0, 0.12),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: const Interval(0.3, 0.65, curve: Curves.easeOutCubic),
-    ));
+    _contentFade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _entranceCtrl,
+        curve: const Interval(0.3, 0.65, curve: Curves.easeOut),
+      ),
+    );
+    _contentSlide =
+        Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _entranceCtrl,
+            curve: const Interval(0.3, 0.65, curve: Curves.easeOutCubic),
+          ),
+        );
 
-    _stepsFade = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: const Interval(0.5, 0.8, curve: Curves.easeOut),
-    ));
-    _stepsSlide = Tween<Offset>(
-      begin: const Offset(0, 0.12),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: const Interval(0.5, 0.8, curve: Curves.easeOutCubic),
-    ));
+    _stepsFade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _entranceCtrl,
+        curve: const Interval(0.5, 0.8, curve: Curves.easeOut),
+      ),
+    );
+    _stepsSlide = Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _entranceCtrl,
+            curve: const Interval(0.5, 0.8, curve: Curves.easeOutCubic),
+          ),
+        );
 
-    _bottomFade = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: const Interval(0.7, 1.0, curve: Curves.easeOut),
-    ));
-    _bottomSlide = Tween<Offset>(
-      begin: const Offset(0, 0.2),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _entranceCtrl,
-      curve: const Interval(0.7, 1.0, curve: Curves.easeOutCubic),
-    ));
+    _bottomFade = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _entranceCtrl,
+        curve: const Interval(0.7, 1.0, curve: Curves.easeOut),
+      ),
+    );
+    _bottomSlide = Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _entranceCtrl,
+            curve: const Interval(0.7, 1.0, curve: Curves.easeOutCubic),
+          ),
+        );
 
     // ── QR scan line ──
     _scanLineCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2200),
     )..repeat(reverse: true);
-    _scanLinePosition = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _scanLineCtrl, curve: Curves.easeInOut),
-    );
+    _scanLinePosition = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _scanLineCtrl, curve: Curves.easeInOut));
 
     // ── Pulse for waiting ──
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat(reverse: true);
-    _pulseOpacity = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
+    _pulseOpacity = Tween<double>(
+      begin: 0.5,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
   }
 
   @override
@@ -162,11 +177,15 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
       backgroundColor: KovaColors.background,
       body: SafeArea(
         child: AnimatedBuilder(
-          animation: Listenable.merge([_entranceCtrl, _scanLineCtrl, _pulseCtrl]),
+          animation: Listenable.merge([
+            _entranceCtrl,
+            _scanLineCtrl,
+            _pulseCtrl,
+          ]),
           builder: (context, _) {
             return Column(
               children: [
-                // ── Back button + title area ──
+                // ── Back button ──
                 Padding(
                   padding: const EdgeInsets.only(
                     left: 8,
@@ -205,7 +224,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Connect WhatsApp',
+                                  'Connect with Child',
                                   style: GoogleFonts.nunito(
                                     fontSize: 24,
                                     fontWeight: FontWeight.w800,
@@ -249,7 +268,8 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
                               child: _activeTab == 0
                                   ? _buildQRContent(key: const ValueKey('qr'))
                                   : _buildPairingContent(
-                                      key: const ValueKey('pairing')),
+                                      key: const ValueKey('pairing'),
+                                    ),
                             ),
                           ),
                         ),
@@ -293,7 +313,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
   }
 
   // ═══════════════════════════════════════════
-  // ──  Tab Toggle (Custom, not TabBar)
+  // ──  Tab Toggle
   // ═══════════════════════════════════════════
   Widget _buildTabToggle() {
     return Container(
@@ -305,9 +325,13 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
       padding: const EdgeInsets.all(4),
       child: Row(
         children: [
-          Expanded(child: _buildTabButton(0, Icons.qr_code_rounded, 'Scan QR code')),
+          Expanded(
+            child: _buildTabButton(0, Icons.qr_code_rounded, 'Scan QR code'),
+          ),
           const SizedBox(width: 4),
-          Expanded(child: _buildTabButton(1, Icons.tag_rounded, 'Use pairing code')),
+          Expanded(
+            child: _buildTabButton(1, Icons.tag_rounded, 'Use pairing code'),
+          ),
         ],
       ),
     );
@@ -331,7 +355,9 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
             Icon(
               icon,
               size: 18,
-              color: isActive ? KovaColors.textOnDark : KovaColors.textSecondary,
+              color: isActive
+                  ? KovaColors.textOnDark
+                  : KovaColors.textSecondary,
             ),
             const SizedBox(width: 6),
             Text(
@@ -339,7 +365,9 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
               style: GoogleFonts.nunito(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: isActive ? KovaColors.textOnDark : KovaColors.textSecondary,
+                color: isActive
+                    ? KovaColors.textOnDark
+                    : KovaColors.textSecondary,
               ),
             ),
           ],
@@ -371,11 +399,11 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
         ),
         child: Stack(
           children: [
-            // QR Code from qr_flutter
+            // QR Code
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: QrImageView(
-                data: 'https://kova.app/link/KOVA-7X4Q-9N2P',
+                data: 'kova://pair/$_pairingCode',
                 version: QrVersions.auto,
                 size: 168,
                 eyeStyle: const QrEyeStyle(
@@ -455,22 +483,10 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
         decoration: BoxDecoration(
           color: KovaColors.primary.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: KovaColors.primary.withValues(alpha: 0.12),
-          ),
+          border: Border.all(color: KovaColors.primary.withValues(alpha: 0.12)),
         ),
         child: Column(
           children: [
-            Text(
-              'YOUR PAIRING CODE',
-              style: GoogleFonts.nunito(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: KovaColors.textSecondary,
-                letterSpacing: 1.5,
-              ),
-            ),
-            const SizedBox(height: 14),
             TweenAnimationBuilder<double>(
               tween: Tween(begin: 0.95, end: 1.0),
               duration: const Duration(milliseconds: 600),
@@ -479,9 +495,9 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
                 return Transform.scale(scale: scale, child: child);
               },
               child: Text(
-                'KOVA-7X4Q-9N2P',
+                _pairingCode,
                 style: GoogleFonts.nunito(
-                  fontSize: 26,
+                  fontSize: 28,
                   fontWeight: FontWeight.w900,
                   color: KovaColors.primary,
                   letterSpacing: 2.5,
@@ -492,6 +508,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
             // Copy button
             GestureDetector(
               onTap: () {
+                Clipboard.setData(const ClipboardData(text: _pairingCode));
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -539,14 +556,14 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
   Widget _buildSteps() {
     final steps = _activeTab == 0
         ? [
-            'Open WhatsApp on your child\'s phone',
-            'Go to Settings → Linked Devices',
-            'Scan this QR code from the child\'s phone',
+            'Open Kova on your child\'s phone',
+            'Go to Settings → Pair with Parent',
+            'Scan this QR code',
           ]
         : [
-            'Open WhatsApp on your child\'s phone',
-            'Go to Settings → Linked Devices',
-            'Tap "Link with phone number" and enter the code',
+            'Open Kova on your child\'s phone',
+            'Go to Settings → Pair with Parent',
+            'Enter the pairing code above',
           ];
 
     return Column(
@@ -605,12 +622,8 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
 
     if (_isConnected) {
       statusColor = KovaColors.success;
-      statusText = 'Connected successfully';
+      statusText = 'Connected successfully!';
       statusIcon = Icons.check_circle_rounded;
-    } else if (_isConnecting) {
-      statusColor = const Color(0xFFF5A623);
-      statusText = 'Waiting for connection...';
-      statusIcon = Icons.access_time_rounded;
     } else {
       statusColor = const Color(0xFFF5A623);
       statusText = 'Waiting for connection...';
@@ -625,9 +638,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
       decoration: BoxDecoration(
         color: statusColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: statusColor.withValues(alpha: 0.25),
-        ),
+        border: Border.all(color: statusColor.withValues(alpha: 0.25)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,

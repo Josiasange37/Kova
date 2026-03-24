@@ -82,10 +82,12 @@ class _MonitoredAppsScreenState extends State<MonitoredAppsScreen>
   Animation<double> _itemFade(int index) {
     final start = (index * 0.1).clamp(0.0, 0.7);
     final end = (start + 0.3).clamp(0.0, 1.0);
-    return Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(
-      parent: _staggerCtrl,
-      curve: Interval(start, end, curve: Curves.easeOut),
-    ));
+    return Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(
+        parent: _staggerCtrl,
+        curve: Interval(start, end, curve: Curves.easeOut),
+      ),
+    );
   }
 
   Animation<Offset> _itemSlide(int index) {
@@ -94,15 +96,17 @@ class _MonitoredAppsScreenState extends State<MonitoredAppsScreen>
     return Tween<Offset>(
       begin: const Offset(0, 0.15),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _staggerCtrl,
-      curve: Interval(start, end, curve: Curves.easeOutCubic),
-    ));
+    ).animate(
+      CurvedAnimation(
+        parent: _staggerCtrl,
+        curve: Interval(start, end, curve: Curves.easeOutCubic),
+      ),
+    );
   }
 
   void _onContinue() {
-    // Navigate to dashboard or next screen
-    Navigator.of(context).pushReplacementNamed(KovaRoutes.dashboard);
+    // Navigate to accessibility setup
+    Navigator.of(context).pushReplacementNamed(KovaRoutes.accessibilitySetup);
   }
 
   @override
@@ -239,9 +243,7 @@ class _MonitoredAppsScreenState extends State<MonitoredAppsScreen>
       decoration: BoxDecoration(
         color: KovaColors.cardWhite,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: KovaColors.divider.withValues(alpha: 0.6),
-        ),
+        border: Border.all(color: KovaColors.divider.withValues(alpha: 0.6)),
         boxShadow: [
           BoxShadow(
             color: KovaColors.primary.withValues(alpha: 0.04),
@@ -260,11 +262,7 @@ class _MonitoredAppsScreenState extends State<MonitoredAppsScreen>
               color: app.iconColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              app.iconData,
-              color: app.iconColor,
-              size: 24,
-            ),
+            child: Icon(app.iconData, color: app.iconColor, size: 24),
           ),
           const SizedBox(width: 14),
 
@@ -306,11 +304,7 @@ class _MonitoredAppsScreenState extends State<MonitoredAppsScreen>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  app.badgeIcon,
-                  size: 13,
-                  color: app.badgeColor,
-                ),
+                Icon(app.badgeIcon, size: 13, color: app.badgeColor),
                 const SizedBox(width: 4),
                 Text(
                   app.badgeText,
