@@ -12,7 +12,8 @@ class ParentProfileScreen extends StatefulWidget {
   State<ParentProfileScreen> createState() => _ParentProfileScreenState();
 }
 
-class _ParentProfileScreenState extends State<ParentProfileScreen> {
+class _ParentProfileScreenState extends State<ParentProfileScreen>
+    with SingleTickerProviderStateMixin {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _pinController = TextEditingController();
@@ -21,8 +22,21 @@ class _ParentProfileScreenState extends State<ParentProfileScreen> {
   bool _pinVisible = false;
   bool _confirmPinVisible = false;
 
+  // ── Entrance animation ──
+  late AnimationController _entranceCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _entranceCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..forward();
+  }
+
   @override
   void dispose() {
+    _entranceCtrl.dispose();
     _nameController.dispose();
     _phoneController.dispose();
     _pinController.dispose();
@@ -30,122 +44,185 @@ class _ParentProfileScreenState extends State<ParentProfileScreen> {
     super.dispose();
   }
 
+  Animation<double> _fade(double start, double end) {
+    return Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(
+      parent: _entranceCtrl,
+      curve: Interval(start, end, curve: Curves.easeOut),
+    ));
+  }
+
+  Animation<Offset> _slide(double start, double end) {
+    return Tween<Offset>(
+      begin: const Offset(0, 0.12),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _entranceCtrl,
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
+    ));
+  }
+
+  Widget _animated(int step, Widget child) {
+    final s = (step * 0.12).clamp(0.0, 0.7);
+    final e = (s + 0.3).clamp(0.0, 1.0);
+    return SlideTransition(
+      position: _slide(s, e),
+      child: FadeTransition(
+        opacity: _fade(s, e),
+        child: child,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: KovaColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: KovaSpacing.lg,
-            vertical: KovaSpacing.lg,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 8),
-
-              // ── Title ──
-              Text(
-                'Your profile',
-                style: GoogleFonts.nunito(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: KovaColors.primary,
-                ),
+        child: AnimatedBuilder(
+          animation: _entranceCtrl,
+          builder: (context, _) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(
+                horizontal: KovaSpacing.lg,
+                vertical: KovaSpacing.lg,
               ),
-              const SizedBox(height: 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 8),
 
-              // ── First Name ──
-              _buildLabel('Your first name'),
-              const SizedBox(height: 8),
-              _buildTextField(
-                controller: _nameController,
-                hint: 'Enter your name',
-                keyboardType: TextInputType.name,
-                textCapitalization: TextCapitalization.words,
-              ),
-              const SizedBox(height: 24),
+                  // ── Title ──
+                  _animated(
+                    0,
+                    Text(
+                      'Your profile',
+                      style: GoogleFonts.nunito(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: KovaColors.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
 
-              // ── WhatsApp Number ──
-              _buildLabel('Your WhatsApp number'),
-              const SizedBox(height: 8),
-              _buildTextField(
-                controller: _phoneController,
-                hint: '+237',
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+                  // ── First Name ──
+                  _animated(1, Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildLabel('Your first name'),
+                      const SizedBox(height: 8),
+                      _buildTextField(
+                        controller: _nameController,
+                        hint: 'Enter your name',
+                        keyboardType: TextInputType.name,
+                        textCapitalization: TextCapitalization.words,
+                      ),
+                    ],
+                  )),
+                  const SizedBox(height: 24),
+
+                  // ── WhatsApp Number ──
+                  _animated(2, Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildLabel('Your WhatsApp number'),
+                      const SizedBox(height: 8),
+                      _buildTextField(
+                        controller: _phoneController,
+                        hint: '+237',
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+                        ],
+                      ),
+                    ],
+                  )),
+                  const SizedBox(height: 24),
+
+                  // ── Create PIN ──
+                  _animated(3, Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildLabel('Create a 4-digit PIN'),
+                      const SizedBox(height: 8),
+                      _buildPinField(
+                        controller: _pinController,
+                        visible: _pinVisible,
+                        onToggleVisibility: () {
+                          setState(() => _pinVisible = !_pinVisible);
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      _buildPinDots(_pinController),
+                    ],
+                  )),
+                  const SizedBox(height: 24),
+
+                  // ── Confirm PIN ──
+                  _animated(4, Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildLabel('Confirm PIN'),
+                      const SizedBox(height: 8),
+                      _buildPinField(
+                        controller: _confirmPinController,
+                        visible: _confirmPinVisible,
+                        onToggleVisibility: () {
+                          setState(() => _confirmPinVisible = !_confirmPinVisible);
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      _buildPinDots(_confirmPinController),
+                    ],
+                  )),
+                  const SizedBox(height: 20),
+
+                  // ── Info text ──
+                  _animated(
+                    5,
+                    Text(
+                      'This PIN protects your settings and lets you view\ndetected content.',
+                      style: GoogleFonts.nunito(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: KovaColors.textSecondary,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // ── Continue Button ──
+                  _animated(
+                    6,
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _onContinue,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: KovaColors.primary,
+                          foregroundColor: KovaColors.textOnDark,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(KovaRadius.pill),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: Text(
+                          'Continue',
+                          style: GoogleFonts.nunito(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                 ],
               ),
-              const SizedBox(height: 24),
-
-              // ── Create PIN ──
-              _buildLabel('Create a 4-digit PIN'),
-              const SizedBox(height: 8),
-              _buildPinField(
-                controller: _pinController,
-                visible: _pinVisible,
-                onToggleVisibility: () {
-                  setState(() => _pinVisible = !_pinVisible);
-                },
-              ),
-              const SizedBox(height: 10),
-              _buildPinDots(_pinController),
-              const SizedBox(height: 24),
-
-              // ── Confirm PIN ──
-              _buildLabel('Confirm PIN'),
-              const SizedBox(height: 8),
-              _buildPinField(
-                controller: _confirmPinController,
-                visible: _confirmPinVisible,
-                onToggleVisibility: () {
-                  setState(() => _confirmPinVisible = !_confirmPinVisible);
-                },
-              ),
-              const SizedBox(height: 10),
-              _buildPinDots(_confirmPinController),
-              const SizedBox(height: 20),
-
-              // ── Info text ──
-              Text(
-                'This PIN protects your settings and lets you view\ndetected content.',
-                style: GoogleFonts.nunito(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  color: KovaColors.textSecondary,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              // ── Continue Button ──
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _onContinue,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: KovaColors.primary,
-                    foregroundColor: KovaColors.textOnDark,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(KovaRadius.pill),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    'Continue',
-                    style: GoogleFonts.nunito(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

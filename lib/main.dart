@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/core/page_transitions.dart';
 import 'package:kova/screens/splash_screen.dart';
 import 'package:kova/screens/parent_profile_screen.dart';
 import 'package:kova/screens/child_profile_screen.dart';
+import 'package:kova/screens/whatsapp_connect_screen.dart';
+import 'package:kova/screens/monitored_apps_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,6 +30,14 @@ void main() {
 
 class KovaApp extends StatelessWidget {
   const KovaApp({super.key});
+
+  // ── Route → Screen mapping ──
+  static final _routeBuilders = <String, Widget Function()>{
+    KovaRoutes.parentProfile: () => const ParentProfileScreen(),
+    KovaRoutes.childProfile: () => const ChildProfileScreen(),
+    KovaRoutes.whatsappConnect: () => const WhatsappConnectScreen(),
+    KovaRoutes.monitoredApps: () => const MonitoredAppsScreen(),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -63,12 +74,28 @@ class KovaApp extends StatelessWidget {
         ),
       ),
 
-      // -- Routes --
+      // -- Routes with custom transitions --
       initialRoute: KovaRoutes.splash,
-      routes: {
-        KovaRoutes.splash: (context) => const SplashScreen(),
-        KovaRoutes.parentProfile: (context) => const ParentProfileScreen(),
-        KovaRoutes.childProfile: (context) => const ChildProfileScreen(),
+      onGenerateRoute: (settings) {
+        // Splash uses default (no transition needed)
+        if (settings.name == KovaRoutes.splash) {
+          return MaterialPageRoute(
+            builder: (_) => const SplashScreen(),
+            settings: settings,
+          );
+        }
+
+        // All other routes use smooth slide-up + fade
+        final builder = _routeBuilders[settings.name];
+        if (builder != null) {
+          return KovaPageRoute(page: builder());
+        }
+
+        // Fallback — unknown route goes to splash
+        return MaterialPageRoute(
+          builder: (_) => const SplashScreen(),
+          settings: settings,
+        );
       },
     );
   }

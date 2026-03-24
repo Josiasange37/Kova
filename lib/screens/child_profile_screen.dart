@@ -67,8 +67,8 @@ class _ChildProfileScreenState extends State<ChildProfileScreen>
     if (!_isNameFilled) return;
     // Hide keyboard
     FocusScope.of(context).unfocus();
-    // Navigate to next screen, perhaps whatsappConnect or dashboard
-    Navigator.of(context).pushReplacementNamed(KovaRoutes.dashboard);
+    // Navigate to next screen
+    Navigator.of(context).pushReplacementNamed(KovaRoutes.whatsappConnect);
   }
 
   // Helper for mode config
