@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/screens/splash_screen.dart';
+import 'package:kova/screens/parent_profile_screen.dart';
+import 'package:kova/screens/child_profile_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,10 +67,8 @@ class KovaApp extends StatelessWidget {
       initialRoute: KovaRoutes.splash,
       routes: {
         KovaRoutes.splash: (context) => const SplashScreen(),
-        // Future screens will be added here as we build them:
-        // KovaRoutes.welcome: (context) => const WelcomeScreen(),
-        // KovaRoutes.parentProfile: (context) => const ParentProfileScreen(),
-        // ...
+        KovaRoutes.parentProfile: (context) => const ParentProfileScreen(),
+        KovaRoutes.childProfile: (context) => const ChildProfileScreen(),
       },
     );
   }
