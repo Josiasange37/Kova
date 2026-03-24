@@ -137,150 +137,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isEmbedded) {
+      return _buildBody();
+    }
+
     return Scaffold(
       backgroundColor: KovaColors.background,
-      appBar: widget.isEmbedded
-          ? null
-          : AppBar(
-              backgroundColor: KovaColors.background,
-              elevation: 0,
-              leading: IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  color: KovaColors.textPrimary,
-                  size: 20,
-                ),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-              title: Text(
-                'Settings',
-                style: GoogleFonts.nunito(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: KovaColors.textPrimary,
-                ),
-              ),
-              centerTitle: true,
-            ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: KovaSpacing.md),
-          children: [
-            if (widget.isEmbedded) ...[
-              const SizedBox(height: KovaSpacing.lg),
-              Text(
-                'Settings',
-                style: GoogleFonts.nunito(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  color: KovaColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: KovaSpacing.sm),
-            ],
-            _buildSection('Profile', [
-              _buildSettingItem(
-                Icons.person_outline_rounded,
-                'Child name',
-                subtitle: 'Alex, 12 years old',
-                trailing: _buildEditButton(),
-              ),
-              _buildSettingItem(
-                Icons.local_phone_outlined,
-                'Phone number',
-                subtitle: '+237 690 123 456',
-                trailing: _buildEditButton(),
-                showDivider: false,
-              ),
-            ]),
-            _buildSection('Security', [
-              _buildSettingItem(
-                Icons.lock_outline_rounded,
-                'Change PIN',
-                trailing: _buildActionButton('Change'),
-                showDivider: false,
-              ),
-            ]),
-            _buildSection('Notifications', [
-              _buildSettingItem(
-                Icons.notifications_none_rounded,
-                'Quiet hours',
-                subtitle: '10pm — 6am',
-                trailing: Transform.scale(
-                  scale: 0.8,
-                  child: Switch.adaptive(
-                    value: _quietHours,
-                    onChanged: (v) => setState(() => _quietHours = v),
-                    activeTrackColor: KovaColors.primary,
-                  ),
-                ),
-                showDivider: false,
-              ),
-            ]),
-            _buildSection('Language', [
-              _buildSettingItem(
-                Icons.language_rounded,
-                'Language',
-                trailing: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0F0F0),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _buildLanguageToggle('Français'),
-                      _buildLanguageToggle('English'),
-                    ],
-                  ),
-                ),
-                showDivider: false,
-              ),
-            ]),
-            _buildSection('Report', [
-              _buildSettingItem(
-                Icons.description_outlined,
-                'Export weekly PDF',
-                trailing: _buildActionButton('Export'),
-                showDivider: false,
-              ),
-            ]),
-            _buildSection('About', [
-              _buildSettingItem(
-                Icons.info_outline_rounded,
-                'App version',
-                subtitle: '1.0.0',
-              ),
-              _buildSettingItem(
-                Icons.description_outlined,
-                'Legal',
-                trailing: _buildActionButton('View'),
-                showDivider: false,
-              ),
-            ]),
-            const SizedBox(height: KovaSpacing.xl),
-            OutlinedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.add_rounded, size: 20),
-              label: const Text('Add a child'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: KovaColors.primary,
-                side: const BorderSide(color: KovaColors.divider),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                textStyle: GoogleFonts.nunito(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const SizedBox(height: KovaSpacing.xxl),
-          ],
+      appBar: AppBar(
+        backgroundColor: KovaColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: KovaColors.textPrimary,
+            size: 20,
+          ),
+          onPressed: () => Navigator.of(context).pop(),
         ),
+        title: Text(
+          'Settings',
+          style: GoogleFonts.nunito(
+            fontSize: 22,
+            fontWeight: FontWeight.w900,
+            color: KovaColors.textPrimary,
+          ),
+        ),
+        centerTitle: true,
       ),
+      body: _buildBody(),
       bottomNavigationBar: BottomNavigationBar(
         elevation: 0,
         backgroundColor: KovaColors.cardWhite,
@@ -313,6 +197,128 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icon(Icons.settings_outlined),
             label: 'Settings',
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: KovaSpacing.md),
+        children: [
+          if (widget.isEmbedded) ...[
+            const SizedBox(height: KovaSpacing.lg),
+            Text(
+              'Settings',
+              style: GoogleFonts.nunito(
+                fontSize: 32,
+                fontWeight: FontWeight.w900,
+                color: KovaColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: KovaSpacing.sm),
+          ],
+          _buildSection('Profile', [
+            _buildSettingItem(
+              Icons.person_outline_rounded,
+              'Child name',
+              subtitle: 'Alex, 12 years old',
+              trailing: _buildEditButton(),
+            ),
+            _buildSettingItem(
+              Icons.local_phone_outlined,
+              'Phone number',
+              subtitle: '+237 690 123 456',
+              trailing: _buildEditButton(),
+              showDivider: false,
+            ),
+          ]),
+          _buildSection('Security', [
+            _buildSettingItem(
+              Icons.lock_outline_rounded,
+              'Change PIN',
+              trailing: _buildActionButton('Change'),
+              showDivider: false,
+            ),
+          ]),
+          _buildSection('Notifications', [
+            _buildSettingItem(
+              Icons.notifications_none_rounded,
+              'Quiet hours',
+              subtitle: '10pm — 6am',
+              trailing: Transform.scale(
+                scale: 0.8,
+                child: Switch.adaptive(
+                  value: _quietHours,
+                  onChanged: (v) => setState(() => _quietHours = v),
+                  activeTrackColor: KovaColors.primary,
+                ),
+              ),
+              showDivider: false,
+            ),
+          ]),
+          _buildSection('Language', [
+            _buildSettingItem(
+              Icons.language_rounded,
+              'Language',
+              trailing: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0F0F0),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildLanguageToggle('Français'),
+                    _buildLanguageToggle('English'),
+                  ],
+                ),
+              ),
+              showDivider: false,
+            ),
+          ]),
+          _buildSection('Report', [
+            _buildSettingItem(
+              Icons.description_outlined,
+              'Export weekly PDF',
+              trailing: _buildActionButton('Export'),
+              showDivider: false,
+            ),
+          ]),
+          _buildSection('About', [
+            _buildSettingItem(
+              Icons.info_outline_rounded,
+              'App version',
+              subtitle: '1.0.0',
+            ),
+            _buildSettingItem(
+              Icons.description_outlined,
+              'Legal',
+              trailing: _buildActionButton('View'),
+              showDivider: false,
+            ),
+          ]),
+          const SizedBox(height: KovaSpacing.xl),
+          OutlinedButton.icon(
+            onPressed: () {},
+            icon: const Icon(Icons.add_rounded, size: 20),
+            label: const Text('Add a child'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: KovaColors.primary,
+              side: const BorderSide(color: KovaColors.divider),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              textStyle: GoogleFonts.nunito(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: KovaSpacing.xxl),
         ],
       ),
     );
