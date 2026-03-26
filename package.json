@@ -1,0 +1,13 @@
+{
+  "name": "kova-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "postinstall": "npm install --prefix server && flutter pub get && cd kovachild && flutter pub get",
+    "build:parent": "flutter build web",
+    "build:child": "cd kovachild && flutter build web --base-href \"/child/\"",
+    "build": "npm run build:parent && npm run build:child",
+    "start": "npm start --prefix server",
+    "dev": "npm run dev --prefix server"
+  }
+}

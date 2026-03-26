@@ -3,6 +3,7 @@ require('dotenv').config();
 
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -55,9 +56,27 @@ app.use('/api/alerts', alertsRoutes);
 app.use('/api/apps', appsRoutes);
 app.use('/api/settings', settingsRoutes);
 
-// ── 404 handler ──
-app.use((req, res) => {
+// ── Serve Frontend Apps ──
+const childAppPath = path.join(__dirname, '../../kovachild/build/web');
+const parentAppPath = path.join(__dirname, '../../build/web');
+
+// Serve Child App at /child
+app.use('/child', express.static(childAppPath));
+app.get('/child/*', (req, res) => {
+  res.sendFile(path.join(childAppPath, 'index.html'));
+});
+
+// Serve Parent App at /
+app.use(express.static(parentAppPath));
+
+// ── API 404 handler ──
+app.use('/api', (req, res) => {
   res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` });
+});
+
+// ── Fallback for Parent App SPA routing ──
+app.get('*', (req, res) => {
+  res.sendFile(path.join(parentAppPath, 'index.html'));
 });
 
 // ── Global error handler ──

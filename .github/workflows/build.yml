@@ -1,0 +1,37 @@
+name: Build KOVA Monorepo
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.19.0' # Adjust based on your required version
+          channel: 'stable'
+
+      - name: Install dependencies and build all apps
+        run: |
+          npm install
+          npm run build
+
+      - name: Run Backend Tests
+        run: |
+          cd server
+          npm test
