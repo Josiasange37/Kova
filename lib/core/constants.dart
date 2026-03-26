@@ -14,8 +14,8 @@ class KovaColors {
   /// Success green
   static const Color success = Color(0xFF2ECC71);
 
-  /// Warm off-white background
-  static const Color background = Color(0xFFF5F0E8);
+  /// Warm off-white background (Changed to pure white to match Welcome screen)
+  static const Color background = Color(0xFFFFFFFF);
 
   /// Card white
   static const Color cardWhite = Color(0xFFFFFFFF);
