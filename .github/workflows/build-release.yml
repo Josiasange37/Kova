@@ -8,8 +8,8 @@ on:
   pull_request:
 
 jobs:
-  build-parent:
-    name: Build Parent App (Android & iOS)
+  build:
+    name: Build KOVA App (Android & iOS)
     runs-on: macos-latest
     steps:
       - name: Checkout repository
@@ -29,55 +29,32 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Build Web
+        run: flutter build web
+
       - name: Build Android APK
         run: flutter build apk --release
 
       - name: Build iOS App (Unsigned)
         run: flutter build ios --release --no-codesign
 
+      - name: Upload Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kova-web
+          path: build/web
+
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: parent-android-apk
+          name: kova-android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
 
       - name: Upload iOS App
         uses: actions/upload-artifact@v4
         with:
-          name: parent-ios-app
+          name: kova-ios-app
           path: build/ios/iphoneos/Runner.app
-
-  build-child:
-    name: Build Child App (Android)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: 'stable'
-
-      - name: Install dependencies
-        run: flutter pub get
-        working-directory: ./kovachild
-
-      - name: Build Android APK
-        run: flutter build apk --release
-        working-directory: ./kovachild
-
-      - name: Upload Android APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: child-android-apk
-          path: kovachild/build/app/outputs/flutter-apk/app-release.apk
 
   build-backend:
     name: Build Node Backend

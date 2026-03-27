@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/constants.dart';
+import '../child_app/screens/child_dashboard.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool isEmbedded;
@@ -55,51 +56,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String? subtitle,
     Widget? trailing,
     bool showDivider = true,
+    VoidCallback? onPressed,
   }) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              Icon(icon, color: KovaColors.primary, size: 24),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: GoogleFonts.nunito(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: KovaColors.textPrimary,
-                      ),
-                    ),
-                    if (subtitle != null)
+    return InkWell(
+      onTap: onPressed,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(icon, color: KovaColors.primary, size: 24),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        subtitle,
+                        title,
                         style: GoogleFonts.nunito(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: KovaColors.textSecondary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: KovaColors.textPrimary,
                         ),
                       ),
-                  ],
+                      if (subtitle != null)
+                        Text(
+                          subtitle,
+                          style: GoogleFonts.nunito(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: KovaColors.textSecondary,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-              ?trailing,
-            ],
+                if (trailing != null) trailing,
+              ],
+            ),
           ),
-        ),
-        if (showDivider)
-          Divider(
-            height: 1,
-            indent: 56,
-            endIndent: 16,
-            color: KovaColors.divider.withValues(alpha: 0.4),
-          ),
-      ],
+          if (showDivider)
+            Divider(
+              height: 1,
+              indent: 56,
+              endIndent: 16,
+              color: KovaColors.divider.withValues(alpha: 0.4),
+            ),
+        ],
+      ),
     );
   }
 
@@ -297,6 +302,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Icons.description_outlined,
               'Legal',
               trailing: _buildActionButton('View'),
+              showDivider: false,
+            ),
+          ]),
+          _buildSection('App Mode', [
+            _buildSettingItem(
+              Icons.swap_horiz_rounded,
+              'Switch to Child Mode',
+              subtitle: ' Alex\'s view',
+              trailing: _buildActionButton('Switch'),
+              onPressed: () {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => const ChildDashboard()),
+                  (route) => false,
+                );
+              },
               showDivider: false,
             ),
           ]),

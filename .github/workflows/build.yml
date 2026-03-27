@@ -26,10 +26,10 @@ jobs:
           flutter-version: '3.19.0' # Adjust based on your required version
           channel: 'stable'
 
-      - name: Install dependencies and build all apps
+      - name: Install dependencies and build app
         run: |
           npm install
-          npm run build
+          flutter build web
 
       - name: Run Backend Tests
         run: |

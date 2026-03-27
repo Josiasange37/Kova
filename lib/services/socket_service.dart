@@ -6,20 +6,26 @@ import 'package:kova/models/alert.dart';
 class SocketService {
   static const String serverUrl = 'http://localhost:3000';
   final _storage = const FlutterSecureStorage();
-  
+
   IO.Socket? _socket;
-  
+
   // Streams for real-time events
   final _alertStreamController = StreamController<Alert>.broadcast();
-  final _childStatusStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _appBlockedStreamController = StreamController<Map<String, dynamic>>.broadcast();
-  final _screenTimeStreamController = StreamController<Map<String, dynamic>>.broadcast();
+  final _childStatusStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _appBlockedStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  final _screenTimeStreamController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   // Public stream getters
   Stream<Alert> get onNewAlert => _alertStreamController.stream;
-  Stream<Map<String, dynamic>> get onChildStatus => _childStatusStreamController.stream;
-  Stream<Map<String, dynamic>> get onAppBlocked => _appBlockedStreamController.stream;
-  Stream<Map<String, dynamic>> get onScreenTimeUpdate => _screenTimeStreamController.stream;
+  Stream<Map<String, dynamic>> get onChildStatus =>
+      _childStatusStreamController.stream;
+  Stream<Map<String, dynamic>> get onAppBlocked =>
+      _appBlockedStreamController.stream;
+  Stream<Map<String, dynamic>> get onScreenTimeUpdate =>
+      _screenTimeStreamController.stream;
 
   // Singleton pattern
   static final SocketService _instance = SocketService._internal();
@@ -32,11 +38,14 @@ class SocketService {
     final token = await _storage.read(key: 'jwt_token');
     if (token == null) return;
 
-    _socket = IO.io(serverUrl, IO.OptionBuilder()
-        .setTransports(['websocket'])
-        .setAuth({'token': token})
-        .disableAutoConnect()
-        .build());
+    _socket = IO.io(
+      serverUrl,
+      IO.OptionBuilder()
+          .setTransports(['websocket'])
+          .setAuth({'token': token})
+          .disableAutoConnect()
+          .build(),
+    );
 
     _setupListeners();
     _socket!.connect();

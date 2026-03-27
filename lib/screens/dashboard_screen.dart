@@ -167,10 +167,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                   ),
                   // Kova logo icon
                   SvgPicture.asset(
-                    'assets/svg/kova_logo.svg',
+                    KovaAssets.logoSvg,
                     height: 32,
-                    // If you want it to have a specific color:
-                    // colorFilter: ColorFilter.mode(KovaColors.primary, BlendMode.srcIn),
                   ),
                 ],
               ),

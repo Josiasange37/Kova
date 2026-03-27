@@ -43,7 +43,10 @@ class ApiService {
   Future<List<ChildProfile>> getChildren() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(Uri.parse('$baseUrl/children'), headers: headers);
+      final response = await http.get(
+        Uri.parse('$baseUrl/children'),
+        headers: headers,
+      );
 
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
@@ -68,13 +71,13 @@ class ApiService {
       if (response.statusCode == 201) {
         final data = json.decode(response.body);
         final child = ChildProfile.fromJson(data['child']);
-        
+
         // Save as active child if none exists
         final currentActive = await _storage.read(key: 'active_child_id');
         if (currentActive == null) {
           await _storage.write(key: 'active_child_id', value: child.id);
         }
-        
+
         return child;
       }
       return null;
@@ -129,18 +132,24 @@ class ApiService {
 
   // --- Alerts API ---
 
-  Future<List<Alert>> getAlerts({String? childId, String? severity, bool? resolved}) async {
+  Future<List<Alert>> getAlerts({
+    String? childId,
+    String? severity,
+    bool? resolved,
+  }) async {
     try {
       final headers = await _getHeaders();
-      
+
       // Build query string
       final queryParams = <String>[];
       if (childId != null) queryParams.add('childId=$childId');
       if (severity != null) queryParams.add('severity=$severity');
       if (resolved != null) queryParams.add('resolved=$resolved');
-      
-      final queryString = queryParams.isNotEmpty ? '?${queryParams.join('&')}' : '';
-      
+
+      final queryString = queryParams.isNotEmpty
+          ? '?${queryParams.join('&')}'
+          : '';
+
       final response = await http.get(
         Uri.parse('$baseUrl/alerts$queryString'),
         headers: headers,
@@ -213,14 +222,18 @@ class ApiService {
     }
   }
 
-  Future<bool> updateAppControl(String appId, {String? sensitivity, bool? isBlocked}) async {
+  Future<bool> updateAppControl(
+    String appId, {
+    String? sensitivity,
+    bool? isBlocked,
+  }) async {
     try {
       final headers = await _getHeaders();
-      
+
       final body = <String, dynamic>{};
       if (sensitivity != null) body['sensitivity'] = sensitivity;
       if (isBlocked != null) body['isBlocked'] = isBlocked;
-      
+
       final response = await http.put(
         Uri.parse('$baseUrl/apps/$appId/control'),
         headers: headers,

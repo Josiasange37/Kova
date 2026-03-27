@@ -40,11 +40,11 @@ class KovaSettings {
   }
 
   Map<String, dynamic> toJson() => {
-        'quietHoursEnabled': quietHoursEnabled,
-        'quietHoursStart': quietHoursStart,
-        'quietHoursEnd': quietHoursEnd,
-        'language': language,
-        'notificationsEnabled': notificationsEnabled,
-        'weeklyReportEnabled': weeklyReportEnabled,
-      };
+    'quietHoursEnabled': quietHoursEnabled,
+    'quietHoursStart': quietHoursStart,
+    'quietHoursEnd': quietHoursEnd,
+    'language': language,
+    'notificationsEnabled': notificationsEnabled,
+    'weeklyReportEnabled': weeklyReportEnabled,
+  };
 }

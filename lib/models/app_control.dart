@@ -32,7 +32,8 @@ class AppControl {
       controlId: json['controlId'] ?? json['control_id'] ?? '',
       appName: json['appName'] ?? json['app_name'] ?? '',
       packageName: json['packageName'] ?? json['package_name'],
-      monitoringType: json['monitoringType'] ?? json['monitoring_type'] ?? 'automatic',
+      monitoringType:
+          json['monitoringType'] ?? json['monitoring_type'] ?? 'automatic',
       isConnected: json['isConnected'] ?? json['is_connected'] ?? false,
       iconName: json['iconName'] ?? json['icon_name'],
       iconColor: json['iconColor'] ?? json['icon_color'],
@@ -43,16 +44,16 @@ class AppControl {
   }
 
   Map<String, dynamic> toJson() => {
-        'appId': appId,
-        'controlId': controlId,
-        'appName': appName,
-        'packageName': packageName,
-        'monitoringType': monitoringType,
-        'isConnected': isConnected,
-        'iconName': iconName,
-        'iconColor': iconColor,
-        'sensitivity': sensitivity,
-        'isBlocked': isBlocked,
-        'isEnabled': isEnabled,
-      };
+    'appId': appId,
+    'controlId': controlId,
+    'appName': appName,
+    'packageName': packageName,
+    'monitoringType': monitoringType,
+    'isConnected': isConnected,
+    'iconName': iconName,
+    'iconColor': iconColor,
+    'sensitivity': sensitivity,
+    'isBlocked': isBlocked,
+    'isEnabled': isEnabled,
+  };
 }

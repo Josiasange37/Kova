@@ -5,6 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/core/page_transitions.dart';
 import 'package:kova/screens/splash_screen.dart';
+import 'package:kova/screens/role_selection_screen.dart';
+import 'package:kova/child_app/screens/splash_screen.dart' as child;
 import 'package:kova/screens/parent_profile_screen.dart';
 import 'package:kova/screens/child_profile_screen.dart';
 import 'package:kova/screens/whatsapp_connect_screen.dart';
@@ -43,6 +45,8 @@ class KovaApp extends StatelessWidget {
   // ── Route → Screen mapping ──
   static final _routeBuilders = <String, Widget Function()>{
     KovaRoutes.welcome: () => const WelcomeScreen(),
+    KovaRoutes.roleSelection: () => const RoleSelectionScreen(),
+    KovaRoutes.childWelcome: () => const child.SplashScreen(),
     KovaRoutes.parentProfile: () => const ParentProfileScreen(),
     KovaRoutes.childProfile: () => const ChildProfileScreen(),
     KovaRoutes.whatsappConnect: () => const WhatsappConnectScreen(),

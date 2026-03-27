@@ -22,9 +22,9 @@ class Parent {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'phone': phone,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'phone': phone,
+    'createdAt': createdAt.toIso8601String(),
+  };
 }

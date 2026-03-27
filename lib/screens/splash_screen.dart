@@ -103,7 +103,7 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 2200));
     if (!mounted) return;
 
-    Navigator.of(context).pushReplacementNamed(KovaRoutes.welcome);
+    Navigator.of(context).pushReplacementNamed(KovaRoutes.roleSelection);
   }
 
   @override

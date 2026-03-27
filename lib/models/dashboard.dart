@@ -23,7 +23,9 @@ class DashboardChild {
       name: json['name'] as String,
       age: json['age'] as int,
       isOnline: json['isOnline'] ?? false,
-      lastSeen: json['lastSeen'] != null ? DateTime.parse(json['lastSeen']) : null,
+      lastSeen: json['lastSeen'] != null
+          ? DateTime.parse(json['lastSeen'])
+          : null,
     );
   }
 }

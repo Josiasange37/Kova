@@ -35,11 +35,14 @@ class AuthService {
         final data = json.decode(response.body);
         _token = data['token'];
         await _storage.write(key: 'jwt_token', value: _token);
-        
+
         // Store parent info
         if (data['parent'] != null) {
           await _storage.write(key: 'parent_id', value: data['parent']['id']);
-          await _storage.write(key: 'parent_name', value: data['parent']['name']);
+          await _storage.write(
+            key: 'parent_name',
+            value: data['parent']['name'],
+          );
         }
         return true;
       }
@@ -62,11 +65,14 @@ class AuthService {
         final data = json.decode(response.body);
         _token = data['token'];
         await _storage.write(key: 'jwt_token', value: _token);
-        
+
         // Store parent info
         if (data['parent'] != null) {
           await _storage.write(key: 'parent_id', value: data['parent']['id']);
-          await _storage.write(key: 'parent_name', value: data['parent']['name']);
+          await _storage.write(
+            key: 'parent_name',
+            value: data['parent']['name'],
+          );
         }
         return true;
       }

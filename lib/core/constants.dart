@@ -76,6 +76,8 @@ class KovaRoutes {
 
   static const String splash = '/';
   static const String welcome = '/welcome';
+  static const String roleSelection = '/role-selection';
+  static const String childWelcome = '/child-welcome';
   static const String parentProfile = '/parent-profile';
   static const String childProfile = '/child-profile';
   static const String whatsappConnect = '/whatsapp-connect';

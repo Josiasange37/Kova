@@ -34,21 +34,21 @@ class ChildProfile {
       lastSeen: json['last_seen'] != null
           ? DateTime.parse(json['last_seen'])
           : json['lastSeen'] != null
-              ? DateTime.parse(json['lastSeen'])
-              : null,
+          ? DateTime.parse(json['lastSeen'])
+          : null,
       createdAt: DateTime.parse(json['created_at'] ?? json['createdAt']),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'parentId': parentId,
-        'name': name,
-        'age': age,
-        'safetyScore': safetyScore,
-        'isOnline': isOnline,
-        'deviceId': deviceId,
-        'lastSeen': lastSeen?.toIso8601String(),
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'id': id,
+    'parentId': parentId,
+    'name': name,
+    'age': age,
+    'safetyScore': safetyScore,
+    'isOnline': isOnline,
+    'deviceId': deviceId,
+    'lastSeen': lastSeen?.toIso8601String(),
+    'createdAt': createdAt.toIso8601String(),
+  };
 }
