@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:kova/providers/app_state.dart';
+import 'package:kova/models/alert.dart';
 import 'package:kova/core/constants.dart';
 
 class AlertHistoryScreen extends StatefulWidget {
@@ -17,8 +20,8 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
   int _selectedAppFilter = 0; // 0=All, 1=WhatsApp, 2=TikTok, 3=Facebook
   int _selectedTimeFilter = 0; // 0=This week, 1=This month, 2=All
 
-  static const _appFilters = ['All', 'WhatsApp', 'TikTok', 'Facebook'];
   static const _timeFilters = ['This week', 'This month', 'All'];
+
 
   late AnimationController _entranceCtrl;
   late Animation<double> _headerFade;
@@ -68,48 +71,96 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
     super.dispose();
   }
 
-  // ── Demo data ──
-  List<_AlertItem> get _alerts => [
-    const _AlertItem(
-      app: 'TikTok',
-      icon: Icons.music_note_rounded,
-      borderColor: Color(0xFFFA6262), // Red border
-      score: '87%',
-      title: 'Suspicious content',
-      action: 'Blocked 20 min',
-      time: '2 hours ago',
-    ),
-    const _AlertItem(
-      app: 'WhatsApp',
-      icon: Icons.chat_bubble_outline_rounded,
-      borderColor: Color(0xFFF5A623), // Orange/yellow border
-      score: '72%',
-      title: 'Inappropriate text',
-      action: 'Notification sent',
-      time: '5 hours ago',
-    ),
-    const _AlertItem(
-      app: 'Facebook',
-      icon: Icons.facebook_rounded,
-      borderColor: Color(0xFFF5A623), // Orange border
-      score: '65%',
-      title: 'Suspicious link',
-      action: 'Blocked',
-      time: 'Yesterday',
-    ),
-    const _AlertItem(
-      app: 'TikTok',
-      icon: Icons.music_note_rounded,
-      borderColor: Color(0xFF4AC38B), // Green border
-      score: '12%',
-      title: 'Normal scan',
-      action: 'No action',
-      time: '2 days ago',
-    ),
-  ];
+  // ── Helper methods ──
+
+  List<Alert> _getFilteredAlerts(List<Alert> allAlerts, List<String> apps) {
+    var filtered = allAlerts;
+
+    // Filter by App
+    if (_selectedAppFilter > 0 && _selectedAppFilter < apps.length) {
+      final selectedAppName = apps[_selectedAppFilter];
+      filtered = filtered.where((a) => a.appName == selectedAppName).toList();
+    }
+
+    // Filter by Time
+    final now = DateTime.now();
+    if (_selectedTimeFilter == 0) {
+      // Today
+      filtered = filtered.where((a) => 
+        a.createdAt.year == now.year && 
+        a.createdAt.month == now.month && 
+        a.createdAt.day == now.day).toList();
+    } else if (_selectedTimeFilter == 1) {
+      // Yesterday
+      final yesterday = now.subtract(const Duration(days: 1));
+      filtered = filtered.where((a) => 
+        a.createdAt.year == yesterday.year && 
+        a.createdAt.month == yesterday.month && 
+        a.createdAt.day == yesterday.day).toList();
+    } else if (_selectedTimeFilter == 2) {
+      // Last 7 days
+      final weekAgo = now.subtract(const Duration(days: 7));
+      filtered = filtered.where((a) => a.createdAt.isAfter(weekAgo)).toList();
+    }
+
+    return filtered;
+  }
+
+  String _getTimeAgo(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays == 1) return 'Yesterday';
+    return '${diff.inDays} days ago';
+  }
+
+  Color _getSeverityColor(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'critical':
+      case 'high':
+        return const Color(0xFFFF5252);
+      case 'medium':
+        return const Color(0xFFFB8C00);
+      default:
+        return const Color(0xFF4AC38B);
+    }
+  }
+
+  IconData _getAppIcon(String appName) {
+    switch (appName.toLowerCase()) {
+      case 'whatsapp':
+        return Icons.message_rounded;
+      case 'instagram':
+        return Icons.camera_alt_rounded;
+      case 'tiktok':
+        return Icons.music_note_rounded;
+      case 'snapchat':
+        return Icons.snapchat_rounded;
+      case 'youtube':
+        return Icons.play_circle_fill_rounded;
+      default:
+        return Icons.apps_rounded;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    
+    // Derive app filters from alert history
+    final uniqueApps = appState.alerts.map((a) => a.appName).toSet().toList();
+    uniqueApps.sort();
+    final apps = ['All', ...uniqueApps];
+
+    final filteredAlerts = _getFilteredAlerts(appState.alerts, apps);
+
+    // Calculate stats
+    final totalAlerts = filteredAlerts.length;
+    final blocksCount = filteredAlerts.where((a) => a.isResolved && (a.resolvedAction?.contains('Block') ?? false)).length;
+    final avgScore = totalAlerts == 0 ? 0 
+        : (filteredAlerts.map((a) => a.aiConfidence).reduce((a, b) => a + b) / totalAlerts * 100).round();
+
     final content = AnimatedBuilder(
       animation: _entranceCtrl,
       builder: (context, _) {
@@ -137,7 +188,10 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
               if (!widget.isEmbedded) const SizedBox(height: 20),
 
               // ── App filter chips ──
-              Opacity(opacity: _filterFade.value, child: _buildAppFilters()),
+              Opacity(
+                opacity: _filterFade.value, 
+                child: _buildAppFilters(apps),
+              ),
               const SizedBox(height: 16),
 
               // ── Time filter chips ──
@@ -145,15 +199,20 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
               const SizedBox(height: 24),
 
               // ── Stats row ──
-              Opacity(opacity: _statsFade.value, child: _buildStatsRow()),
+              Opacity(
+                opacity: _statsFade.value, 
+                child: _buildStatsRow(totalAlerts.toString(), blocksCount.toString(), '$avgScore%'),
+              ),
               const SizedBox(height: 24),
 
               // ── Alert list ──
               Opacity(
                 opacity: _listFade.value,
-                child: Column(
-                  children: _alerts.map((a) => _buildAlertCard(a)).toList(),
-                ),
+                child: filteredAlerts.isEmpty 
+                  ? _buildEmptyState()
+                  : Column(
+                      children: filteredAlerts.map((a) => _buildAlertCard(a)).toList(),
+                    ),
               ),
             ],
           ),
@@ -174,16 +233,16 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
   // ═══════════════════════════════════════════
   // ──  App Filter Chips
   // ═══════════════════════════════════════════
-  Widget _buildAppFilters() {
+  Widget _buildAppFilters(List<String> apps) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Row(
-        children: List.generate(_appFilters.length, (i) {
+        children: List.generate(apps.length, (i) {
           final isActive = _selectedAppFilter == i;
           return Padding(
             padding: EdgeInsets.only(
-              right: i < _appFilters.length - 1 ? 12 : 0,
+              right: i < apps.length - 1 ? 12 : 0,
             ),
             child: GestureDetector(
               onTap: () => setState(() => _selectedAppFilter = i),
@@ -212,7 +271,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                       : null,
                 ),
                 child: Text(
-                  _appFilters[i],
+                  apps[i],
                   style: GoogleFonts.nunito(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -281,7 +340,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
   // ═══════════════════════════════════════════
   // ──  Stats Row
   // ═══════════════════════════════════════════
-  Widget _buildStatsRow() {
+  Widget _buildStatsRow(String total, String blocks, String score) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Container(
@@ -300,11 +359,11 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
         ),
         child: Row(
           children: [
-            _buildStatItem('12', 'Total alerts'),
+            _buildStatItem(total, 'Total alerts'),
             Container(width: 1, height: 40, color: const Color(0xFFEEEEEE)),
-            _buildStatItem('5', 'Blocks'),
+            _buildStatItem(blocks, 'Blocks'),
             Container(width: 1, height: 40, color: const Color(0xFFEEEEEE)),
-            _buildStatItem('68%', 'Avg AI score'),
+            _buildStatItem(score, 'Avg AI score'),
           ],
         ),
       ),
@@ -340,10 +399,14 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
   // ═══════════════════════════════════════════
   // ──  Alert Card
   // ═══════════════════════════════════════════
-  Widget _buildAlertCard(_AlertItem alert) {
+  Widget _buildAlertCard(Alert alert) {
+    final borderColor = _getSeverityColor(alert.severity);
+    final scoreText = '${(alert.aiConfidence * 100).round()}%';
+    final timeAgo = _getTimeAgo(alert.createdAt);
+
     return GestureDetector(
       onTap: () {
-        Navigator.of(context).pushNamed(KovaRoutes.alertDetail);
+        Navigator.of(context).pushNamed(KovaRoutes.alertDetail, arguments: alert);
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12, left: 20, right: 20),
@@ -351,10 +414,10 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
         decoration: BoxDecoration(
           color: KovaColors.cardWhite,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: alert.borderColor, width: 1.2),
+          border: Border.all(color: borderColor, width: 1.2),
           boxShadow: [
             BoxShadow(
-              color: alert.borderColor.withValues(alpha: 0.06),
+              color: borderColor.withValues(alpha: 0.06),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -373,7 +436,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
               ),
               child: Center(
                 child: Icon(
-                  alert.icon,
+                  _getAppIcon(alert.appName),
                   color: const Color(0xFF1F2937),
                   size: 22,
                 ),
@@ -389,7 +452,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                   Row(
                     children: [
                       Text(
-                        alert.app,
+                        alert.appName,
                         style: GoogleFonts.nunito(
                           fontSize: 14,
                           fontWeight: FontWeight.w800,
@@ -408,7 +471,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          alert.score,
+                          scoreText,
                           style: GoogleFonts.nunito(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
@@ -420,17 +483,17 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    alert.title,
+                    alert.alertType,
                     style: GoogleFonts.nunito(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       color: const Color(0xFF6B7280),
                     ),
                   ),
-                  if (alert.action.isNotEmpty) ...[
+                  if (alert.isResolved) ...[
                     const SizedBox(height: 4),
                     Text(
-                      alert.action,
+                      alert.resolvedAction ?? 'Resolved',
                       style: GoogleFonts.nunito(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -444,7 +507,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
 
             // Time text (top right)
             Text(
-              alert.time,
+              timeAgo,
               style: GoogleFonts.nunito(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -456,24 +519,32 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
       ),
     );
   }
+
+  Widget _buildEmptyState() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 60),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(
+              Icons.notifications_none_rounded,
+              size: 64,
+              color: Colors.grey[300],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No alerts found',
+              style: GoogleFonts.nunito(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _AlertItem {
-  final String app;
-  final IconData icon;
-  final Color borderColor;
-  final String score;
-  final String title;
-  final String action;
-  final String time;
 
-  const _AlertItem({
-    required this.app,
-    required this.icon,
-    required this.borderColor,
-    required this.score,
-    required this.title,
-    required this.action,
-    required this.time,
-  });
-}

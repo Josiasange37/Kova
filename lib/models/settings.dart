@@ -1,50 +1,101 @@
-// Dart data model for Settings
+// models/settings.dart — KOVA Settings data model
 class KovaSettings {
-  final String? parentName;
-  final String? parentPhone;
-  final String? childName;
-  final int? childAge;
-  final bool quietHoursEnabled;
-  final String quietHoursStart;
-  final String quietHoursEnd;
-  final String language;
+  final String id;
+  final String parentId;
   final bool notificationsEnabled;
-  final bool weeklyReportEnabled;
+  final bool alertSound;
+  final bool autoBlock;
+  final String sensitivityLevel;
+  final bool dailyReport;
+  final int screenTimeLimit;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 
   KovaSettings({
-    this.parentName,
-    this.parentPhone,
-    this.childName,
-    this.childAge,
-    required this.quietHoursEnabled,
-    required this.quietHoursStart,
-    required this.quietHoursEnd,
-    required this.language,
+    required this.id,
+    required this.parentId,
     required this.notificationsEnabled,
-    required this.weeklyReportEnabled,
+    required this.alertSound,
+    required this.autoBlock,
+    required this.sensitivityLevel,
+    required this.dailyReport,
+    required this.screenTimeLimit,
+    required this.createdAt,
+    required this.updatedAt,
   });
 
-  factory KovaSettings.fromJson(Map<String, dynamic> json) {
+  // ── SQLite serialization ──
+
+  factory KovaSettings.fromMap(Map<String, dynamic> map) {
     return KovaSettings(
-      parentName: json['parentName'],
-      parentPhone: json['parentPhone'],
-      childName: json['childName'],
-      childAge: json['childAge'],
-      quietHoursEnabled: json['quietHoursEnabled'] ?? false,
-      quietHoursStart: json['quietHoursStart'] ?? '22:00',
-      quietHoursEnd: json['quietHoursEnd'] ?? '07:00',
-      language: json['language'] ?? 'en',
-      notificationsEnabled: json['notificationsEnabled'] ?? true,
-      weeklyReportEnabled: json['weeklyReportEnabled'] ?? true,
+      id: map['id'] as String,
+      parentId: map['parent_id'] as String,
+      notificationsEnabled: (map['notifications_enabled'] as int? ?? 1) == 1,
+      alertSound: (map['alert_sound'] as int? ?? 1) == 1,
+      autoBlock: (map['auto_block'] as int? ?? 0) == 1,
+      sensitivityLevel: map['sensitivity_level'] as String? ?? 'medium',
+      dailyReport: (map['daily_report'] as int? ?? 1) == 1,
+      screenTimeLimit: map['screen_time_limit'] as int? ?? 120,
+      createdAt: DateTime.parse(map['created_at'] as String),
+      updatedAt: DateTime.parse(map['updated_at'] as String),
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'quietHoursEnabled': quietHoursEnabled,
-    'quietHoursStart': quietHoursStart,
-    'quietHoursEnd': quietHoursEnd,
-    'language': language,
-    'notificationsEnabled': notificationsEnabled,
-    'weeklyReportEnabled': weeklyReportEnabled,
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'parent_id': parentId,
+    'notifications_enabled': notificationsEnabled ? 1 : 0,
+    'alert_sound': alertSound ? 1 : 0,
+    'auto_block': autoBlock ? 1 : 0,
+    'sensitivity_level': sensitivityLevel,
+    'daily_report': dailyReport ? 1 : 0,
+    'screen_time_limit': screenTimeLimit,
+    'created_at': createdAt.toIso8601String(),
+    'updated_at': updatedAt.toIso8601String(),
   };
+
+  // ── JSON compat ──
+
+  factory KovaSettings.fromJson(Map<String, dynamic> json) {
+    final now = DateTime.now();
+    return KovaSettings(
+      id: json['id'] ?? '',
+      parentId: json['parentId'] ?? json['parent_id'] ?? '',
+      notificationsEnabled: json['notificationsEnabled'] ?? true,
+      alertSound: json['alertSound'] ?? true,
+      autoBlock: json['autoBlock'] ?? false,
+      sensitivityLevel: json['sensitivityLevel'] ?? 'medium',
+      dailyReport: json['dailyReport'] ?? true,
+      screenTimeLimit: json['screenTimeLimit'] ?? 120,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'])
+          : now,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'])
+          : now,
+    );
+  }
+
+  /// Copy with modifications
+  KovaSettings copyWith({
+    bool? notificationsEnabled,
+    bool? alertSound,
+    bool? autoBlock,
+    String? sensitivityLevel,
+    bool? dailyReport,
+    int? screenTimeLimit,
+  }) {
+    return KovaSettings(
+      id: id,
+      parentId: parentId,
+      notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      alertSound: alertSound ?? this.alertSound,
+      autoBlock: autoBlock ?? this.autoBlock,
+      sensitivityLevel: sensitivityLevel ?? this.sensitivityLevel,
+      dailyReport: dailyReport ?? this.dailyReport,
+      screenTimeLimit: screenTimeLimit ?? this.screenTimeLimit,
+      createdAt: createdAt,
+      updatedAt: DateTime.now(),
+    );
+  }
 }

@@ -5,7 +5,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/providers/app_state.dart';
+import 'package:kova/services/seed_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -91,19 +94,29 @@ class _SplashScreenState extends State<SplashScreen>
     setState(() => _phase = 1);
     _logoEntranceCtrl.forward();
 
+    // Seed demo data + init AppState during logo animation
+    await SeedService.seedIfNeeded();
+    if (!mounted) return;
+    final appState = context.read<AppState>();
+    await appState.init();
+
     // Wait for logo to settle
-    await Future.delayed(const Duration(milliseconds: 1800));
+    await Future.delayed(const Duration(milliseconds: 800));
     if (!mounted) return;
 
     // Phase 2: Brand name + tagline
     setState(() => _phase = 2);
     _brandCtrl.forward();
 
-    // Wait for brand reveal to settle then navigate to Welcome
+    // Wait for brand reveal to settle then navigate
     await Future.delayed(const Duration(milliseconds: 2200));
     if (!mounted) return;
 
-    Navigator.of(context).pushReplacementNamed(KovaRoutes.roleSelection);
+    // Route based on login state
+    final route = appState.isLoggedIn
+        ? KovaRoutes.dashboard
+        : KovaRoutes.roleSelection;
+    Navigator.of(context).pushReplacementNamed(route);
   }
 
   @override

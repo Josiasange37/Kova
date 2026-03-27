@@ -1,30 +1,38 @@
-// Dart data model for Parent
+// models/parent.dart — Parent data model
 class Parent {
   final String id;
   final String name;
   final String phone;
+  final String pinHash;
+  final String pinSalt;
   final DateTime createdAt;
 
   Parent({
     required this.id,
     required this.name,
     required this.phone,
+    required this.pinHash,
+    required this.pinSalt,
     required this.createdAt,
   });
 
-  factory Parent.fromJson(Map<String, dynamic> json) {
+  factory Parent.fromMap(Map<String, dynamic> map) {
     return Parent(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      phone: json['phone'] as String,
-      createdAt: DateTime.parse(json['created_at'] ?? json['createdAt']),
+      id: map['id'] as String,
+      name: map['name'] as String,
+      phone: map['phone'] as String,
+      pinHash: map['pin_hash'] as String,
+      pinSalt: map['pin_salt'] as String,
+      createdAt: DateTime.parse(map['created_at'] as String),
     );
   }
 
-  Map<String, dynamic> toJson() => {
+  Map<String, dynamic> toMap() => {
     'id': id,
     'name': name,
     'phone': phone,
-    'createdAt': createdAt.toIso8601String(),
+    'pin_hash': pinHash,
+    'pin_salt': pinSalt,
+    'created_at': createdAt.toIso8601String(),
   };
 }

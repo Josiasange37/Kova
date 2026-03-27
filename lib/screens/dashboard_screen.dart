@@ -1,10 +1,12 @@
 // dashboard_screen.dart — Parent Monitoring Dashboard
-// Two states: Protected (green) and Action required (red) based on alerts.
+// Reads from AppState. Two states: Protected (green) and Action required (red).
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/providers/app_state.dart';
 import 'package:kova/screens/app_control_screen.dart';
 import 'package:kova/screens/alert_history_screen.dart';
 import 'package:kova/screens/settings_screen.dart';
@@ -19,11 +21,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen>
     with SingleTickerProviderStateMixin {
   int _selectedNavIndex = 0;
-
-  // Simulated state — toggle between safe / alert modes
-  bool _hasAlerts = false;
-  int _alertCount = 0;
-  int _safetyScore = 95;
 
   late AnimationController _entranceCtrl;
   late Animation<double> _headerFade;
@@ -80,14 +77,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.dispose();
   }
 
-  void _toggleAlertDemo() {
-    setState(() {
-      _hasAlerts = !_hasAlerts;
-      _alertCount = _hasAlerts ? 2 : 0;
-      _safetyScore = _hasAlerts ? 78 : 95;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -119,106 +108,129 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ──  Dashboard Tab
   // ═══════════════════════════════════════════
   Widget _buildDashboardTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: KovaSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 20),
+    return Consumer<AppState>(
+      builder: (context, state, _) {
+        final child = state.activeChild;
+        final dashboard = state.dashboard;
+        final hasAlerts = dashboard?.hasAlerts ?? false;
+        final safetyScore = dashboard?.safetyScore ?? 95;
+        final alertCount = dashboard?.alertCount ?? 0;
+        final parentName = state.parentName ?? 'Parent';
 
-          // ── Header: greeting + logo ──
-          SlideTransition(
-            position: _headerSlide,
-            child: Opacity(
-              opacity: _headerFade.value,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Column(
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: KovaSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 20),
+
+              // ── Header: greeting + logo ──
+              SlideTransition(
+                position: _headerSlide,
+                child: Opacity(
+                  opacity: _headerFade.value,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Good evening, John',
-                        style: GoogleFonts.nunito(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: KovaColors.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        child: Text(
-                          _hasAlerts
-                              ? 'Action required'
-                              : 'Everything looks good today',
-                          key: ValueKey(_hasAlerts),
-                          style: GoogleFonts.nunito(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: _hasAlerts
-                                ? KovaColors.danger
-                                : KovaColors.textSecondary,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Good evening, $parentName',
+                            style: GoogleFonts.nunito(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: KovaColors.primary,
+                            ),
                           ),
-                        ),
+                          const SizedBox(height: 4),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 300),
+                            child: Text(
+                              hasAlerts
+                                  ? 'Action required'
+                                  : 'Everything looks good today',
+                              key: ValueKey(hasAlerts),
+                              style: GoogleFonts.nunito(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: hasAlerts
+                                    ? KovaColors.danger
+                                    : KovaColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Kova logo icon
+                      SvgPicture.asset(
+                        KovaAssets.logoSvg,
+                        height: 32,
                       ),
                     ],
                   ),
-                  // Kova logo icon
-                  SvgPicture.asset(
-                    KovaAssets.logoSvg,
-                    height: 32,
+                ),
+              ),
+              const SizedBox(height: 28),
+
+              // ── Child card ──
+              SlideTransition(
+                position: _cardSlide,
+                child: Opacity(
+                  opacity: _cardFade.value,
+                  child: _buildChildCard(
+                    childName: child?.name ?? 'Child',
+                    childAge: child?.age ?? 0,
+                    hasAlerts: hasAlerts,
+                    safetyScore: safetyScore,
+                    alertCount: alertCount,
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 28),
+              const SizedBox(height: 28),
 
-          // ── Child card ──
-          SlideTransition(
-            position: _cardSlide,
-            child: Opacity(
-              opacity: _cardFade.value,
-              child: GestureDetector(
-                onTap: _toggleAlertDemo,
-                child: _buildChildCard(),
+              // ── Monitored apps ──
+              SlideTransition(
+                position: _appsSlide,
+                child: Opacity(
+                  opacity: _appsFade.value,
+                  child: _buildMonitoredApps(),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 28),
+              const SizedBox(height: 28),
 
-          // ── Monitored apps ──
-          SlideTransition(
-            position: _appsSlide,
-            child: Opacity(
-              opacity: _appsFade.value,
-              child: _buildMonitoredApps(),
-            ),
+              // ── Recent activity ──
+              SlideTransition(
+                position: _activitySlide,
+                child: Opacity(
+                  opacity: _activityFade.value,
+                  child: _buildRecentActivity(
+                    hasAlerts: hasAlerts,
+                    alertCount: alertCount,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 32),
+            ],
           ),
-          const SizedBox(height: 28),
-
-          // ── Recent activity ──
-          SlideTransition(
-            position: _activitySlide,
-            child: Opacity(
-              opacity: _activityFade.value,
-              child: _buildRecentActivity(),
-            ),
-          ),
-          const SizedBox(height: 32),
-        ],
-      ),
+        );
+      },
     );
   }
 
   // ═══════════════════════════════════════════
   // ──  Child Card
   // ═══════════════════════════════════════════
-  Widget _buildChildCard() {
-    final badgeColor = _hasAlerts ? KovaColors.danger : KovaColors.success;
-    final badgeText = _hasAlerts ? 'Action required' : 'Protected';
+  Widget _buildChildCard({
+    required String childName,
+    required int childAge,
+    required bool hasAlerts,
+    required int safetyScore,
+    required int alertCount,
+  }) {
+    final badgeColor = hasAlerts ? KovaColors.danger : KovaColors.success;
+    final badgeText = hasAlerts ? 'Action required' : 'Protected';
 
     return Container(
       width: double.infinity,
@@ -250,7 +262,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
             child: Text(
-              'A',
+              childName.isNotEmpty ? childName[0].toUpperCase() : '?',
               style: GoogleFonts.nunito(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
@@ -262,7 +274,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
           // Name + age
           Text(
-            'Alex',
+            childName,
             style: GoogleFonts.nunito(
               fontSize: 16,
               fontWeight: FontWeight.w800,
@@ -270,7 +282,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
           Text(
-            '12 years',
+            '$childAge years',
             style: GoogleFonts.nunito(
               fontSize: 12,
               fontWeight: FontWeight.w500,
@@ -307,12 +319,12 @@ class _DashboardScreenState extends State<DashboardScreen>
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
                 child: Text(
-                  '$_safetyScore',
-                  key: ValueKey(_safetyScore),
+                  '$safetyScore',
+                  key: ValueKey(safetyScore),
                   style: GoogleFonts.nunito(
                     fontSize: 36,
                     fontWeight: FontWeight.w900,
-                    color: _hasAlerts ? KovaColors.danger : KovaColors.success,
+                    color: hasAlerts ? KovaColors.danger : KovaColors.success,
                   ),
                 ),
               ),
@@ -332,12 +344,12 @@ class _DashboardScreenState extends State<DashboardScreen>
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 300),
             child: Text(
-              _hasAlerts ? '$_alertCount alerts' : 'No alerts',
-              key: ValueKey(_alertCount),
+              hasAlerts ? '$alertCount alerts' : 'No alerts',
+              key: ValueKey(alertCount),
               style: GoogleFonts.nunito(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: _hasAlerts
+                color: hasAlerts
                     ? KovaColors.danger
                     : KovaColors.textSecondary,
               ),
@@ -418,7 +430,10 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ═══════════════════════════════════════════
   // ──  Recent Activity
   // ═══════════════════════════════════════════
-  Widget _buildRecentActivity() {
+  Widget _buildRecentActivity({
+    required bool hasAlerts,
+    required int alertCount,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -434,8 +449,11 @@ class _DashboardScreenState extends State<DashboardScreen>
 
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 350),
-          child: _hasAlerts
-              ? _buildAlertActivityCard(key: const ValueKey('alert'))
+          child: hasAlerts
+              ? _buildAlertActivityCard(
+                  alertCount: alertCount,
+                  key: const ValueKey('alert'),
+                )
               : _buildSafeActivityCard(key: const ValueKey('safe')),
         ),
       ],
@@ -490,7 +508,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  Widget _buildAlertActivityCard({Key? key}) {
+  Widget _buildAlertActivityCard({required int alertCount, Key? key}) {
     return Container(
       key: key,
       width: double.infinity,
@@ -508,7 +526,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               Icon(Icons.warning_rounded, color: KovaColors.danger, size: 20),
               const SizedBox(width: 8),
               Text(
-                '$_alertCount threats detected',
+                '$alertCount threats detected',
                 style: GoogleFonts.nunito(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
@@ -521,7 +539,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           Padding(
             padding: const EdgeInsets.only(left: 28),
             child: Text(
-              'Tap on Alex\'s card to review alerts',
+              'Tap on Alerts tab to review',
               style: GoogleFonts.nunito(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
@@ -534,7 +552,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             padding: const EdgeInsets.only(left: 28),
             child: GestureDetector(
               onTap: () {
-                Navigator.of(context).pushNamed(KovaRoutes.alertHistory);
+                setState(() => _selectedNavIndex = 1);
               },
               child: Text(
                 'View details →',

@@ -1,4 +1,4 @@
-name: Build Kova Full Stack
+name: Build Kova Release
 
 on:
   push:
@@ -9,8 +9,8 @@ on:
 
 jobs:
   build:
-    name: Build KOVA App (Android & iOS)
-    runs-on: macos-latest
+    name: Build KOVA Android APK
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,7 +20,7 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
-          
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -29,51 +29,14 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Web
-        run: flutter build web
+      - name: Analyze code
+        run: flutter analyze
 
       - name: Build Android APK
         run: flutter build apk --release
-
-      - name: Build iOS App (Unsigned)
-        run: flutter build ios --release --no-codesign
-
-      - name: Upload Web Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: kova-web
-          path: build/web
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: kova-android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Upload iOS App
-        uses: actions/upload-artifact@v4
-        with:
-          name: kova-ios-app
-          path: build/ios/iphoneos/Runner.app
-
-  build-backend:
-    name: Build Node Backend
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: server/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: ./server
-
-      - name: Run Backend Tests
-        run: npm test
-        working-directory: ./server

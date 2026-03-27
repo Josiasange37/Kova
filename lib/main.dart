@@ -2,8 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/core/page_transitions.dart';
+import 'package:kova/providers/app_state.dart';
+import 'package:kova/services/seed_service.dart';
 import 'package:kova/screens/splash_screen.dart';
 import 'package:kova/screens/role_selection_screen.dart';
 import 'package:kova/child_app/screens/splash_screen.dart' as child;
@@ -19,11 +22,11 @@ import 'package:kova/screens/alert_history_screen.dart';
 import 'package:kova/screens/alert_detail_screen.dart';
 import 'package:kova/screens/settings_screen.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Force portrait orientation for mobile
-  SystemChrome.setPreferredOrientations([
+  await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
@@ -36,7 +39,18 @@ void main() {
     ),
   );
 
-  runApp(const KovaApp());
+  // Initialize demo data if needed
+  await SeedService.seedIfNeeded();
+
+  final appState = AppState();
+  await appState.init();
+
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => appState,
+      child: const KovaApp(),
+    ),
+  );
 }
 
 class KovaApp extends StatelessWidget {
@@ -62,61 +76,61 @@ class KovaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'KOVA',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: KovaColors.background,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: KovaColors.primary,
-          primary: KovaColors.primary,
-          secondary: KovaColors.accent,
-          surface: KovaColors.cardWhite,
-          error: KovaColors.danger,
-        ),
-        textTheme: GoogleFonts.nunitoTextTheme().apply(
-          bodyColor: KovaColors.textPrimary,
-          displayColor: KovaColors.textPrimary,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: KovaColors.primary,
-            foregroundColor: KovaColors.textOnDark,
-            minimumSize: const Size(double.infinity, 52),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(KovaRadius.button),
-            ),
-            textStyle: GoogleFonts.nunito(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
+        title: 'KOVA',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
+          scaffoldBackgroundColor: KovaColors.background,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: KovaColors.primary,
+            primary: KovaColors.primary,
+            secondary: KovaColors.accent,
+            surface: KovaColors.cardWhite,
+            error: KovaColors.danger,
+          ),
+          textTheme: GoogleFonts.nunitoTextTheme().apply(
+            bodyColor: KovaColors.textPrimary,
+            displayColor: KovaColors.textPrimary,
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: KovaColors.primary,
+              foregroundColor: KovaColors.textOnDark,
+              minimumSize: const Size(double.infinity, 52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(KovaRadius.button),
+              ),
+              textStyle: GoogleFonts.nunito(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
-      ),
 
-      // -- Routes with custom transitions --
-      initialRoute: KovaRoutes.splash,
-      onGenerateRoute: (settings) {
-        // Splash uses default (no transition needed)
-        if (settings.name == KovaRoutes.splash) {
+        // -- Routes with custom transitions --
+        initialRoute: KovaRoutes.splash,
+        onGenerateRoute: (settings) {
+          // Splash uses default (no transition needed)
+          if (settings.name == KovaRoutes.splash) {
+            return MaterialPageRoute(
+              builder: (_) => const SplashScreen(),
+              settings: settings,
+            );
+          }
+
+          // All other routes use smooth slide-up + fade
+          final builder = _routeBuilders[settings.name];
+          if (builder != null) {
+            return KovaPageRoute(page: builder());
+          }
+
+          // Fallback — unknown route goes to splash
           return MaterialPageRoute(
             builder: (_) => const SplashScreen(),
             settings: settings,
           );
-        }
-
-        // All other routes use smooth slide-up + fade
-        final builder = _routeBuilders[settings.name];
-        if (builder != null) {
-          return KovaPageRoute(page: builder());
-        }
-
-        // Fallback — unknown route goes to splash
-        return MaterialPageRoute(
-          builder: (_) => const SplashScreen(),
-          settings: settings,
-        );
-      },
+        },
     );
   }
 }

@@ -1,4 +1,4 @@
-// Dart data model for Alert
+// models/alert.dart — Alert data model
 class Alert {
   final String id;
   final String childId;
@@ -29,6 +29,45 @@ class Alert {
     this.resolvedAt,
     required this.createdAt,
   });
+
+  // ── SQLite serialization ──
+
+  factory Alert.fromMap(Map<String, dynamic> map) {
+    return Alert(
+      id: map['id'] as String,
+      childId: map['child_id'] as String,
+      childName: map['child_name'] as String?,
+      appName: map['app_name'] as String,
+      alertType: map['alert_type'] as String,
+      severity: map['severity'] as String,
+      senderInfo: map['sender_info'] as String?,
+      contentPreview: map['content_preview'] as String?,
+      aiConfidence: (map['ai_confidence'] as num?)?.toDouble() ?? 0.0,
+      isResolved: (map['is_resolved'] as int? ?? 0) == 1,
+      resolvedAction: map['resolved_action'] as String?,
+      resolvedAt: map['resolved_at'] != null
+          ? DateTime.parse(map['resolved_at'] as String)
+          : null,
+      createdAt: DateTime.parse(map['created_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'child_id': childId,
+    'app_name': appName,
+    'alert_type': alertType,
+    'severity': severity,
+    'sender_info': senderInfo,
+    'content_preview': contentPreview,
+    'ai_confidence': aiConfidence,
+    'is_resolved': isResolved ? 1 : 0,
+    'resolved_action': resolvedAction,
+    'resolved_at': resolvedAt?.toIso8601String(),
+    'created_at': createdAt.toIso8601String(),
+  };
+
+  // ── JSON compat ──
 
   factory Alert.fromJson(Map<String, dynamic> json) {
     return Alert(
@@ -71,4 +110,20 @@ class Alert {
 
   /// Returns true if this is a high-priority alert
   bool get isCritical => severity == 'high' || severity == 'critical';
+
+  /// Formatted severity label
+  String get severityLabel {
+    switch (severity) {
+      case 'critical':
+        return 'Critical';
+      case 'high':
+        return 'High';
+      case 'medium':
+        return 'Medium';
+      case 'low':
+        return 'Low';
+      default:
+        return severity;
+    }
+  }
 }

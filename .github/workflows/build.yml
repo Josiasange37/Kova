@@ -1,4 +1,4 @@
-name: Build KOVA Monorepo
+name: Build KOVA
 
 on:
   push:
@@ -8,30 +8,29 @@ on:
 
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+      - name: Set up Java
+        uses: actions/setup-java@v4
         with:
-          node-version: '18'
-          cache: 'npm'
+          distribution: 'zulu'
+          java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.0' # Adjust based on your required version
           channel: 'stable'
 
-      - name: Install dependencies and build app
-        run: |
-          npm install
-          flutter build web
+      - name: Install dependencies
+        run: flutter pub get
 
-      - name: Run Backend Tests
-        run: |
-          cd server
-          npm test
+      - name: Analyze code
+        run: flutter analyze
+
+      - name: Build Android APK
+        run: flutter build apk --release
