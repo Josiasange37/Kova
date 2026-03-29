@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:kova/providers/app_state.dart';
-import 'package:kova/models/alert.dart';
+import 'package:kova/parent/services/alert_history_service.dart';
+import 'package:kova/local_backend/repositories/alert_repository.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/core/router.dart';
 
 class AlertHistoryScreen extends StatefulWidget {
   final bool isEmbedded;
@@ -21,7 +23,6 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
   int _selectedTimeFilter = 0; // 0=This week, 1=This month, 2=All
 
   static const _timeFilters = ['This week', 'This month', 'All'];
-
 
   late AnimationController _entranceCtrl;
   late Animation<double> _headerFade;
@@ -66,6 +67,15 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Load alerts when screen is first built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AlertHistoryService>().loadAlerts();
+    });
+  }
+
+  @override
   void dispose() {
     _entranceCtrl.dispose();
     super.dispose();
@@ -73,30 +83,41 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
 
   // ── Helper methods ──
 
-  List<Alert> _getFilteredAlerts(List<Alert> allAlerts, List<String> apps) {
+  List<AlertModel> _getFilteredAlerts(
+    List<AlertModel> allAlerts,
+    List<String> apps,
+  ) {
     var filtered = allAlerts;
 
     // Filter by App
     if (_selectedAppFilter > 0 && _selectedAppFilter < apps.length) {
       final selectedAppName = apps[_selectedAppFilter];
-      filtered = filtered.where((a) => a.appName == selectedAppName).toList();
+      filtered = filtered.where((a) => a.app == selectedAppName).toList();
     }
 
     // Filter by Time
     final now = DateTime.now();
     if (_selectedTimeFilter == 0) {
       // Today
-      filtered = filtered.where((a) => 
-        a.createdAt.year == now.year && 
-        a.createdAt.month == now.month && 
-        a.createdAt.day == now.day).toList();
+      filtered = filtered
+          .where(
+            (a) =>
+                a.createdAt.year == now.year &&
+                a.createdAt.month == now.month &&
+                a.createdAt.day == now.day,
+          )
+          .toList();
     } else if (_selectedTimeFilter == 1) {
       // Yesterday
       final yesterday = now.subtract(const Duration(days: 1));
-      filtered = filtered.where((a) => 
-        a.createdAt.year == yesterday.year && 
-        a.createdAt.month == yesterday.month && 
-        a.createdAt.day == yesterday.day).toList();
+      filtered = filtered
+          .where(
+            (a) =>
+                a.createdAt.year == yesterday.year &&
+                a.createdAt.month == yesterday.month &&
+                a.createdAt.day == yesterday.day,
+          )
+          .toList();
     } else if (_selectedTimeFilter == 2) {
       // Last 7 days
       final weekAgo = now.subtract(const Duration(days: 7));
@@ -146,20 +167,30 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.watch<AppState>();
-    
+    final service = context.watch<AlertHistoryService>();
+
     // Derive app filters from alert history
-    final uniqueApps = appState.alerts.map((a) => a.appName).toSet().toList();
+    final uniqueApps = service.allAlerts.map((a) => a.app).toSet().toList();
     uniqueApps.sort();
     final apps = ['All', ...uniqueApps];
 
-    final filteredAlerts = _getFilteredAlerts(appState.alerts, apps);
+    final filteredAlerts = _getFilteredAlerts(service.allAlerts, apps);
 
-    // Calculate stats
+    // Calculate stats from filtered alerts
     final totalAlerts = filteredAlerts.length;
-    final blocksCount = filteredAlerts.where((a) => a.isResolved && (a.resolvedAction?.contains('Block') ?? false)).length;
-    final avgScore = totalAlerts == 0 ? 0 
-        : (filteredAlerts.map((a) => a.aiConfidence).reduce((a, b) => a + b) / totalAlerts * 100).round();
+    final blocksCount = filteredAlerts.where((a) => a.resolved).length;
+    final avgScore = totalAlerts == 0
+        ? 0
+        : ((filteredAlerts
+                          .map(
+                            (a) =>
+                                (a.scoreText + a.scoreImage + a.scoreGrooming) /
+                                3,
+                          )
+                          .reduce((a, b) => a + b) /
+                      totalAlerts) *
+                  100)
+              .round();
 
     final content = AnimatedBuilder(
       animation: _entranceCtrl,
@@ -189,7 +220,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
 
               // ── App filter chips ──
               Opacity(
-                opacity: _filterFade.value, 
+                opacity: _filterFade.value,
                 child: _buildAppFilters(apps),
               ),
               const SizedBox(height: 16),
@@ -200,19 +231,25 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
 
               // ── Stats row ──
               Opacity(
-                opacity: _statsFade.value, 
-                child: _buildStatsRow(totalAlerts.toString(), blocksCount.toString(), '$avgScore%'),
+                opacity: _statsFade.value,
+                child: _buildStatsRow(
+                  totalAlerts.toString(),
+                  blocksCount.toString(),
+                  '$avgScore%',
+                ),
               ),
               const SizedBox(height: 24),
 
               // ── Alert list ──
               Opacity(
                 opacity: _listFade.value,
-                child: filteredAlerts.isEmpty 
-                  ? _buildEmptyState()
-                  : Column(
-                      children: filteredAlerts.map((a) => _buildAlertCard(a)).toList(),
-                    ),
+                child: filteredAlerts.isEmpty
+                    ? _buildEmptyState()
+                    : Column(
+                        children: filteredAlerts
+                            .map((a) => _buildAlertCard(a))
+                            .toList(),
+                      ),
               ),
             ],
           ),
@@ -241,9 +278,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
         children: List.generate(apps.length, (i) {
           final isActive = _selectedAppFilter == i;
           return Padding(
-            padding: EdgeInsets.only(
-              right: i < apps.length - 1 ? 12 : 0,
-            ),
+            padding: EdgeInsets.only(right: i < apps.length - 1 ? 12 : 0),
             child: GestureDetector(
               onTap: () => setState(() => _selectedAppFilter = i),
               child: AnimatedContainer(
@@ -399,14 +434,17 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
   // ═══════════════════════════════════════════
   // ──  Alert Card
   // ═══════════════════════════════════════════
-  Widget _buildAlertCard(Alert alert) {
+  Widget _buildAlertCard(AlertModel alert) {
     final borderColor = _getSeverityColor(alert.severity);
-    final scoreText = '${(alert.aiConfidence * 100).round()}%';
+    final avgScorePercent =
+        ((alert.scoreText + alert.scoreImage + alert.scoreGrooming) / 3 * 100)
+            .round();
+    final scoreText = '$avgScorePercent%';
     final timeAgo = _getTimeAgo(alert.createdAt);
 
     return GestureDetector(
       onTap: () {
-        Navigator.of(context).pushNamed(KovaRoutes.alertDetail, arguments: alert);
+        context.push(AppRoutes.alertDetail, extra: alert);
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12, left: 20, right: 20),
@@ -436,7 +474,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
               ),
               child: Center(
                 child: Icon(
-                  _getAppIcon(alert.appName),
+                  _getAppIcon(alert.app),
                   color: const Color(0xFF1F2937),
                   size: 22,
                 ),
@@ -452,7 +490,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                   Row(
                     children: [
                       Text(
-                        alert.appName,
+                        alert.app,
                         style: GoogleFonts.nunito(
                           fontSize: 14,
                           fontWeight: FontWeight.w800,
@@ -483,17 +521,17 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    alert.alertType,
+                    alert.type,
                     style: GoogleFonts.nunito(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       color: const Color(0xFF6B7280),
                     ),
                   ),
-                  if (alert.isResolved) ...[
+                  if (alert.resolved) ...[
                     const SizedBox(height: 4),
                     Text(
-                      alert.resolvedAction ?? 'Resolved',
+                      'Resolved',
                       style: GoogleFonts.nunito(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -546,5 +584,3 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
     );
   }
 }
-
-

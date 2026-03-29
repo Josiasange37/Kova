@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/core/router.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -292,9 +294,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         height: 52,
                         child: ElevatedButton(
                           onPressed: () {
-                            Navigator.of(
-                              context,
-                            ).pushReplacementNamed(KovaRoutes.parentProfile);
+                            context.go(AppRoutes.parentProfile);
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: KovaColors.primary,

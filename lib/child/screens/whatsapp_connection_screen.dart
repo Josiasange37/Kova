@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:kova/child_app/screens/monitored_apps_screen.dart';
+import 'package:kova/core/router.dart';
 import '../theme/kova_theme.dart';
 
 class WhatsappConnectionScreen extends StatelessWidget {
@@ -101,13 +102,8 @@ class WhatsappConnectionScreen extends StatelessWidget {
 
             ElevatedButton(
               onPressed: () {
-                // Navigate to next screen
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MonitoredAppsScreen(),
-                  ),
-                );
+                // Navigate to monitored apps screen
+                context.go(AppRoutes.childMonitoredApps);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: KovaTheme.primaryBlue,

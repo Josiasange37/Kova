@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:kova/child_app/screens/dashboard_screen.dart';
+import 'package:go_router/go_router.dart';
+import 'package:kova/core/router.dart';
 
 class ParentConnectionScreen extends StatefulWidget {
   const ParentConnectionScreen({super.key});
@@ -53,7 +54,7 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Color(0xFF1E2A5D)),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.pop(),
         ),
       ),
       body: SafeArea(
@@ -160,13 +161,8 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen> {
                 height: 56,
                 child: ElevatedButton(
                   onPressed: () {
-                    // Final navigation to dashboard
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const DashboardScreen(),
-                      ),
-                    );
+                    // Navigate to child accessibility setup then dashboard
+                    context.go(AppRoutes.childAccessibility);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1E2A5D),

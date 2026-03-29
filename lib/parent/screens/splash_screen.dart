@@ -4,9 +4,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/core/router.dart';
 import 'package:kova/providers/app_state.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -112,9 +114,10 @@ class _SplashScreenState extends State<SplashScreen>
 
     // Route based on login state
     final route = appState.isLoggedIn
-        ? KovaRoutes.dashboard
-        : KovaRoutes.roleSelection;
-    Navigator.of(context).pushReplacementNamed(route);
+        ? AppRoutes.parentDashboard
+        : AppRoutes.roleSelection;
+    if (!mounted) return;
+    context.go(route);
   }
 
   @override

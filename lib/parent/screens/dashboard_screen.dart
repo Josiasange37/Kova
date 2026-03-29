@@ -1,15 +1,15 @@
 // dashboard_screen.dart — Parent Monitoring Dashboard
-// Reads from AppState. Two states: Protected (green) and Action required (red).
+// Reads from DashboardDataService. Two states: Protected (green) and Action required (red).
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
-import 'package:kova/providers/app_state.dart';
-import 'package:kova/screens/app_control_screen.dart';
-import 'package:kova/screens/alert_history_screen.dart';
-import 'package:kova/screens/settings_screen.dart';
+import 'package:kova/parent/services/dashboard_data_service.dart';
+import 'package:kova/parent/screens/app_control_screen.dart';
+import 'package:kova/parent/screens/alert_history_screen.dart';
+import 'package:kova/parent/screens/settings_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -37,6 +37,15 @@ class _DashboardScreenState extends State<DashboardScreen>
     super.initState();
     _initAnimations();
     _entranceCtrl.forward();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Load dashboard data when screen is first built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<DashboardDataService>().loadDashboardData();
+    });
   }
 
   void _initAnimations() {
@@ -108,14 +117,13 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ──  Dashboard Tab
   // ═══════════════════════════════════════════
   Widget _buildDashboardTab() {
-    return Consumer<AppState>(
-      builder: (context, state, _) {
-        final child = state.activeChild;
-        final dashboard = state.dashboard;
-        final hasAlerts = dashboard?.hasAlerts ?? false;
-        final safetyScore = dashboard?.safetyScore ?? 95;
-        final alertCount = dashboard?.alertCount ?? 0;
-        final parentName = state.parentName ?? 'Parent';
+    return Consumer<DashboardDataService>(
+      builder: (context, service, _) {
+        final child = service.activeChild;
+        final hasAlerts = service.hasAlerts;
+        final safetyScore = service.safetyScore;
+        final alertCount = service.alertCount;
+        final parentName = 'Parent'; // TODO: Get from ParentRepository
 
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: KovaSpacing.lg),
@@ -164,10 +172,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ],
                       ),
                       // Kova logo icon
-                      SvgPicture.asset(
-                        KovaAssets.logoSvg,
-                        height: 32,
-                      ),
+                      SvgPicture.asset(KovaAssets.logoSvg, height: 32),
                     ],
                   ),
                 ),
@@ -181,7 +186,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                   opacity: _cardFade.value,
                   child: _buildChildCard(
                     childName: child?.name ?? 'Child',
-                    childAge: child?.age ?? 0,
+                    childAge: 0, // TODO: Add age field to ChildModel
                     hasAlerts: hasAlerts,
                     safetyScore: safetyScore,
                     alertCount: alertCount,
@@ -349,9 +354,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               style: GoogleFonts.nunito(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: hasAlerts
-                    ? KovaColors.danger
-                    : KovaColors.textSecondary,
+                color: hasAlerts ? KovaColors.danger : KovaColors.textSecondary,
               ),
             ),
           ),

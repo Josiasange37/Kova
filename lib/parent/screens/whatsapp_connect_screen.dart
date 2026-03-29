@@ -2,9 +2,11 @@
 // Two modes: QR Code scan or Pairing Code — for pairing parent with child device
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/core/router.dart';
 
 class WhatsappConnectScreen extends StatefulWidget {
   const WhatsappConnectScreen({super.key});
@@ -165,10 +167,10 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
       _isConnected = true;
     });
 
-    // Auto-navigate after success
+    // Auto-navigate after success to success screen
     await Future.delayed(const Duration(milliseconds: 1500));
     if (!mounted) return;
-    Navigator.of(context).pushReplacementNamed(KovaRoutes.monitoredApps);
+    context.go(AppRoutes.parentSuccess);
   }
 
   @override
@@ -198,7 +200,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
                         icon: const Icon(Icons.arrow_back_ios_new_rounded),
                         color: KovaColors.textPrimary,
                         iconSize: 20,
-                        onPressed: () => Navigator.of(context).pop(),
+                        onPressed: () => context.pop(),
                       ),
                     ],
                   ),

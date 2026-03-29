@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:kova/child_app/screens/blocked_overlay_screen.dart';
+import 'package:kova/child/screens/blocked_overlay_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});

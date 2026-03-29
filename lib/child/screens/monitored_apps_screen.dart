@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-
-import 'package:kova/child_app/screens/parent_connection_screen.dart';
+import 'package:go_router/go_router.dart';
+import 'package:kova/core/router.dart';
 
 class MonitoredAppsScreen extends StatelessWidget {
   const MonitoredAppsScreen({super.key});
@@ -79,12 +79,8 @@ class MonitoredAppsScreen extends StatelessWidget {
                 height: 56,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ParentConnectionScreen(),
-                      ),
-                    );
+                    // Navigate to parent connection screen
+                    context.go(AppRoutes.childParentConnection);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1E2A5D),

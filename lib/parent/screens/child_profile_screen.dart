@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/core/router.dart';
 
 class ChildProfileScreen extends StatefulWidget {
   const ChildProfileScreen({super.key});
@@ -66,8 +68,8 @@ class _ChildProfileScreenState extends State<ChildProfileScreen>
     if (!_isNameFilled) return;
     // Hide keyboard
     FocusScope.of(context).unfocus();
-    // Navigate to next screen
-    Navigator.of(context).pushReplacementNamed(KovaRoutes.whatsappConnect);
+    // Navigate to monitored apps screen
+    context.go(AppRoutes.parentMonitoredApps);
   }
 
   // Helper for mode config
@@ -100,7 +102,7 @@ class _ChildProfileScreenState extends State<ChildProfileScreen>
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
           color: KovaColors.textPrimary,
           iconSize: 20,
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
         ),
       ),
       body: SafeArea(

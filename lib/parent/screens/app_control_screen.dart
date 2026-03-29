@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/constants.dart';
 
@@ -99,7 +100,7 @@ class _AppControlScreenState extends State<AppControlScreen> {
                 _headerButton(
                   context,
                   FontAwesomeIcons.arrowLeft,
-                  onTap: () => Navigator.pop(context),
+                  onTap: () => context.pop(),
                 ),
               Expanded(
                 child: Column(

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/core/router.dart';
 
 class RoleSelectionScreen extends StatelessWidget {
   const RoleSelectionScreen({super.key});
@@ -33,7 +35,7 @@ class RoleSelectionScreen extends StatelessWidget {
                 subtitle: 'Monitor and protect your child',
                 icon: Icons.shield_outlined,
                 onTap: () {
-                  Navigator.of(context).pushNamed(KovaRoutes.welcome);
+                  context.go(AppRoutes.parentWelcome);
                 },
               ),
 
@@ -46,7 +48,7 @@ class RoleSelectionScreen extends StatelessWidget {
                 subtitle: 'Set up protection on this device',
                 icon: Icons.child_care_outlined,
                 onTap: () {
-                  Navigator.of(context).pushNamed(KovaRoutes.childWelcome);
+                  context.go(AppRoutes.childWelcome);
                 },
               ),
             ],

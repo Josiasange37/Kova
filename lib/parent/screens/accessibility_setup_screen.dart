@@ -2,8 +2,10 @@
 // Step-by-step guide to enable KOVA accessibility service on the child's device.
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/core/router.dart';
 
 class AccessibilitySetupScreen extends StatefulWidget {
   const AccessibilitySetupScreen({super.key});
@@ -150,7 +152,7 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
     // Auto-navigate after success
     await Future.delayed(const Duration(milliseconds: 1500));
     if (!mounted) return;
-    Navigator.of(context).pushReplacementNamed(KovaRoutes.success);
+    context.go(AppRoutes.parentSuccess);
   }
 
   @override
@@ -176,7 +178,7 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
                         icon: const Icon(Icons.arrow_back_ios_new_rounded),
                         color: KovaColors.textPrimary,
                         iconSize: 20,
-                        onPressed: () => Navigator.of(context).pop(),
+                        onPressed: () => context.pop(),
                       ),
                     ],
                   ),

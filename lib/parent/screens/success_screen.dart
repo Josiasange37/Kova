@@ -1,8 +1,10 @@
 // success_screen.dart — Final Setup Confirmation
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/core/router.dart';
 import 'package:kova/providers/app_state.dart';
 
 class SuccessScreen extends StatefulWidget {
@@ -168,7 +170,7 @@ class _SuccessScreenState extends State<SuccessScreen>
                   onPressed: () async {
                     await context.read<AppState>().markLoggedIn();
                     if (!context.mounted) return;
-                    Navigator.of(context).pushReplacementNamed(KovaRoutes.dashboard);
+                    context.go(AppRoutes.parentDashboard);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: KovaColors.primary,

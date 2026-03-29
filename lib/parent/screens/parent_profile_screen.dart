@@ -2,8 +2,10 @@
 // Collects: first name, WhatsApp number, 4-digit PIN
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/core/router.dart';
 
 class ParentProfileScreen extends StatefulWidget {
   const ParentProfileScreen({super.key});
@@ -410,7 +412,7 @@ class _ParentProfileScreenState extends State<ParentProfileScreen>
     }
 
     // TODO: Save profile data and navigate to next setup screen
-    Navigator.of(context).pushReplacementNamed(KovaRoutes.childProfile);
+    context.go(AppRoutes.childProfile);
   }
 
   void _showSnackBar(String message) {

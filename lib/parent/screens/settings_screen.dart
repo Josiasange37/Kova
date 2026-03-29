@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../core/constants.dart';
-import '../child_app/screens/child_dashboard.dart';
+import 'package:kova/core/constants.dart';
+import 'package:kova/core/router.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool isEmbedded;
@@ -157,7 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             color: KovaColors.textPrimary,
             size: 20,
           ),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
         ),
         title: Text(
           'Settings',
@@ -312,10 +313,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: ' Alex\'s view',
               trailing: _buildActionButton('Switch'),
               onPressed: () {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => const ChildDashboard()),
-                  (route) => false,
-                );
+                // Navigate to child dashboard
+                context.go(AppRoutes.childDashboard);
               },
               showDivider: false,
             ),

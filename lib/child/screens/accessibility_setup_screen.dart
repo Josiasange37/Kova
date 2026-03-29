@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:kova/core/router.dart';
 import '../theme/kova_theme.dart';
 import '../services/accessibility_service.dart';
-import 'whatsapp_connection_screen.dart';
 
 class AccessibilitySetupScreen extends StatefulWidget {
   const AccessibilitySetupScreen({super.key});
@@ -40,9 +41,8 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
     final isGranted =
         await AccessibilityService.isAccessibilityPermissionGranted();
     if (isGranted && mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const WhatsappConnectionScreen()),
-      );
+      // Navigate to child dashboard after permission granted
+      context.go(AppRoutes.childDashboard);
     }
   }
 
@@ -53,9 +53,8 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
     setState(() => _isChecking = false);
 
     if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const WhatsappConnectionScreen()),
-      );
+      // Navigate to child dashboard
+      context.go(AppRoutes.childDashboard);
     }
   }
 
@@ -68,7 +67,7 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => context.pop(),
         ),
       ),
       body: SafeArea(

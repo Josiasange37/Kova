@@ -1,8 +1,10 @@
 // monitored_apps_screen.dart — KOVA Monitored Apps List
 // Shows all monitored apps with their connection status
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/core/router.dart';
 
 class MonitoredAppsScreen extends StatefulWidget {
   const MonitoredAppsScreen({super.key});
@@ -105,8 +107,8 @@ class _MonitoredAppsScreenState extends State<MonitoredAppsScreen>
   }
 
   void _onContinue() {
-    // Navigate to accessibility setup
-    Navigator.of(context).pushReplacementNamed(KovaRoutes.accessibilitySetup);
+    // Navigate to connect child screen
+    context.go(AppRoutes.parentConnectChild);
   }
 
   @override
@@ -128,7 +130,7 @@ class _MonitoredAppsScreenState extends State<MonitoredAppsScreen>
                         icon: const Icon(Icons.arrow_back_ios_new_rounded),
                         color: KovaColors.textPrimary,
                         iconSize: 20,
-                        onPressed: () => Navigator.of(context).pop(),
+                        onPressed: () => context.pop(),
                       ),
                     ],
                   ),

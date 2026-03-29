@@ -73,17 +73,20 @@ class LocalStorage {
 
   static Future<bool> clear() => _prefs.clear();
 
-  static String? getString(String key) => _prefs.getString(key);
+  static String getString(String key, [String? defaultValue]) =>
+      _prefs.getString(key) ?? defaultValue ?? '';
 
   static Future<bool> setString(String key, String value) =>
       _prefs.setString(key, value);
 
-  static bool? getBool(String key) => _prefs.getBool(key);
+  static bool getBool(String key, [bool? defaultValue]) =>
+      _prefs.getBool(key) ?? defaultValue ?? false;
 
   static Future<bool> setBool(String key, bool value) =>
       _prefs.setBool(key, value);
 
-  static int? getInt(String key) => _prefs.getInt(key);
+  static int getInt(String key, [int? defaultValue]) =>
+      _prefs.getInt(key) ?? defaultValue ?? 0;
 
   static Future<bool> setInt(String key, int value) =>
       _prefs.setInt(key, value);

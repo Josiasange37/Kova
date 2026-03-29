@@ -1,5 +1,6 @@
 // alert_detail_screen.dart — Individual Alert Detail with AI score, content preview, and actions
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/constants.dart';
 import 'dart:math';
@@ -75,7 +76,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
                         icon: const Icon(Icons.arrow_back_ios_new_rounded),
                         color: KovaColors.textPrimary,
                         iconSize: 20,
-                        onPressed: () => Navigator.of(context).pop(),
+                        onPressed: () => context.pop(),
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -621,7 +622,7 @@ class _PinEntrySheetState extends State<_PinEntrySheet> {
       if (_pin.length == _pinLength) {
         // Simulate PIN verification
         Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) Navigator.of(context).pop();
+          if (mounted) context.pop();
         });
       }
     }
@@ -697,7 +698,7 @@ class _PinEntrySheetState extends State<_PinEntrySheet> {
 
           // Cancel
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => context.pop(),
             child: Text(
               'Cancel',
               style: GoogleFonts.nunito(
