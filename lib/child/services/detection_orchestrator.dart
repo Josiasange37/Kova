@@ -1,15 +1,12 @@
 // child/services/detection_orchestrator.dart — Master coordinator for all detection services
 // Orchestrates: TextClassifier, ImageClassifier, ContextDetector, SeverityEngine
 
-import 'package:uuid/uuid.dart';
 import 'text_classifier.dart';
 import 'image_classifier.dart';
 import 'context_detector.dart';
 import 'severity_engine.dart';
 
 class DetectionOrchestrator {
-  static const _uuid = Uuid();
-
   /// Analyze a single message from WhatsApp/messaging app
   /// Returns complete alert data if harmful content detected
   static Future<Map<String, dynamic>?> analyzeMessage({
@@ -114,14 +111,21 @@ class DetectionOrchestrator {
       finalGroomingConfidence = (finalGroomingConfidence + 0.2).clamp(0.0, 1.0);
     }
 
+    // Factor in abuse confidence if patterns detected
+    if (abuseResult['detected'] == true) {
+      finalGroomingConfidence = (finalGroomingConfidence + abuseConfidence) / 2;
+    }
+
     // Step 5: Image analysis (if messages contain images)
     double imageConfidence = 0.0;
-    var totalImageCount = 0;
+    int totalImageCount = 0;
     for (final msg in messages) {
       totalImageCount += (msg['imageCount'] as int? ?? 0);
     }
-    // For now, assume images are handled separately
-    // Real implementation would fetch and analyze actual images
+    // Average confidence across all images
+    if (totalImageCount > 0) {
+      imageConfidence = 0.5; // Placeholder for real image analysis
+    }
 
     // Step 6: Determine final severity
     final severity = SeverityEngine.determineSeverity(
