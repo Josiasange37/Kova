@@ -92,11 +92,7 @@ class AlertHistoryService extends ChangeNotifier {
       // Time filter
       if (_selectedTime != 'all') {
         final now = DateTime.now();
-        final alertTime = DateTime.fromMillisecondsSinceEpoch(
-          alert.createdAt is int
-              ? alert.createdAt * 1000
-              : (alert.createdAt as DateTime).millisecondsSinceEpoch,
-        );
+        final alertTime = alert.createdAt;
 
         switch (_selectedTime) {
           case 'today':
