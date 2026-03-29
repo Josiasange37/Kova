@@ -13,6 +13,9 @@ import 'package:kova/core/router.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/local_backend/database/database_service.dart';
 
+// App state
+import 'package:kova/providers/app_state.dart';
+
 // Parent services
 import 'package:kova/parent/services/dashboard_data_service.dart';
 import 'package:kova/parent/services/alert_history_service.dart';
@@ -75,6 +78,8 @@ class _KovaAppState extends State<KovaApp> {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        // Central app state
+        ChangeNotifierProvider(create: (_) => AppState()),
         // Parent services
         ChangeNotifierProvider(create: (_) => DashboardDataService()),
         ChangeNotifierProvider(create: (_) => AlertHistoryService()),

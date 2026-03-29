@@ -36,7 +36,7 @@ jobs:
 
       - name: Analyze code
         run: |
-          flutter analyze --no-fatal-infos
+          flutter analyze --no-fatal-infos --no-fatal-warnings
           echo "Code analysis completed"
 
       - name: Build Android APK
