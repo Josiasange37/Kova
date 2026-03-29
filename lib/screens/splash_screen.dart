@@ -8,7 +8,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/providers/app_state.dart';
-import 'package:kova/services/seed_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -94,8 +93,7 @@ class _SplashScreenState extends State<SplashScreen>
     setState(() => _phase = 1);
     _logoEntranceCtrl.forward();
 
-    // Seed demo data + init AppState during logo animation
-    await SeedService.seedIfNeeded();
+    // Initialize AppState during logo animation
     if (!mounted) return;
     final appState = context.read<AppState>();
     await appState.init();

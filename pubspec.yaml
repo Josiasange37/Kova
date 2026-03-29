@@ -1,5 +1,5 @@
 name: kova
-description: "KOVA — Silent parental control app for Android"
+description: "KOVA — One APK, two modes (parent & child), fully local, no server"
 publish_to: 'none'
 version: 0.2.0+1
 
@@ -9,18 +9,43 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  # ── Navigation & Routing ──
+  go_router: ^13.2.0
+
+  # ── State Management ──
+  provider: ^6.1.1
+
+  # ── Local Database ──
+  sqflite: ^2.3.0
+  path: ^1.9.0
+  path_provider: ^2.1.2
+
+  # ── Local Storage ──
+  shared_preferences: ^2.2.2
+
+  # ── HTTP & Networking ──
+  http: ^1.2.0
+  connectivity_plus: ^5.0.2
+
+  # ── UI & Design ──
   google_fonts: ^6.2.1
   flutter_svg: ^2.0.17
   qr_flutter: ^4.1.0
-  percent_indicator: ^4.2.4
+  mobile_scanner: ^5.1.1
+  percent_indicator: ^4.2.3
   font_awesome_flutter: ^11.0.0
-  shared_preferences: ^2.5.5
-  flutter_secure_storage: ^10.0.0
-  sqflite: ^2.4.2
-  path: ^1.9.1
-  uuid: ^4.5.1
-  crypto: ^3.0.6
-  provider: ^6.1.4
+
+  # ── Local Notifications ──
+  flutter_local_notifications: ^17.0.0
+
+  # ── Permissions ──
+  permission_handler: ^11.0.1
+
+  # ── Utilities ──
+  uuid: ^4.4.0
+  crypto: ^3.0.3
+  image: ^4.1.7
   intl: ^0.20.2
 
 dev_dependencies:
@@ -37,9 +62,9 @@ flutter_icons:
   ios: true
   image_path: "assets/kova_logo.png"
 
-
 flutter:
   uses-material-design: true
 
   assets:
     - assets/svg/
+    - assets/models/

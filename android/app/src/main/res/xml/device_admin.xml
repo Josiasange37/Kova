@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <!-- Can lock the device -->
+        <limit-password />
+        <!-- Can reset password -->
+        <reset-password />
+        <!-- Can wipe device data -->
+        <wipe-data />
+        <!-- Can manage app installation/uninstallation -->
+        <force-lock />
+        <!-- Can disable camera -->
+        <disable-camera />
+        <!-- Can disable keyguard -->
+        <disable-keyguard-features />
+    </uses-policies>
+</device-admin>
