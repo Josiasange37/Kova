@@ -2,7 +2,6 @@
 // Wrapper around accessibility_bridge for permission checking
 
 import 'package:flutter/services.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 class AccessibilityService {
   static const platform = MethodChannel('com.kova.app/accessibility');

@@ -94,7 +94,7 @@ class AlertHistoryService extends ChangeNotifier {
         final now = DateTime.now();
         final alertTime = DateTime.fromMillisecondsSinceEpoch(
           alert.createdAt is int
-              ? (alert.createdAt as int) * 1000
+              ? alert.createdAt * 1000
               : (alert.createdAt as DateTime).millisecondsSinceEpoch,
         );
 
