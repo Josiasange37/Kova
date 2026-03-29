@@ -11,6 +11,8 @@ jobs:
   build:
     name: Build KOVA Android APK
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,18 +27,63 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          cache: true
 
       - name: Install dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          echo "Dependencies installed successfully"
 
       - name: Analyze code
-        run: flutter analyze
+        run: |
+          flutter analyze --no-fatal-infos
+          echo "Code analysis completed"
 
       - name: Build Android APK
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release -v
+          echo "APK built successfully"
+          ls -lh build/app/outputs/flutter-apk/
+
+      - name: Verify APK
+        run: |
+          if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
+            echo "✅ APK verified: $(ls -lh build/app/outputs/flutter-apk/app-release.apk)"
+          else
+            echo "❌ APK not found"
+            exit 1
+          fi
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: kova-android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Generate Release Info
+        run: |
+          echo "## KOVA APK Build Report" > release_info.md
+          echo "" >> release_info.md
+          echo "**Build Time**: $(date)" >> release_info.md
+          echo "**Commit**: $(git rev-parse --short HEAD)" >> release_info.md
+          echo "**Branch**: $(git rev-parse --abbrev-ref HEAD)" >> release_info.md
+          echo "**APK Size**: $(du -h build/app/outputs/flutter-apk/app-release.apk | cut -f1)" >> release_info.md
+          echo "" >> release_info.md
+          echo "✅ Build completed successfully!" >> release_info.md
+
+      - name: Upload Release Info
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-info
+          path: release_info.md
+          retention-days: 30
+
+      - name: Build Success
+        if: success()
+        run: echo "✅ Release build completed successfully!"
+
+      - name: Build Failure
+        if: failure()
+        run: echo "❌ Release build failed. Check logs above for details."

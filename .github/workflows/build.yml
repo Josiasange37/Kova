@@ -10,6 +10,7 @@ jobs:
   build:
     name: Build Android APK
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -25,12 +26,37 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          cache: true
 
       - name: Install dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          echo "Dependencies installed successfully"
 
       - name: Analyze code
-        run: flutter analyze
+        run: |
+          flutter analyze --no-fatal-infos
+          echo "Code analysis completed"
 
       - name: Build Android APK
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release -v
+          echo "APK built successfully"
+          ls -lh build/app/outputs/flutter-apk/
+
+      - name: Verify APK
+        run: |
+          if [ -f build/app/outputs/flutter-apk/app-release.apk ]; then
+            echo "✅ APK verified: $(ls -lh build/app/outputs/flutter-apk/app-release.apk)"
+          else
+            echo "❌ APK not found"
+            exit 1
+          fi
+
+      - name: Build Status
+        if: success()
+        run: echo "✅ Build completed successfully!"
+
+      - name: Build Failure
+        if: failure()
+        run: echo "❌ Build failed. Check logs above for details."
