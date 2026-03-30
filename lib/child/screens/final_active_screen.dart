@@ -102,7 +102,7 @@ class FinalActiveScreen extends StatelessWidget {
         border: Border.all(color: Colors.grey.shade100),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -113,7 +113,7 @@ class FinalActiveScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: KovaTheme.primaryBlue.withOpacity(0.05),
+              color: KovaTheme.primaryBlue.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: KovaTheme.primaryBlue, size: 24),

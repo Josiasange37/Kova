@@ -1,6 +1,7 @@
 // child/services/accessibility_bridge.dart — MethodChannel receiver for Kotlin service communication
 // Handles calls from KovaAccessibilityService and forwards to detection orchestrator
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'detection_orchestrator.dart';
 
@@ -16,7 +17,7 @@ class AccessibilityBridge {
       // Set up method call handler for alerts from native side
       platform.setMethodCallHandler(_handleMethodCall);
     } catch (e) {
-      print('Error initializing accessibility bridge: $e');
+      debugPrint('Error initializing accessibility bridge: $e');
     }
   }
 
@@ -156,7 +157,7 @@ class AccessibilityBridge {
     try {
       await platform.invokeMethod<void>('onAlertDetected', alert);
     } catch (e) {
-      print('Error sending alert to native: $e');
+      debugPrint('Error sending alert to native: $e');
     }
   }
 
@@ -169,7 +170,7 @@ class AccessibilityBridge {
         'app': app,
       });
     } catch (e) {
-      print('Error blocking app: $e');
+      debugPrint('Error blocking app: $e');
     }
   }
 
@@ -181,7 +182,7 @@ class AccessibilityBridge {
         'childId': childId,
       });
     } catch (e) {
-      print('Error pausing monitoring: $e');
+      debugPrint('Error pausing monitoring: $e');
     }
   }
 
@@ -192,7 +193,7 @@ class AccessibilityBridge {
         'childId': childId,
       });
     } catch (e) {
-      print('Error resuming monitoring: $e');
+      debugPrint('Error resuming monitoring: $e');
     }
   }
 
@@ -201,7 +202,7 @@ class AccessibilityBridge {
     try {
       await platform.invokeMethod<void>('tearDownBridge');
     } catch (e) {
-      print('Error tearing down bridge: $e');
+      debugPrint('Error tearing down bridge: $e');
     }
   }
 }

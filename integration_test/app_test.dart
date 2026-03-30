@@ -59,7 +59,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 2));
 
     // Child Profile Screen
-    expect(find.text("Your child\'s profile"), findsWidgets);
+    expect(find.text("Your child's profile"), findsWidgets);
     
     final childTextField = find.byType(TextField);
     expect(childTextField, findsOneWidget);

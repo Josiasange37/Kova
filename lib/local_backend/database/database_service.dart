@@ -41,6 +41,7 @@ class DatabaseService {
       CREATE TABLE IF NOT EXISTS children (
         id              TEXT PRIMARY KEY,
         name            TEXT NOT NULL,
+        age             INTEGER DEFAULT 10,
         pair_code       TEXT,
         pair_code_exp   INTEGER,
         linked          INTEGER DEFAULT 0,

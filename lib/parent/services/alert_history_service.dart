@@ -3,7 +3,6 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
-import 'package:kova/shared/models/alert_model.dart';
 
 class AlertHistoryService extends ChangeNotifier {
   final _alertRepo = AlertRepository();
@@ -56,7 +55,7 @@ class AlertHistoryService extends ChangeNotifier {
       _error = null;
     } catch (e) {
       _error = 'Error loading alerts: $e';
-      print(_error);
+      debugPrint(_error);
     } finally {
       _loading = false;
       notifyListeners();
@@ -131,7 +130,7 @@ class AlertHistoryService extends ChangeNotifier {
       }
       _applyFilters();
     } catch (e) {
-      print('Error marking alert as read: $e');
+      debugPrint('Error marking alert as read: $e');
     }
   }
 
@@ -145,7 +144,7 @@ class AlertHistoryService extends ChangeNotifier {
       }
       _applyFilters();
     } catch (e) {
-      print('Error resolving alert: $e');
+      debugPrint('Error resolving alert: $e');
     }
   }
 
@@ -156,7 +155,7 @@ class AlertHistoryService extends ChangeNotifier {
       _allAlerts.removeWhere((a) => a.id == alertId);
       _applyFilters();
     } catch (e) {
-      print('Error deleting alert: $e');
+      debugPrint('Error deleting alert: $e');
     }
   }
 

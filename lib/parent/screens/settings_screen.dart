@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:kova/core/app_mode.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
+import 'package:kova/parent/services/settings_service.dart';
+import 'package:kova/parent/services/dashboard_data_service.dart';
+import 'package:kova/shared/services/local_storage.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool isEmbedded;
@@ -14,8 +19,13 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _quietHours = true;
-  String _selectedLanguage = 'English';
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<SettingsService>().loadSettings();
+    });
+  }
 
   Widget _buildSection(String title, List<Widget> children) {
     return Column(
@@ -93,6 +103,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
+                // ignore: use_null_aware_elements
                 if (trailing != null) trailing,
               ],
             ),
@@ -125,9 +136,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildActionButton(String label) {
+  Widget _buildActionButton(String label, {VoidCallback? onTap}) {
     return TextButton(
-      onPressed: () {},
+      onPressed: onTap ?? () {},
       style: TextButton.styleFrom(
         foregroundColor: KovaColors.primary,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -171,44 +182,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
         centerTitle: true,
       ),
       body: _buildBody(),
-      bottomNavigationBar: BottomNavigationBar(
-        elevation: 0,
-        backgroundColor: KovaColors.cardWhite,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: KovaColors.primary,
-        unselectedItemColor: KovaColors.textSecondary.withValues(alpha: 0.5),
-        selectedLabelStyle: GoogleFonts.nunito(
-          fontWeight: FontWeight.w800,
-          fontSize: 11,
-        ),
-        unselectedLabelStyle: GoogleFonts.nunito(
-          fontWeight: FontWeight.w700,
-          fontSize: 11,
-        ),
-        currentIndex: 3,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_rounded),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.notifications_none_rounded),
-            label: 'Alerts',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.track_changes_rounded),
-            label: 'Control',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            label: 'Settings',
-          ),
-        ],
-      ),
     );
   }
 
   Widget _buildBody() {
+    final settings = context.watch<SettingsService>();
+    final dashboard = context.watch<DashboardDataService>();
+
+    // Real data from services
+    final activeChild = dashboard.activeChild;
+    final childName = activeChild?.name ?? 'No child';
+    final childAge = activeChild?.age ?? 0;
+    final parentPhone = LocalStorage.getString('parent_phone');
+
+    // Map language code to display name
+    final languageDisplay =
+        settings.language == 'fr' ? 'Français' : 'English';
+
     return SafeArea(
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: KovaSpacing.md),
@@ -229,13 +219,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSettingItem(
               Icons.person_outline_rounded,
               'Child name',
-              subtitle: 'Alex, 12 years old',
+              subtitle: '$childName, $childAge years old',
               trailing: _buildEditButton(),
             ),
             _buildSettingItem(
               Icons.local_phone_outlined,
               'Phone number',
-              subtitle: '+237 690 123 456',
+              subtitle: parentPhone.isNotEmpty
+                  ? parentPhone
+                  : 'Not set',
               trailing: _buildEditButton(),
               showDivider: false,
             ),
@@ -244,20 +236,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSettingItem(
               Icons.lock_outline_rounded,
               'Change PIN',
-              trailing: _buildActionButton('Change'),
+              trailing: _buildActionButton('Change', onTap: () {
+                context.push(AppRoutes.pinEntry);
+              }),
               showDivider: false,
             ),
           ]),
           _buildSection('Notifications', [
             _buildSettingItem(
               Icons.notifications_none_rounded,
-              'Quiet hours',
-              subtitle: '10pm — 6am',
+              'Notifications',
+              subtitle: settings.notificationsEnabled
+                  ? 'Enabled'
+                  : 'Disabled',
               trailing: Transform.scale(
                 scale: 0.8,
                 child: Switch.adaptive(
-                  value: _quietHours,
-                  onChanged: (v) => setState(() => _quietHours = v),
+                  value: settings.notificationsEnabled,
+                  onChanged: (v) => settings.setNotificationsEnabled(v),
+                  activeTrackColor: KovaColors.primary,
+                ),
+              ),
+            ),
+            _buildSettingItem(
+              Icons.volume_up_rounded,
+              'Sound',
+              trailing: Transform.scale(
+                scale: 0.8,
+                child: Switch.adaptive(
+                  value: settings.soundEnabled,
+                  onChanged: (v) => settings.setSoundEnabled(v),
                   activeTrackColor: KovaColors.primary,
                 ),
               ),
@@ -277,8 +285,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildLanguageToggle('Français'),
-                    _buildLanguageToggle('English'),
+                    _buildLanguageToggle(
+                      'Français',
+                      'fr',
+                      languageDisplay,
+                      settings,
+                    ),
+                    _buildLanguageToggle(
+                      'English',
+                      'en',
+                      languageDisplay,
+                      settings,
+                    ),
                   ],
                 ),
               ),
@@ -310,18 +328,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSettingItem(
               Icons.swap_horiz_rounded,
               'Switch to Child Mode',
-              subtitle: ' Alex\'s view',
-              trailing: _buildActionButton('Switch'),
-              onPressed: () {
-                // Navigate to child dashboard
+              subtitle: childName != 'No child'
+                  ? "$childName's view"
+                  : 'Not configured',
+              trailing: _buildActionButton('Switch', onTap: () async {
+                // Switch to child mode — use the linked child's pair code
+                final child = dashboard.activeChild;
+                if (child != null && child.pairCode != null) {
+                  await AppModeManager.setChildMode(child.pairCode!);
+                }
+                if (!mounted) return;
                 context.go(AppRoutes.childDashboard);
-              },
+              }),
+              showDivider: true,
+            ),
+            _buildSettingItem(
+              Icons.restart_alt_rounded,
+              'Reset all settings',
+              subtitle: 'Restore defaults',
+              trailing: _buildActionButton('Reset', onTap: () async {
+                await settings.resetToDefaults();
+              }),
               showDivider: false,
             ),
           ]),
           const SizedBox(height: KovaSpacing.xl),
           OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: () {
+              context.push(AppRoutes.childProfile);
+            },
             icon: const Icon(Icons.add_rounded, size: 20),
             label: const Text('Add a child'),
             style: OutlinedButton.styleFrom(
@@ -343,10 +378,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildLanguageToggle(String name) {
-    bool isSelected = _selectedLanguage == name;
+  Widget _buildLanguageToggle(
+    String displayName,
+    String langCode,
+    String currentLanguageDisplay,
+    SettingsService settings,
+  ) {
+    bool isSelected = currentLanguageDisplay == displayName;
     return GestureDetector(
-      onTap: () => setState(() => _selectedLanguage = name),
+      onTap: () => settings.setLanguage(langCode),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -355,7 +395,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
-          name,
+          displayName,
           style: GoogleFonts.nunito(
             color: isSelected ? Colors.white : KovaColors.textSecondary,
             fontWeight: FontWeight.w700,

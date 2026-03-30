@@ -231,7 +231,7 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
           width: 24,
           height: 24,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           alignment: Alignment.center,
@@ -284,7 +284,7 @@ class _SetupFeatureItem extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: KovaTheme.primaryBlue.withOpacity(0.1),
+            color: KovaTheme.primaryBlue.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: KovaTheme.primaryBlue, size: 24),

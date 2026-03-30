@@ -134,7 +134,7 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen> {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.blue.withOpacity(0.05),
+                        color: Colors.blue.withValues(alpha: 0.05),
                         blurRadius: 20,
                         spreadRadius: 5,
                       ),

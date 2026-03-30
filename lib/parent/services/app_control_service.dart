@@ -10,7 +10,7 @@ class AppControlService extends ChangeNotifier {
   final _alertRepo = AlertRepository();
 
   List<ChildModel> _children = [];
-  Map<String, AppControlData> _appData = {};
+  final Map<String, AppControlData> _appData = {};
   bool _loading = false;
   String? _error;
 
@@ -32,7 +32,7 @@ class AppControlService extends ChangeNotifier {
       _error = null;
     } catch (e) {
       _error = 'Error loading app controls: $e';
-      print(_error);
+      debugPrint(_error);
     } finally {
       _loading = false;
       notifyListeners();
@@ -106,7 +106,7 @@ class AppControlService extends ChangeNotifier {
       // Recalculate app data
       await _calculateAppData();
     } catch (e) {
-      print('Error toggling app control: $e');
+      debugPrint('Error toggling app control: $e');
     }
   }
 

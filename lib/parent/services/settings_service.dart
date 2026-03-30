@@ -20,22 +20,22 @@ class SettingsService extends ChangeNotifier {
   String get theme => _theme;
   bool get loading => _loading;
 
-  // Load settings from storage
-  Future<void> loadSettings() async {
+  // Load settings from storage (synchronous SharedPreferences reads)
+  void loadSettings() {
     _loading = true;
     notifyListeners();
 
     try {
-      _notificationsEnabled = await LocalStorage.getBool(
+      _notificationsEnabled = LocalStorage.getBool(
         'notifications_enabled',
         true,
       );
-      _soundEnabled = await LocalStorage.getBool('sound_enabled', true);
-      _vibrationEnabled = await LocalStorage.getBool('vibration_enabled', true);
-      _language = await LocalStorage.getString('language', 'en');
-      _theme = await LocalStorage.getString('theme', 'light');
+      _soundEnabled = LocalStorage.getBool('sound_enabled', true);
+      _vibrationEnabled = LocalStorage.getBool('vibration_enabled', true);
+      _language = LocalStorage.getString('language', 'en');
+      _theme = LocalStorage.getString('theme', 'light');
     } catch (e) {
-      print('Error loading settings: $e');
+      debugPrint('Error loading settings: $e');
     } finally {
       _loading = false;
       notifyListeners();

@@ -4,7 +4,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
-import 'package:kova/shared/models/alert_model.dart';
 import 'package:kova/shared/services/local_storage.dart';
 
 class DashboardDataService extends ChangeNotifier {
@@ -54,12 +53,12 @@ class DashboardDataService extends ChangeNotifier {
       _alerts = await _alertRepo.getAll();
 
       // Load parent name from local storage
-      _parentName = await LocalStorage.getString('parent_name');
+      _parentName = LocalStorage.getString('parent_name');
 
       _error = null;
     } catch (e) {
       _error = 'Error loading dashboard: $e';
-      print(_error);
+      debugPrint(_error);
     } finally {
       _loading = false;
       notifyListeners();

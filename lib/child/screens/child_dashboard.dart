@@ -50,7 +50,7 @@ class ChildDashboard extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
+                                  color: Colors.white.withValues(alpha: 0.2),
                                   shape: BoxShape.circle,
                                 ),
                                 child: const Icon(
@@ -134,7 +134,7 @@ class ChildDashboard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -161,7 +161,7 @@ class ChildDashboard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E2A5D).withOpacity(0.1),
+                      color: const Color(0xFF1E2A5D).withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(
@@ -240,7 +240,7 @@ class ChildDashboard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -402,7 +402,7 @@ class ChildDashboard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.02),
+            color: Colors.black.withValues(alpha: 0.02),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),

@@ -69,7 +69,7 @@ class DashboardScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
+                          color: Colors.black.withValues(alpha: 0.02),
                           blurRadius: 10,
                           offset: const Offset(0, 2),
                         ),
@@ -112,7 +112,7 @@ class DashboardScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF1E2A5D).withOpacity(0.2),
+                      color: const Color(0xFF1E2A5D).withValues(alpha: 0.2),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -139,7 +139,7 @@ class DashboardScreen extends StatelessWidget {
                     Text(
                       'Your device is connected and monitoring is active in the background.',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.8),
+                        color: Colors.white.withValues(alpha: 0.8),
                         fontSize: 14,
                         height: 1.5,
                       ),

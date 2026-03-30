@@ -36,7 +36,7 @@ class WhatsappConnectionScreen extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
               decoration: BoxDecoration(
-                color: KovaTheme.primaryBlue.withOpacity(0.05),
+                color: KovaTheme.primaryBlue.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Column(

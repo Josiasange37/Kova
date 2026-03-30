@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:kova/core/app_mode.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
+import 'package:kova/shared/services/local_storage.dart';
 
 class ParentProfileScreen extends StatefulWidget {
   const ParentProfileScreen({super.key});
@@ -388,7 +390,7 @@ class _ParentProfileScreenState extends State<ParentProfileScreen>
   }
 
   // ── Continue button handler ──
-  void _onContinue() {
+  Future<void> _onContinue() async {
     final name = _nameController.text.trim();
     final phone = _phoneController.text.trim();
     final pin = _pinController.text.trim();
@@ -411,7 +413,14 @@ class _ParentProfileScreenState extends State<ParentProfileScreen>
       return;
     }
 
-    // TODO: Save profile data and navigate to next setup screen
+    // Save parent profile to local storage
+    await LocalStorage.setString('parent_name', name);
+    await LocalStorage.setString('parent_phone', phone);
+
+    // Hash PIN & set parent mode in one call
+    await AppModeManager.setParentMode(pin);
+
+    if (!mounted) return;
     context.go(AppRoutes.childProfile);
   }
 

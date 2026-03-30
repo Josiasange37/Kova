@@ -8,6 +8,7 @@ import '../database/database_service.dart';
 class ChildModel {
   final String id;
   final String name;
+  final int age;
   final String? pairCode;
   final int? pairCodeExp;
   final bool linked;
@@ -18,6 +19,7 @@ class ChildModel {
   ChildModel({
     required this.id,
     required this.name,
+    this.age = 10,
     this.pairCode,
     this.pairCodeExp,
     required this.linked,
@@ -30,19 +32,17 @@ class ChildModel {
     return ChildModel(
       id: map['id'] as String,
       name: map['name'] as String,
+      age: map['age'] as int? ?? 10,
       pairCode: map['pair_code'] as String?,
       pairCodeExp: map['pair_code_exp'] as int?,
       linked: (map['linked'] as int? ?? 0) == 1,
       score: map['score'] as int? ?? 100,
       appControls: {
-        'whatsapp':
-            (map['app_whatsapp'] == null ? 1 : map['app_whatsapp']) == 1,
-        'tiktok': (map['app_tiktok'] == null ? 1 : map['app_tiktok']) == 1,
-        'facebook':
-            (map['app_facebook'] == null ? 1 : map['app_facebook']) == 1,
-        'instagram':
-            (map['app_instagram'] == null ? 1 : map['app_instagram']) == 1,
-        'sms': (map['app_sms'] == null ? 1 : map['app_sms']) == 1,
+        'whatsapp': ((map['app_whatsapp'] ?? 1) as int) == 1,
+        'tiktok': ((map['app_tiktok'] ?? 1) as int) == 1,
+        'facebook': ((map['app_facebook'] ?? 1) as int) == 1,
+        'instagram': ((map['app_instagram'] ?? 1) as int) == 1,
+        'sms': ((map['app_sms'] ?? 1) as int) == 1,
       },
       createdAt: DateTime.fromMillisecondsSinceEpoch(
         map['created_at'] as int? ?? 0,
@@ -53,6 +53,7 @@ class ChildModel {
   Map<String, dynamic> toMap() => {
     'id': id,
     'name': name,
+    'age': age,
     'pair_code': pairCode,
     'pair_code_exp': pairCodeExp,
     'linked': linked ? 1 : 0,
@@ -68,6 +69,7 @@ class ChildModel {
   ChildModel copyWith({
     String? id,
     String? name,
+    int? age,
     String? pairCode,
     int? pairCodeExp,
     bool? linked,
@@ -78,6 +80,7 @@ class ChildModel {
     return ChildModel(
       id: id ?? this.id,
       name: name ?? this.name,
+      age: age ?? this.age,
       pairCode: pairCode ?? this.pairCode,
       pairCodeExp: pairCodeExp ?? this.pairCodeExp,
       linked: linked ?? this.linked,
@@ -108,7 +111,7 @@ class ChildRepository {
 
   /// Create a new child and generate a pairing code
   /// Returns the child ID
-  Future<String> create(String name) async {
+  Future<String> create(String name, {int age = 10}) async {
     final db = await _db.database;
     final id = const Uuid().v4();
     final code = _generateCode();
@@ -119,6 +122,7 @@ class ChildRepository {
     await db.insert('children', {
       'id': id,
       'name': name,
+      'age': age,
       'pair_code': code,
       'pair_code_exp': expiration,
       'linked': 0,

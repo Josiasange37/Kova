@@ -123,7 +123,17 @@ class _DashboardScreenState extends State<DashboardScreen>
         final hasAlerts = service.hasAlerts;
         final safetyScore = service.safetyScore;
         final alertCount = service.alertCount;
-        final parentName = 'Parent'; // TODO: Get from ParentRepository
+        final parentName = (service.parentName?.isNotEmpty ?? false)
+            ? service.parentName!
+            : 'Parent';
+
+        // Determine time-based greeting
+        final hour = DateTime.now().hour;
+        final greeting = hour < 12
+            ? 'Good morning'
+            : hour < 17
+                ? 'Good afternoon'
+                : 'Good evening';
 
         return SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: KovaSpacing.lg),
@@ -145,7 +155,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Good evening, $parentName',
+                            '$greeting, $parentName',
                             style: GoogleFonts.nunito(
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
@@ -185,8 +195,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                 child: Opacity(
                   opacity: _cardFade.value,
                   child: _buildChildCard(
-                    childName: child?.name ?? 'Child',
-                    childAge: 0, // TODO: Add age field to ChildModel
+                    childName: child?.name ?? 'No child added',
+                    childAge: child?.age ?? 0,
                     hasAlerts: hasAlerts,
                     safetyScore: safetyScore,
                     alertCount: alertCount,

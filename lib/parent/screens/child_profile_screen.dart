@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
+import 'package:kova/parent/services/child_profile_service.dart';
 
 class ChildProfileScreen extends StatefulWidget {
   const ChildProfileScreen({super.key});
@@ -64,12 +66,33 @@ class _ChildProfileScreenState extends State<ChildProfileScreen>
     if (_age > 3) setState(() => _age--);
   }
 
-  void _onContinue() {
+  Future<void> _onContinue() async {
     if (!_isNameFilled) return;
     // Hide keyboard
     FocusScope.of(context).unfocus();
-    // Navigate to monitored apps screen
-    context.go(AppRoutes.parentMonitoredApps);
+
+    // Save to ChildProfileService
+    final service = context.read<ChildProfileService>();
+    service.setChildName(_nameController.text.trim());
+    service.setAge(_age);
+    final success = await service.saveChildProfile();
+
+    if (!mounted) return;
+
+    if (success) {
+      context.go(AppRoutes.parentMonitoredApps);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            service.error ?? 'Failed to save child profile',
+            style: GoogleFonts.nunito(fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: KovaColors.danger,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   // Helper for mode config

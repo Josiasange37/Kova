@@ -18,7 +18,7 @@ class BlockScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -44,7 +44,7 @@ class BlockScreen extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   fontSize: 16,
-                  color: Colors.white.withOpacity(0.8),
+                  color: Colors.white.withValues(alpha: 0.8),
                   height: 1.5,
                 ),
               ),
@@ -57,7 +57,7 @@ class BlockScreen extends StatelessWidget {
                   vertical: 16,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(

@@ -169,7 +169,7 @@ class DetectionOrchestrator {
       'senderName': senderName,
       'messageCount': messages.length,
       'isEscalating': isEscalating,
-      'span': messages.length > 0 ? 'multi_message' : 'single_message',
+      'span': messages.isNotEmpty ? 'multi_message' : 'single_message',
     };
 
     return alert;

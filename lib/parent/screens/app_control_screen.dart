@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/parent/services/app_control_service.dart';
+import 'package:kova/shared/services/local_storage.dart';
 
 class AppControlScreen extends StatefulWidget {
   final bool isEmbedded;
@@ -14,78 +17,81 @@ class AppControlScreen extends StatefulWidget {
 }
 
 class _AppControlScreenState extends State<AppControlScreen> {
-  // Per-app state
-  late List<_AppControlData> _apps;
+  // Local mutable state for sensitivity and blocking (persisted via LocalStorage)
+  final Map<String, int> _sensitivity = {};
+  final Map<String, int> _blocking = {};
+
+  // Static app metadata (icons & colors)
+  static final _appMeta = <String, _AppMeta>{
+    'x': _AppMeta(
+      name: 'X',
+      icon: Icons.close_rounded,
+      color: const Color(0xFF000000),
+    ),
+    'tiktok': _AppMeta(
+      name: 'TikTok',
+      icon: Icons.music_note_rounded,
+      color: const Color(0xFF010101),
+    ),
+    'instagram': _AppMeta(
+      name: 'Instagram',
+      icon: Icons.camera_alt_rounded,
+      color: const Color(0xFFE4405F),
+    ),
+    'whatsapp': _AppMeta(
+      name: 'WhatsApp',
+      icon: Icons.chat_rounded,
+      color: const Color(0xFF25D366),
+    ),
+    'facebook': _AppMeta(
+      name: 'Facebook',
+      icon: Icons.facebook_rounded,
+      color: const Color(0xFF1877F2),
+    ),
+    'sms': _AppMeta(
+      name: 'SMS',
+      icon: Icons.sms_rounded,
+      color: const Color(0xFF34C759),
+    ),
+  };
 
   @override
   void initState() {
     super.initState();
-    _apps = [
-      _AppControlData(
-        name: 'X',
-        icon: FontAwesomeIcons.xTwitter,
-        color: const Color(0xFF000000),
-        alerts: 5,
-        blocks: 2,
-        enabled: true,
-        sensitivity: 1,
-        blocking: 0,
-      ),
-      _AppControlData(
-        name: 'TikTok',
-        icon: FontAwesomeIcons.tiktok,
-        color: const Color(0xFF010101),
-        alerts: 12,
-        blocks: 5,
-        enabled: true,
-        sensitivity: 2,
-        blocking: 2,
-      ),
-      _AppControlData(
-        name: 'Instagram',
-        icon: FontAwesomeIcons.instagram,
-        color: const Color(0xFFE4405F),
-        alerts: 0,
-        blocks: 0,
-        enabled: true,
-        sensitivity: 1,
-        blocking: 1,
-      ),
-      _AppControlData(
-        name: 'WhatsApp',
-        icon: FontAwesomeIcons.whatsapp,
-        color: const Color(0xFF25D366),
-        alerts: 0,
-        blocks: 3,
-        enabled: true,
-        sensitivity: 1,
-        blocking: 1,
-      ),
-      _AppControlData(
-        name: 'Facebook',
-        icon: FontAwesomeIcons.facebook,
-        color: const Color(0xFF1877F2),
-        alerts: 0,
-        blocks: 3,
-        enabled: true,
-        sensitivity: 1,
-        blocking: 0,
-      ),
-      _AppControlData(
-        name: 'SMS',
-        icon: FontAwesomeIcons.solidComment,
-        color: const Color(0xFF34C759),
-        alerts: 1,
-        blocks: 0,
-        enabled: true,
-        sensitivity: 0,
-        blocking: 0,
-      ),
-    ];
+    // Load persisted sensitivity/blocking values from SharedPreferences
+    for (final key in _appMeta.keys) {
+      _sensitivity[key] =
+          LocalStorage.getInt('app_sensitivity_$key', 1);
+      _blocking[key] =
+          LocalStorage.getInt('app_blocking_$key', 0);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AppControlService>().loadAppControls();
+    });
+  }
+
+  void _saveSensitivity(String appKey, int value) {
+    setState(() => _sensitivity[appKey] = value);
+    LocalStorage.setInt('app_sensitivity_$appKey', value);
+  }
+
+  void _saveBlocking(String appKey, int value) {
+    setState(() => _blocking[appKey] = value);
+    LocalStorage.setInt('app_blocking_$appKey', value);
   }
 
   @override
   Widget build(BuildContext context) {
+    final service = context.watch<AppControlService>();
+
+    // Ordered keys for display
+    final orderedKeys = ['x', 'tiktok', 'instagram', 'whatsapp', 'facebook', 'sms'];
+
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: KovaSpacing.lg),
       child: Column(
@@ -99,7 +105,7 @@ class _AppControlScreenState extends State<AppControlScreen> {
               if (!widget.isEmbedded)
                 _headerButton(
                   context,
-                  FontAwesomeIcons.arrowLeft,
+                  Icons.arrow_back,
                   onTap: () => context.pop(),
                 ),
               Expanded(
@@ -133,16 +139,43 @@ class _AppControlScreenState extends State<AppControlScreen> {
           ),
           const SizedBox(height: 32),
 
-          const SizedBox(height: 22),
+          if (service.loading)
+            const Center(child: CircularProgressIndicator())
+          else ...[
+            const SizedBox(height: 22),
 
-          // ── App cards ──
-          ...List.generate(_apps.length, (i) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _buildAppCard(i),
-            );
-          }),
-          const SizedBox(height: 24),
+            // ── App cards ──
+            ...orderedKeys.map((key) {
+              final meta = _appMeta[key]!;
+              final data = service.appData[key];
+              final alerts = data?.alerts ?? 0;
+              final blocks = data?.blocks ?? 0;
+              final enabled = data?.enabled ?? true;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _buildAppCard(
+                  appKey: key,
+                  name: meta.name,
+                  icon: meta.icon,
+                  color: meta.color,
+                  alerts: alerts,
+                  blocks: blocks,
+                  enabled: enabled,
+                  sensitivity: _sensitivity[key] ?? 1,
+                  blocking: _blocking[key] ?? 0,
+                  onToggle: (v) {
+                    // Toggle for first child (or all children if only one)
+                    final children = service.children;
+                    if (children.isNotEmpty) {
+                      service.toggleAppControl(children.first.id, key, v);
+                    }
+                  },
+                ),
+              );
+            }),
+            const SizedBox(height: 24),
+          ],
         ],
       ),
     );
@@ -151,9 +184,18 @@ class _AppControlScreenState extends State<AppControlScreen> {
   // ═══════════════════════════════════════════
   // ──  App Card
   // ═══════════════════════════════════════════
-  Widget _buildAppCard(int index) {
-    final app = _apps[index];
-
+  Widget _buildAppCard({
+    required String appKey,
+    required String name,
+    required IconData icon,
+    required Color color,
+    required int alerts,
+    required int blocks,
+    required bool enabled,
+    required int sensitivity,
+    required int blocking,
+    required ValueChanged<bool> onToggle,
+  }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
@@ -176,14 +218,11 @@ class _AppControlScreenState extends State<AppControlScreen> {
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  color: app.color.withValues(alpha: 0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Center(
-                  child: IconTheme(
-                    data: IconThemeData(color: app.color, size: 28),
-                    child: FaIcon(app.icon),
-                  ),
+                  child: Icon(icon, color: color, size: 28),
                 ),
               ),
               const SizedBox(width: 14),
@@ -194,7 +233,7 @@ class _AppControlScreenState extends State<AppControlScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      app.name,
+                      name,
                       style: GoogleFonts.nunito(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
@@ -204,7 +243,7 @@ class _AppControlScreenState extends State<AppControlScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${app.alerts} alerts • ${app.blocks} blocks',
+                      '$alerts alerts • $blocks blocks',
                       style: GoogleFonts.nunito(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -219,8 +258,8 @@ class _AppControlScreenState extends State<AppControlScreen> {
               Transform.scale(
                 scale: 0.85,
                 child: Switch(
-                  value: app.enabled,
-                  onChanged: (v) => setState(() => app.enabled = v),
+                  value: enabled,
+                  onChanged: onToggle,
                   activeThumbColor: Colors.white,
                   activeTrackColor: KovaColors.primary,
                   inactiveThumbColor: Colors.white,
@@ -250,7 +289,7 @@ class _AppControlScreenState extends State<AppControlScreen> {
                 ),
               ),
               Text(
-                _getSensitivityLabel(app.sensitivity),
+                _getSensitivityLabel(sensitivity),
                 style: GoogleFonts.nunito(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
@@ -261,8 +300,8 @@ class _AppControlScreenState extends State<AppControlScreen> {
           ),
           const SizedBox(height: 18),
           _buildSlider(
-            value: app.sensitivity,
-            onChanged: (v) => setState(() => app.sensitivity = v),
+            value: sensitivity,
+            onChanged: (v) => _saveSensitivity(appKey, v),
           ),
 
           const SizedBox(height: 20),
@@ -282,13 +321,13 @@ class _AppControlScreenState extends State<AppControlScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildManualBlockItem(index, 0, '30 min'),
+              _buildManualBlockItem(appKey, blocking, 0, '30 min'),
               const SizedBox(width: 8),
-              _buildManualBlockItem(index, 1, '1h'),
+              _buildManualBlockItem(appKey, blocking, 1, '1h'),
               const SizedBox(width: 8),
-              _buildManualBlockItem(index, 2, '2h'),
+              _buildManualBlockItem(appKey, blocking, 2, '2h'),
               const SizedBox(width: 8),
-              _buildManualBlockItem(index, 3, '∞'),
+              _buildManualBlockItem(appKey, blocking, 3, '∞'),
             ],
           ),
         ],
@@ -421,13 +460,17 @@ class _AppControlScreenState extends State<AppControlScreen> {
   // ═══════════════════════════════════════════
   // ──  Manual Block Button
   // ═══════════════════════════════════════════
-  Widget _buildManualBlockItem(int appIndex, int itemValue, String label) {
-    final app = _apps[appIndex];
-    final isSelected = app.blocking == itemValue;
+  Widget _buildManualBlockItem(
+    String appKey,
+    int currentBlocking,
+    int itemValue,
+    String label,
+  ) {
+    final isSelected = currentBlocking == itemValue;
 
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => app.blocking = itemValue),
+        onTap: () => _saveBlocking(appKey, itemValue),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 11),
@@ -474,32 +517,22 @@ class _AppControlScreenState extends State<AppControlScreen> {
           border: Border.all(color: const Color(0xFFF0F0F0)),
         ),
         child: Center(
-          child: FaIcon(icon, color: KovaColors.textPrimary, size: 16),
+          child: Icon(icon, color: KovaColors.textPrimary, size: 16),
         ),
       ),
     );
   }
 }
 
-/// Mutable app control data
-class _AppControlData {
+/// Static app metadata
+class _AppMeta {
   final String name;
-  final dynamic icon;
+  final IconData icon;
   final Color color;
-  final int alerts;
-  final int blocks;
-  bool enabled;
-  int sensitivity; // 0=Minimal, 1=Balanced, 2=Strict
-  int blocking; // 0=Minimal, 1=Balanced, 2=Strict
 
-  _AppControlData({
+  const _AppMeta({
     required this.name,
     required this.icon,
     required this.color,
-    required this.alerts,
-    required this.blocks,
-    required this.enabled,
-    required this.sensitivity,
-    required this.blocking,
   });
 }

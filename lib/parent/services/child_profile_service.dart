@@ -63,7 +63,7 @@ class ChildProfileService extends ChangeNotifier {
 
     try {
       // Create child in repository (generates pairing code automatically)
-      _childId = await _childRepo.create(_childName);
+      _childId = await _childRepo.create(_childName, age: _age);
 
       // Get the created child to retrieve the pairing code
       final child = await _childRepo.getById(_childId!);
@@ -78,7 +78,7 @@ class ChildProfileService extends ChangeNotifier {
       return true;
     } catch (e) {
       _error = 'Error saving child profile: $e';
-      print(_error);
+      debugPrint(_error);
       return false;
     } finally {
       _saving = false;

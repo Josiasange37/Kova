@@ -124,7 +124,7 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
                     hintText: '••••',
                     hintStyle: TextStyle(color: Colors.white30),
                     filled: true,
-                    fillColor: Colors.white.withOpacity(0.1),
+                    fillColor: Colors.white.withValues(alpha: 0.1),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(color: Colors.white24),
@@ -139,9 +139,9 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.2),
+                      color: Colors.red.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.withOpacity(0.5)),
+                      border: Border.all(color: Colors.red.withValues(alpha: 0.5)),
                     ),
                     child: Text(
                       _error,

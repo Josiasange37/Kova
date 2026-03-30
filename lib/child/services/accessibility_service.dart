@@ -1,6 +1,7 @@
 // child/services/accessibility_service.dart — Accessibility permission helper
 // Wrapper around accessibility_bridge for permission checking
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class AccessibilityService {
@@ -14,7 +15,7 @@ class AccessibilityService {
       );
       return result ?? false;
     } catch (e) {
-      print('Error checking accessibility permission: $e');
+      debugPrint('Error checking accessibility permission: $e');
       return false;
     }
   }
@@ -24,7 +25,7 @@ class AccessibilityService {
     try {
       await platform.invokeMethod<void>('openAccessibilitySettings');
     } catch (e) {
-      print('Error requesting accessibility permission: $e');
+      debugPrint('Error requesting accessibility permission: $e');
     }
   }
 
@@ -34,7 +35,7 @@ class AccessibilityService {
       final result = await platform.invokeMethod<bool>('isServiceRunning');
       return result ?? false;
     } catch (e) {
-      print('Error checking service status: $e');
+      debugPrint('Error checking service status: $e');
       return false;
     }
   }
