@@ -75,6 +75,14 @@ class DashboardDataService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Update child profile (name and age)
+  Future<void> updateChildProfile(String childId, String name, int age) async {
+    await _childRepo.updateName(childId, name);
+    await _childRepo.updateAge(childId, age);
+    // Reload to reflect changes
+    await loadDashboardData();
+  }
+
   // Get child by ID
   ChildModel? getChildById(String id) {
     if (_children == null) return null;

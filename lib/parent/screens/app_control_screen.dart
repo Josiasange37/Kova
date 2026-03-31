@@ -20,6 +20,7 @@ class _AppControlScreenState extends State<AppControlScreen> {
   // Local mutable state for sensitivity and blocking (persisted via LocalStorage)
   final Map<String, int> _sensitivity = {};
   final Map<String, int> _blocking = {};
+  bool _isLoading = false;
 
   // Static app metadata (icons & colors)
   static final _appMeta = <String, _AppMeta>{
@@ -65,14 +66,26 @@ class _AppControlScreenState extends State<AppControlScreen> {
       _blocking[key] =
           LocalStorage.getInt('app_blocking_$key', 0);
     }
+    // Load app controls once on init
+    _loadAppControls();
+  }
+
+  Future<void> _loadAppControls() async {
+    if (_isLoading) return;
+    setState(() => _isLoading = true);
+    try {
+      await context.read<AppControlService>().loadAppControls();
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AppControlService>().loadAppControls();
-    });
+    // Don't reload here - causes infinite loops
   }
 
   void _saveSensitivity(String appKey, int value) {
@@ -139,7 +152,7 @@ class _AppControlScreenState extends State<AppControlScreen> {
           ),
           const SizedBox(height: 32),
 
-          if (service.loading)
+          if (service.loading || _isLoading)
             const Center(child: CircularProgressIndicator())
           else ...[
             const SizedBox(height: 22),

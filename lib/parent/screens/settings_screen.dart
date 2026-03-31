@@ -120,9 +120,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildEditButton() {
+  Widget _buildEditButton(VoidCallback onPressed) {
     return TextButton(
-      onPressed: () {},
+      onPressed: onPressed,
       style: TextButton.styleFrom(
         foregroundColor: KovaColors.primary,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -134,6 +134,90 @@ class _SettingsScreenState extends State<SettingsScreen> {
         style: GoogleFonts.nunito(fontWeight: FontWeight.w800, fontSize: 13),
       ),
     );
+  }
+
+  void _showEditChildDialog(String currentName, int currentAge) {
+    final nameController = TextEditingController(text: currentName);
+    final ageController = TextEditingController(text: currentAge.toString());
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit Child Profile', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Child Name'),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: ageController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Age'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final newName = nameController.text.trim();
+              final newAge = int.tryParse(ageController.text) ?? currentAge;
+              if (newName.isNotEmpty) {
+                await _updateChildProfile(newName, newAge);
+                if (mounted) Navigator.pop(context);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showEditPhoneDialog(String currentPhone) {
+    final phoneController = TextEditingController(text: currentPhone);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit Phone Number', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
+        content: TextField(
+          controller: phoneController,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(labelText: 'Phone Number'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final newPhone = phoneController.text.trim();
+              await LocalStorage.setString('parent_phone', newPhone);
+              setState(() {});
+              if (mounted) Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _updateChildProfile(String name, int age) async {
+    final dashboard = context.read<DashboardDataService>();
+    final child = dashboard.activeChild;
+    if (child != null) {
+      await context.read<DashboardDataService>().updateChildProfile(child.id, name, age);
+      setState(() {});
+    }
   }
 
   Widget _buildActionButton(String label, {VoidCallback? onTap}) {
@@ -220,7 +304,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Icons.person_outline_rounded,
               'Child name',
               subtitle: '$childName, $childAge years old',
-              trailing: _buildEditButton(),
+              trailing: activeChild != null
+                  ? _buildEditButton(() => _showEditChildDialog(childName, childAge))
+                  : null,
             ),
             _buildSettingItem(
               Icons.local_phone_outlined,
@@ -228,7 +314,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: parentPhone.isNotEmpty
                   ? parentPhone
                   : 'Not set',
-              trailing: _buildEditButton(),
+              trailing: _buildEditButton(() => _showEditPhoneDialog(parentPhone)),
               showDivider: false,
             ),
           ]),

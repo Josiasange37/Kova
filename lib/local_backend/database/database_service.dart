@@ -21,7 +21,15 @@ class DatabaseService {
   /// Initialize the database file and create tables
   Future<Database> _initDatabase() async {
     final path = join(await getDatabasesPath(), 'kova_local.db');
-    return openDatabase(path, version: 1, onCreate: _createTables);
+    return openDatabase(
+      path,
+      version: 1,
+      onCreate: _createTables,
+      onOpen: (db) async {
+        // Set busy timeout to prevent database locked errors
+        await db.execute('PRAGMA busy_timeout = 5000');
+      },
+    );
   }
 
   /// Create all tables on first run
