@@ -9,6 +9,7 @@ import 'package:kova/parent/services/settings_service.dart';
 import 'package:kova/parent/services/dashboard_data_service.dart';
 import 'package:kova/parent/services/alert_history_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
+import 'package:kova/local_backend/repositories/child_repository.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool isEmbedded;
@@ -69,6 +70,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Widget? trailing,
     bool showDivider = true,
     VoidCallback? onPressed,
+    Color? iconColor,
   }) {
     return InkWell(
       onTap: onPressed,
@@ -78,7 +80,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                Icon(icon, color: KovaColors.primary, size: 24),
+                Icon(icon, color: iconColor ?? KovaColors.primary, size: 24),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
@@ -218,6 +220,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (child != null) {
       await context.read<DashboardDataService>().updateChildProfile(child.id, name, age);
       setState(() {});
+    }
+  }
+
+  Future<void> _showDeleteChildDialog(ChildModel child) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${child.name}?', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
+        content: Text(
+          'This will permanently remove ${child.name} and all associated alerts and monitoring data. This action cannot be undone.',
+          style: GoogleFonts.nunito(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: KovaColors.danger),
+            child: Text('Delete', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        final dashboard = context.read<DashboardDataService>();
+        await dashboard.deleteChild(child.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${child.name} has been deleted', style: GoogleFonts.nunito(fontWeight: FontWeight.w600)),
+              backgroundColor: KovaColors.success,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete: $e', style: GoogleFonts.nunito(fontWeight: FontWeight.w600)),
+              backgroundColor: KovaColors.danger,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -422,8 +472,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ? parentPhone
                   : 'Not set',
               trailing: _buildEditButton(() => _showEditPhoneDialog(parentPhone)),
-              showDivider: false,
+              showDivider: activeChild == null,
             ),
+            if (activeChild != null)
+              _buildSettingItem(
+                Icons.delete_outline_rounded,
+                'Delete child',
+                subtitle: 'Remove $childName from monitoring',
+                trailing: _buildActionButton('Delete', onTap: () => _showDeleteChildDialog(activeChild)),
+                showDivider: false,
+                iconColor: KovaColors.danger,
+              ),
           ]),
           _buildSection('Security', [
             _buildSettingItem(

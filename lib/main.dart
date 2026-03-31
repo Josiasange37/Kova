@@ -2,6 +2,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -95,10 +96,26 @@ class _KovaAppState extends State<KovaApp> {
         ChangeNotifierProvider(create: (_) => ChildProfileService()),
         ChangeNotifierProvider(create: (_) => SettingsService()),
       ],
-      child: MaterialApp.router(
-        title: 'KOVA',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
+      child: Builder(
+        builder: (context) {
+          // Listen to settings for language changes
+          final settings = context.watch<SettingsService>();
+          
+          return MaterialApp.router(
+            title: 'KOVA',
+            debugShowCheckedModeBanner: false,
+            // Localization
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [
+              Locale('en'), // English
+              Locale('fr'), // French
+            ],
+            locale: Locale(settings.language),
+            theme: ThemeData(
           useMaterial3: true,
           scaffoldBackgroundColor: KovaColors.background,
           colorScheme: ColorScheme.fromSeed(
@@ -128,6 +145,8 @@ class _KovaAppState extends State<KovaApp> {
           ),
         ),
         routerConfig: _router,
+      );
+        },
       ),
     );
   }

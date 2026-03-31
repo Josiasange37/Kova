@@ -96,6 +96,18 @@ class DashboardDataService extends ChangeNotifier {
     await loadDashboardData();
   }
 
+  // Delete a child and all associated data
+  Future<void> deleteChild(String childId) async {
+    await _childRepo.delete(childId);
+    // If deleted child was active, clear the active child
+    if (_activeChildId == childId) {
+      _activeChildId = null;
+      await LocalStorage.remove('child_id');
+    }
+    // Reload to reflect changes
+    await loadDashboardData();
+  }
+
   // Update active child
   Future<void> setActiveChild(String childId) async {
     _activeChildId = childId;
