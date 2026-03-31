@@ -1,4 +1,5 @@
 // shared/services/notification_service.dart — Local push notifications
+import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationService {
@@ -10,7 +11,17 @@ class NotificationService {
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/launcher_icon',
     );
-    const initSettings = InitializationSettings(android: androidSettings);
+
+    // Linux settings for desktop
+    final linuxSettings = LinuxInitializationSettings(
+      defaultActionName: 'Open notification',
+      defaultIcon: AssetsLinuxIcon('icons/app_icon.png'),
+    );
+
+    final initSettings = InitializationSettings(
+      android: androidSettings,
+      linux: linuxSettings,
+    );
 
     await _notificationsPlugin.initialize(initSettings);
   }
@@ -31,7 +42,14 @@ class NotificationService {
       enableVibration: true,
     );
 
-    const details = NotificationDetails(android: androidDetails);
+    final linuxDetails = LinuxNotificationDetails(
+      urgency: LinuxNotificationUrgency.normal,
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      linux: linuxDetails,
+    );
 
     await _notificationsPlugin.show(
       alertId?.hashCode ?? 0,
@@ -54,7 +72,14 @@ class NotificationService {
       enableVibration: true,
     );
 
-    const details = NotificationDetails(android: androidDetails);
+    final linuxDetails = LinuxNotificationDetails(
+      urgency: LinuxNotificationUrgency.critical,
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      linux: linuxDetails,
+    );
 
     await _notificationsPlugin.show(
       DateTime.now().millisecond,
