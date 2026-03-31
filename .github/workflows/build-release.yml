@@ -29,20 +29,38 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Generate local.properties
+        run: |
+          FLUTTER_ROOT=$(flutter --machine --version | python3 -c "import sys,json; print(json.load(sys.stdin)['flutterRoot'])")
+          echo "flutter.sdk=$FLUTTER_ROOT" > android/local.properties
+          echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
+          echo "✅ local.properties written:"
+          cat android/local.properties
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Install dependencies
         run: |
           flutter pub get
-          echo "Dependencies installed successfully"
+          echo "✅ Dependencies installed"
 
       - name: Analyze code
         run: |
           flutter analyze --no-fatal-infos --no-fatal-warnings
-          echo "Code analysis completed"
+          echo "✅ Code analysis completed"
 
       - name: Build Android APK
         run: |
           flutter build apk --release -v
-          echo "APK built successfully"
+          echo "✅ APK built successfully"
           ls -lh build/app/outputs/flutter-apk/
 
       - name: Verify APK
