@@ -10,6 +10,7 @@ import 'package:kova/parent/services/dashboard_data_service.dart';
 import 'package:kova/parent/services/alert_history_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
+import 'package:kova/local_backend/database/database_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final bool isEmbedded;
@@ -625,10 +626,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+          _buildSection('Danger Zone', [
+            _buildSettingItem(
+              Icons.delete_forever_outlined,
+              'Factory Reset',
+              subtitle: 'Clear all data and start fresh',
+              trailing: _buildActionButton('Reset', onTap: _showFactoryResetDialog),
+              showDivider: false,
+              iconColor: KovaColors.danger,
+            ),
+          ]),
           const SizedBox(height: KovaSpacing.xxl),
         ],
       ),
     );
+  }
+
+  Future<void> _showFactoryResetDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Factory Reset?', style: GoogleFonts.nunito(fontWeight: FontWeight.w800, color: KovaColors.danger)),
+        content: Text(
+          'This will permanently delete ALL data including:\n\n'
+          '• All child profiles\n'
+          '• All alerts and monitoring history\n'
+          '• All settings and preferences\n'
+          '• Parent account information\n\n'
+          'This action cannot be undone. The app will restart fresh.',
+          style: GoogleFonts.nunito(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('Cancel', style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: KovaColors.danger,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Reset Everything', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // Clear database
+        final db = DatabaseService();
+        await db.reset();
+        
+        // Clear all local storage
+        await LocalStorage.clear();
+        
+        if (mounted) {
+          // Show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('All data cleared. Restarting...', style: GoogleFonts.nunito(fontWeight: FontWeight.w600)),
+              backgroundColor: KovaColors.success,
+            ),
+          );
+          
+          // Navigate to splash screen
+          context.go(AppRoutes.splash);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Reset failed: $e', style: GoogleFonts.nunito(fontWeight: FontWeight.w600)),
+              backgroundColor: KovaColors.danger,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildLanguageToggle(
