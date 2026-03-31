@@ -79,21 +79,4 @@ class KovaDeviceAdmin : DeviceAdminReceiver() {
             Log.e(TAG, "Error locking device: ${e.message}")
         }
     }
-
-    /**
-     * Show lock screen with message
-     */
-    fun showLockMessage(context: Context, message: String) {
-        try {
-            // Create lock screen intent
-            val intent = Intent(context, LockScreenActivity::class.java)
-            intent.putExtra("message", message)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            context.startActivity(intent)
-            
-            Log.d(TAG, "Lock screen shown: $message")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error showing lock screen: ${e.message}")
-        }
-    }
 }
