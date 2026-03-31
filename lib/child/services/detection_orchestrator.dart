@@ -154,7 +154,7 @@ class DetectionOrchestrator {
 
     // Batch analyze
     final batchResult = TextAnalyzer.analyzeBatch(texts);
-    final conversationId = '${appKey}_${_childId}';
+    final conversationId = '${appKey}_$_childId';
     
     // Add all messages to context
     for (final msg in messages) {

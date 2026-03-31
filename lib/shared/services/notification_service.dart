@@ -42,7 +42,7 @@ class NotificationService {
       enableVibration: true,
     );
 
-    final linuxDetails = LinuxNotificationDetails(
+    final linuxDetails = const LinuxNotificationDetails(
       urgency: LinuxNotificationUrgency.normal,
     );
 
@@ -72,7 +72,7 @@ class NotificationService {
       enableVibration: true,
     );
 
-    final linuxDetails = LinuxNotificationDetails(
+    final linuxDetails = const LinuxNotificationDetails(
       urgency: LinuxNotificationUrgency.critical,
     );
 

@@ -63,7 +63,7 @@ class ChildWelcomeScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: ElevatedButton.icon(
                 onPressed: () {
-                  context.go(AppRoutes.whatsappConnect);
+                  context.go(AppRoutes.parentConnectChild);
                 },
                 icon: const Icon(Icons.qr_code),
                 label: const Text('Generate Pairing Code'),
