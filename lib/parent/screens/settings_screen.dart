@@ -626,12 +626,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          _buildSection('Danger Zone', [
+          _buildSection('Account', [
             _buildSettingItem(
-              Icons.delete_forever_outlined,
-              'Factory Reset',
-              subtitle: 'Clear all data and start fresh',
-              trailing: _buildActionButton('Reset', onTap: _showFactoryResetDialog),
+              Icons.logout_outlined,
+              'Logout',
+              subtitle: 'Clear all data and return to login',
+              trailing: _buildActionButton('Logout', onTap: _showLogoutDialog),
               showDivider: false,
               iconColor: KovaColors.danger,
             ),
@@ -642,18 +642,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _showFactoryResetDialog() async {
+  Future<void> _showLogoutDialog() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Factory Reset?', style: GoogleFonts.nunito(fontWeight: FontWeight.w800, color: KovaColors.danger)),
+        title: Text('Logout?', style: GoogleFonts.nunito(fontWeight: FontWeight.w800, color: KovaColors.danger)),
         content: Text(
-          'This will permanently delete ALL data including:\n\n'
+          'This will clear ALL data and return you to the login screen:\n\n'
           '• All child profiles\n'
           '• All alerts and monitoring history\n'
           '• All settings and preferences\n'
           '• Parent account information\n\n'
-          'This action cannot be undone. The app will restart fresh.',
+          'This action cannot be undone.',
           style: GoogleFonts.nunito(fontSize: 14),
         ),
         actions: [
@@ -667,7 +667,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               backgroundColor: KovaColors.danger,
               foregroundColor: Colors.white,
             ),
-            child: Text('Reset Everything', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
+            child: Text('Logout', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
           ),
         ],
       ),
@@ -686,7 +686,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Show success message
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('All data cleared. Restarting...', style: GoogleFonts.nunito(fontWeight: FontWeight.w600)),
+              content: Text('Logged out successfully', style: GoogleFonts.nunito(fontWeight: FontWeight.w600)),
               backgroundColor: KovaColors.success,
             ),
           );
@@ -698,7 +698,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Reset failed: $e', style: GoogleFonts.nunito(fontWeight: FontWeight.w600)),
+              content: Text('Logout failed: $e', style: GoogleFonts.nunito(fontWeight: FontWeight.w600)),
               backgroundColor: KovaColors.danger,
             ),
           );
