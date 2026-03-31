@@ -29,44 +29,102 @@ import 'package:kova/parent/services/settings_service.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize database factory for desktop platforms
-  if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+  try {
+    // Initialize database factory for desktop platforms
+    if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+    }
+
+    // Force portrait orientation
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+
+    // Transparent status bar
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+      ),
+    );
+
+    // Initialize services
+    debugPrint('Initializing LocalStorage...');
+    await LocalStorage.init();
+    debugPrint('LocalStorage initialized');
+    
+    debugPrint('Initializing Database...');
+    await DatabaseService().database;
+    debugPrint('Database initialized');
+    
+    debugPrint('Initializing NotificationService...');
+    await NotificationService.init();
+    debugPrint('NotificationService initialized');
+
+    // Initialize settings and load saved preferences
+    debugPrint('Initializing SettingsService...');
+    final settingsService = SettingsService();
+    settingsService.loadSettings();
+    debugPrint('SettingsService initialized');
+
+    // Get app mode
+    debugPrint('Getting app mode...');
+    final appMode = await AppModeManager.getMode();
+    debugPrint('App mode: $appMode');
+
+    // Start detection services ONLY if in child mode
+    if (appMode == AppMode.child) {
+      debugPrint('Starting detection services...');
+      await DetectionOrchestrator.instance.start();
+      debugPrint('Detection services started');
+    }
+
+    debugPrint('Running app...');
+    runApp(KovaApp(initialMode: appMode));
+  } catch (e, stackTrace) {
+    debugPrint('ERROR during initialization: $e');
+    debugPrint('Stack trace: $stackTrace');
+    runApp(ErrorApp(error: e.toString()));
   }
+}
 
-  // Force portrait orientation
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
-
-  // Transparent status bar
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-    ),
-  );
-
-  // Initialize services
-  await LocalStorage.init();
-  await DatabaseService().database;
-  await NotificationService.init();
-
-  // Initialize settings and load saved preferences
-  final settingsService = SettingsService();
-  settingsService.loadSettings();
-
-  // Get app mode
-  final appMode = await AppModeManager.getMode();
-
-  // Start detection services ONLY if in child mode
-  if (appMode == AppMode.child) {
-    await DetectionOrchestrator.instance.start();
+// Error display widget for initialization failures
+class ErrorApp extends StatelessWidget {
+  final String error;
+  
+  const ErrorApp({super.key, required this.error});
+  
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 64),
+                const SizedBox(height: 20),
+                const Text(
+                  'Initialization Error',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  error,
+                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
-
-  runApp(KovaApp(initialMode: appMode));
 }
 
 class KovaApp extends StatefulWidget {
