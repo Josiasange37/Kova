@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:kova/core/app_mode.dart';
+import 'package:kova/core/router.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
+import 'package:kova/local_backend/database/database_service.dart';
+import 'package:kova/shared/services/local_storage.dart';
 import 'package:intl/intl.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -145,6 +149,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ],
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: _showLogoutDialog,
+                    icon: const Icon(
+                      Icons.logout_outlined,
+                      color: Color(0xFF6B7280),
+                      size: 20,
+                    ),
+                    tooltip: 'Logout',
                   ),
                 ],
               ),
@@ -328,6 +342,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return '${difference.inHours} hours ago';
     } else {
       return DateFormat('MMM d, yyyy').format(time);
+    }
+  }
+
+  Future<void> _showLogoutDialog() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'Logout?',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: Color(0xFFEF4444),
+          ),
+        ),
+        content: const Text(
+          'This will clear all your data and return to the login screen.\n\n'
+          'Your parent will need to set up the connection again.',
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text(
+              'Logout',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // Clear database
+        final db = DatabaseService();
+        await db.reset();
+        
+        // Clear all local storage
+        await LocalStorage.clear();
+        
+        if (mounted) {
+          // Navigate to splash screen
+          context.go(AppRoutes.splash);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Logout failed: $e'),
+              backgroundColor: const Color(0xFFEF4444),
+            ),
+          );
+        }
+      }
     }
   }
 

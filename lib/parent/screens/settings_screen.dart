@@ -22,12 +22,17 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  bool _settingsLoaded = false;
+  
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<SettingsService>().loadSettings();
-    });
+    if (!_settingsLoaded) {
+      _settingsLoaded = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<SettingsService>().loadSettings();
+      });
+    }
   }
 
   Widget _buildSection(String title, List<Widget> children) {
