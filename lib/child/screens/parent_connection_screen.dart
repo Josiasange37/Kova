@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -23,11 +24,11 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen>
 
   bool _isLoading = false;
   
-  // Generate 8 random 6-digit pairing codes
-  final List<String> _validPairingCodes = _generatePairingCodes();
-  
+  // Generate 8 random 6-digit pairing codes using deterministic seed
   static List<String> _generatePairingCodes() {
-    final random = Random();
+    // Use a fixed seed based on current timestamp for this session
+    final seed = DateTime.now().millisecondsSinceEpoch ~/ 1000000;
+    final random = Random(seed);
     final codes = <String>{};
     while (codes.length < 8) {
       // Generate 6-digit code (000000 to 999999)
