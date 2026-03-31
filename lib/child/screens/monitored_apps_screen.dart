@@ -1,9 +1,51 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kova/core/router.dart';
+import 'package:kova/core/app_mode.dart';
+import 'package:kova/local_backend/repositories/child_repository.dart';
 
-class MonitoredAppsScreen extends StatelessWidget {
+class MonitoredAppsScreen extends StatefulWidget {
   const MonitoredAppsScreen({super.key});
+
+  @override
+  State<MonitoredAppsScreen> createState() => _MonitoredAppsScreenState();
+}
+
+class _MonitoredAppsScreenState extends State<MonitoredAppsScreen> {
+  final _childRepo = ChildRepository();
+  ChildModel? _child;
+  bool _loading = true;
+
+  final Map<String, _AppMeta> _appMeta = {
+    'whatsapp': const _AppMeta('WhatsApp', 'com.whatsapp'),
+    'tiktok': const _AppMeta('TikTok', 'com.zhiliaoapp.musically'),
+    'facebook': const _AppMeta('Facebook', 'com.facebook.katana'),
+    'instagram': const _AppMeta('Instagram', 'com.instagram.android'),
+    'sms': const _AppMeta('SMS', 'com.google.android.apps.messaging'),
+    'snapchat': const _AppMeta('Snapchat', 'com.snapchat.android'),
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final childId = await AppModeManager.getChildId();
+    if (childId != null) {
+      _child = await _childRepo.getById(childId);
+    }
+    setState(() => _loading = false);
+  }
+
+  List<MapEntry<String, _AppMeta>> get _enabledApps {
+    if (_child == null) return [];
+    return _appMeta.entries.where((entry) {
+      final isEnabled = _child!.appControls[entry.key] ?? true;
+      return isEnabled;
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,69 +75,40 @@ class MonitoredAppsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 32),
               Expanded(
-                child: ListView(
-                  physics: const BouncingScrollPhysics(),
-                  children: [
-                    _buildAppCard(
-                      iconPath: 'assets/images/whatsapp_icon.svg',
-                      title: 'WhatsApp',
-                      subtitle: '',
-                      status: AppStatus.connected,
-                    ),
-                    const SizedBox(height: 12),
-                    _buildAppCard(
-                      iconPath: 'assets/images/tiktok_icon.svg',
-                      title: 'TikTok',
-                      subtitle: 'No action needed',
-                      status: AppStatus.automatic,
-                    ),
-                    const SizedBox(height: 12),
-                    _buildAppCard(
-                      iconPath: 'assets/images/facebook_icon.svg',
-                      title: 'Facebook',
-                      subtitle: 'No action needed',
-                      status: AppStatus.automatic,
-                    ),
-                    const SizedBox(height: 12),
-                    _buildAppCard(
-                      iconPath: 'assets/images/instagram_icon.svg',
-                      title: 'Instagram',
-                      subtitle: 'No action needed',
-                      status: AppStatus.automatic,
-                    ),
-                    const SizedBox(height: 12),
-                    _buildAppCard(
-                      iconPath: 'assets/images/sms_icon.svg',
-                      title: 'SMS',
-                      subtitle: 'No action needed',
-                      status: AppStatus.automatic,
-                    ),
-                  ],
-                ),
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _enabledApps.isEmpty
+                        ? const Center(child: Text('No apps configured for monitoring'))
+                        : ListView.builder(
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: _enabledApps.length,
+                            itemBuilder: (context, index) {
+                              final app = _enabledApps[index];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _buildAppCard(
+                                  title: app.value.name,
+                                  packageName: app.value.package,
+                                  isConnected: app.key == 'whatsapp',
+                                ),
+                              );
+                            },
+                          ),
               ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // Navigate to child dashboard screen
-                    context.go(AppRoutes.childDashboard);
-                  },
+                  onPressed: () => context.go(AppRoutes.childDashboard),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1E2A5D),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                   ),
                   child: const Text(
                     'Continue',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
                   ),
                 ),
               ),
@@ -107,10 +120,9 @@ class MonitoredAppsScreen extends StatelessWidget {
   }
 
   Widget _buildAppCard({
-    required String iconPath,
     required String title,
-    required String subtitle,
-    required AppStatus status,
+    required String packageName,
+    required bool isConnected,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -127,7 +139,6 @@ class MonitoredAppsScreen extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // App Icon Placeholder / Image
           Container(
             width: 44,
             height: 44,
@@ -136,10 +147,9 @@ class MonitoredAppsScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             padding: const EdgeInsets.all(8),
-            child: _getIconReplacement(title, iconPath),
+            child: _getAppIcon(title),
           ),
           const SizedBox(width: 16),
-          // Texts
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,63 +162,37 @@ class MonitoredAppsScreen extends StatelessWidget {
                     color: Color(0xFF111827),
                   ),
                 ),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
-          // Status Badge
-          if (status == AppStatus.connected)
+          if (isConnected)
             Row(
               children: [
-                const Icon(
-                  Icons.check_circle_outline,
-                  color: Color(0xFF10B981),
-                  size: 16,
-                ),
+                const Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 16),
                 const SizedBox(width: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: const Color(0xFF10B981),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Text(
                     'Connected',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
                   ),
                 ),
               ],
             )
-          else if (status == AppStatus.automatic)
+          else
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF4F46E5), // Indigo blue
+                color: const Color(0xFF4F46E5),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: const Text(
                 'Automatic',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500),
               ),
             ),
         ],
@@ -216,8 +200,7 @@ class MonitoredAppsScreen extends StatelessWidget {
     );
   }
 
-  Widget _getIconReplacement(String title, String asset) {
-    // If the SVG is not available yet, provide a fallback built-in icon
+  Widget _getAppIcon(String title) {
     switch (title.toLowerCase()) {
       case 'whatsapp':
         return const Icon(Icons.chat_bubble_outline, color: Color(0xFF10B981));
@@ -229,10 +212,16 @@ class MonitoredAppsScreen extends StatelessWidget {
         return const Icon(Icons.camera_alt_outlined, color: Color(0xFFE1306C));
       case 'sms':
         return const Icon(Icons.message_outlined, color: Color(0xFF4B5563));
+      case 'snapchat':
+        return const Icon(Icons.chat, color: Color(0xFFFFFC00));
       default:
         return const Icon(Icons.apps);
     }
   }
 }
 
-enum AppStatus { connected, automatic }
+class _AppMeta {
+  final String name;
+  final String package;
+  const _AppMeta(this.name, this.package);
+}

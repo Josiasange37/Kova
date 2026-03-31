@@ -1,10 +1,52 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/app_mode.dart';
+import '../../local_backend/repositories/child_repository.dart';
 import '../theme/kova_theme.dart';
 import 'whatsapp_connection_screen.dart';
 
-class FinalActiveScreen extends StatelessWidget {
+class FinalActiveScreen extends StatefulWidget {
   const FinalActiveScreen({super.key});
+
+  @override
+  State<FinalActiveScreen> createState() => _FinalActiveScreenState();
+}
+
+class _FinalActiveScreenState extends State<FinalActiveScreen> {
+  final _childRepo = ChildRepository();
+  ChildModel? _child;
+  bool _loading = true;
+
+  final Map<String, _AppInfo> _allApps = {
+    'whatsapp': const _AppInfo('WhatsApp', Icons.message_rounded, Color(0xFF10B981)),
+    'tiktok': const _AppInfo('TikTok', Icons.video_collection_rounded, Colors.black),
+    'snapchat': const _AppInfo('Snapchat', Icons.snapchat_rounded, Color(0xFFFFFC00)),
+    'instagram': const _AppInfo('Instagram', Icons.camera_alt_rounded, Color(0xFFE1306C)),
+    'facebook': const _AppInfo('Facebook', Icons.facebook, Color(0xFF1877F2)),
+    'sms': const _AppInfo('SMS', Icons.message_outlined, Color(0xFF34C759)),
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final childId = await AppModeManager.getChildId();
+    if (childId != null) {
+      _child = await _childRepo.getById(childId);
+    }
+    setState(() => _loading = false);
+  }
+
+  List<MapEntry<String, _AppInfo>> get _enabledApps {
+    if (_child == null) return [];
+    return _allApps.entries.where((entry) {
+      final isEnabled = _child!.appControls[entry.key] ?? true;
+      return isEnabled;
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +73,6 @@ class FinalActiveScreen extends StatelessWidget {
                 ).textTheme.bodyLarge?.copyWith(color: KovaTheme.textSecondary),
               ),
               const SizedBox(height: 48),
-
               const Text(
                 "Current Monitoring",
                 style: TextStyle(
@@ -41,42 +82,29 @@ class FinalActiveScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-
-              _monitoredApp(
-                context,
-                "WhatsApp",
-                "Active",
-                Icons.message_rounded,
-              ),
-              _monitoredApp(
-                context,
-                "TikTok",
-                "Active",
-                Icons.video_collection_rounded,
-              ),
-              _monitoredApp(
-                context,
-                "Snapchat",
-                "Active",
-                Icons.snapchat_rounded,
-              ),
-              _monitoredApp(
-                context,
-                "Instagram",
-                "Active",
-                Icons.camera_alt_rounded,
-              ),
-
-              const Spacer(),
-
+              _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _enabledApps.isEmpty
+                      ? const Text('No apps currently being monitored')
+                      : Expanded(
+                          child: ListView.builder(
+                            itemCount: _enabledApps.length,
+                            itemBuilder: (context, index) {
+                              final app = _enabledApps[index];
+                              return _monitoredApp(
+                                context,
+                                app.value.name,
+                                "Active",
+                                app.value.icon,
+                                app.value.color,
+                              );
+                            },
+                          ),
+                        ),
               ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const WhatsappConnectionScreen(),
-                    ),
-                  );
-                },
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const WhatsappConnectionScreen()),
+                ),
                 child: const Text("Go to Dashboard"),
               ),
               const SizedBox(height: 24),
@@ -92,6 +120,7 @@ class FinalActiveScreen extends StatelessWidget {
     String name,
     String status,
     IconData icon,
+    Color iconColor,
   ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -113,10 +142,10 @@ class FinalActiveScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: KovaTheme.primaryBlue.withValues(alpha: 0.05),
+              color: iconColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: KovaTheme.primaryBlue, size: 24),
+            child: Icon(icon, color: iconColor, size: 24),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -151,4 +180,11 @@ class FinalActiveScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AppInfo {
+  final String name;
+  final IconData icon;
+  final Color color;
+  const _AppInfo(this.name, this.icon, this.color);
 }
