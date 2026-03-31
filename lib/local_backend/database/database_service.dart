@@ -1,4 +1,5 @@
 // local_backend/database/database_service.dart — SQLite initialization & management
+import 'dart:io';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -20,15 +21,14 @@ class DatabaseService {
 
   /// Initialize the database file and create tables
   Future<Database> _initDatabase() async {
-    final path = join(await getDatabasesPath(), 'kova_local.db');
+    final dbPath = await getDatabasesPath();
+    // Ensure directory exists (needed for Android)
+    await Directory(dbPath).create(recursive: true);
+    final path = join(dbPath, 'kova_local.db');
     return openDatabase(
       path,
       version: 1,
       onCreate: _createTables,
-      onOpen: (db) async {
-        // Set busy timeout to prevent database locked errors
-        await db.execute('PRAGMA busy_timeout = 5000');
-      },
     );
   }
 
