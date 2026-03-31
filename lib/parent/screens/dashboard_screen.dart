@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/core/router.dart';
 import 'package:kova/parent/services/dashboard_data_service.dart';
-import 'package:kova/local_backend/repositories/child_repository.dart';
+// import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/parent/screens/app_control_screen.dart';
 import 'package:kova/parent/screens/alert_history_screen.dart';
 import 'package:kova/parent/screens/settings_screen.dart';
@@ -216,9 +218,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 )
               else
                 // Show summary cards for all children
-                ...children.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final child = entry.value;
+                ...children.map((child) {
                   // Calculate per-child stats
                   final childAlerts = service.alerts?.where((a) => a.childId == child.id).toList() ?? [];
                   final childAlertCount = childAlerts.where((a) => !a.read).length;

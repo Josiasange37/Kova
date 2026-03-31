@@ -6,6 +6,9 @@ import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
 import 'package:kova/shared/services/local_storage.dart';
 
+// Re-export ChildModel for consumers of this service
+export 'package:kova/local_backend/repositories/child_repository.dart' show ChildModel;
+
 class DashboardDataService extends ChangeNotifier {
   final _childRepo = ChildRepository();
   final _alertRepo = AlertRepository();

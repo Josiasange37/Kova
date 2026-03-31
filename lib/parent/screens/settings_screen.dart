@@ -222,7 +222,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _exportWeeklyPDF() async {
-    final dashboard = context.read<DashboardDataService>();
     final alertService = context.read<AlertHistoryService>();
     
     // Get all alerts from the past week
