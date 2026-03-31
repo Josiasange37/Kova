@@ -1,4 +1,4 @@
-package com.example.kova
+package com.kova.child
 
 import android.content.Intent
 import android.app.admin.DevicePolicyManager
@@ -174,5 +174,71 @@ class MainActivity : FlutterActivity() {
     } catch (e: Exception) {
       e.printStackTrace()
     }
+  }
+
+  // BroadcastReceiver to forward messages to Flutter
+  private val messageReceiver = object : android.content.BroadcastReceiver() {
+    override fun onReceive(context: android.content.Context, intent: Intent) {
+      if (intent.action == "com.kova.accessibility.MESSAGE" || intent.action == "com.kova.notification.MESSAGE") {
+        val childId = intent.getStringExtra("childId")
+        val app = intent.getStringExtra("app")
+        val messageText = intent.getStringExtra("messageText")
+        val senderName = intent.getStringExtra("senderName")
+        val imagePaths = intent.getStringArrayExtra("imagePaths")?.toList() ?: emptyList<String>()
+
+        val args = mapOf(
+          "childId" to childId,
+          "app" to app,
+          "messageText" to messageText,
+          "senderName" to senderName,
+          "imagePaths" to imagePaths
+        )
+
+        flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+          MethodChannel(messenger, "com.kova.app/accessibility").invokeMethod("onMessage", args)
+        }
+      } else if (intent.action == "com.kova.accessibility.CONVERSATION") {
+        val childId = intent.getStringExtra("childId")
+        val app = intent.getStringExtra("app")
+        val senderName = intent.getStringExtra("senderName")
+        val messagesArray = intent.getStringArrayExtra("messages") ?: arrayOfNulls<String>(0)
+        
+        val messagesList = messagesArray.filterNotNull().map { text ->
+           mapOf("text" to text, "sender" to "unknown", "timestamp" to System.currentTimeMillis())
+        }
+
+        val args = mapOf(
+          "childId" to childId,
+          "app" to app,
+          "senderName" to senderName,
+          "messages" to messagesList
+        )
+
+        flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+          MethodChannel(messenger, "com.kova.app/accessibility").invokeMethod("onConversation", args)
+        }
+      }
+    }
+  }
+
+  override fun onResume() {
+    super.onResume()
+    val filter = android.content.IntentFilter().apply {
+        addAction("com.kova.accessibility.MESSAGE")
+        addAction("com.kova.notification.MESSAGE")
+        addAction("com.kova.accessibility.CONVERSATION")
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        registerReceiver(messageReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
+    } else {
+        registerReceiver(messageReceiver, filter)
+    }
+  }
+
+  override fun onPause() {
+    super.onPause()
+    try {
+        unregisterReceiver(messageReceiver)
+    } catch (e: Exception) {}
   }
 }

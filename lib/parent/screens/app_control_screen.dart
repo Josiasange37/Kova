@@ -23,35 +23,35 @@ class _AppControlScreenState extends State<AppControlScreen> {
 
   // Static app metadata (icons & colors)
   static final _appMeta = <String, _AppMeta>{
-    'x': _AppMeta(
+    'x': const _AppMeta(
       name: 'X',
       icon: Icons.close_rounded,
-      color: const Color(0xFF000000),
+      color: Color(0xFF000000),
     ),
-    'tiktok': _AppMeta(
+    'tiktok': const _AppMeta(
       name: 'TikTok',
       icon: Icons.music_note_rounded,
-      color: const Color(0xFF010101),
+      color: Color(0xFF010101),
     ),
-    'instagram': _AppMeta(
+    'instagram': const _AppMeta(
       name: 'Instagram',
       icon: Icons.camera_alt_rounded,
-      color: const Color(0xFFE4405F),
+      color: Color(0xFFE4405F),
     ),
-    'whatsapp': _AppMeta(
+    'whatsapp': const _AppMeta(
       name: 'WhatsApp',
       icon: Icons.chat_rounded,
-      color: const Color(0xFF25D366),
+      color: Color(0xFF25D366),
     ),
-    'facebook': _AppMeta(
+    'facebook': const _AppMeta(
       name: 'Facebook',
       icon: Icons.facebook_rounded,
-      color: const Color(0xFF1877F2),
+      color: Color(0xFF1877F2),
     ),
-    'sms': _AppMeta(
+    'sms': const _AppMeta(
       name: 'SMS',
       icon: Icons.sms_rounded,
-      color: const Color(0xFF34C759),
+      color: Color(0xFF34C759),
     ),
   };
 

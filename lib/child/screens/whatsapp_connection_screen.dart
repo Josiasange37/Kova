@@ -125,7 +125,7 @@ class WhatsappConnectionScreen extends StatelessWidget {
           Container(
             width: 32,
             height: 32,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: KovaTheme.primaryBlue,
               shape: BoxShape.circle,
             ),

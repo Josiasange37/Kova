@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
@@ -18,6 +21,7 @@ class _ChildProfileScreenState extends State<ChildProfileScreen>
   final _nameController = TextEditingController();
   int _age = 10;
   bool _isNameFilled = false;
+  File? _avatarFile;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
@@ -95,6 +99,20 @@ class _ChildProfileScreenState extends State<ChildProfileScreen>
     }
   }
 
+  Future<void> _pickAvatar() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    
+    if (pickedFile != null) {
+      setState(() {
+        _avatarFile = File(pickedFile.path);
+      });
+      if (mounted) {
+        context.read<ChildProfileService>().setAvatarPath(pickedFile.path);
+      }
+    }
+  }
+
   // Helper for mode config
   String get _modeName {
     if (_age < 8) return 'Strict mode';
@@ -166,19 +184,26 @@ class _ChildProfileScreenState extends State<ChildProfileScreen>
                               width: 2,
                             ),
                           ),
-                          child: const Icon(
-                            Icons.person_rounded,
-                            size: 48,
-                            color: KovaColors.divider,
+                          child: ClipOval(
+                            child: _avatarFile != null
+                                ? Image.file(
+                                    _avatarFile!,
+                                    fit: BoxFit.cover,
+                                    width: 96,
+                                    height: 96,
+                                  )
+                                : const Icon(
+                                    Icons.person_rounded,
+                                    size: 48,
+                                    color: KovaColors.divider,
+                                  ),
                           ),
                         ),
                         Positioned(
                           bottom: 0,
                           right: 0,
                           child: InkWell(
-                            onTap: () {
-                              // Avatar pick logic placeholder
-                            },
+                            onTap: _pickAvatar,
                             child: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: const BoxDecoration(

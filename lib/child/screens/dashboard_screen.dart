@@ -1,11 +1,62 @@
 import 'package:flutter/material.dart';
-import 'package:kova/child/screens/blocked_overlay_screen.dart';
+import 'package:kova/core/app_mode.dart';
+import 'package:kova/local_backend/repositories/child_repository.dart';
+import 'package:kova/local_backend/repositories/alert_repository.dart';
+import 'package:intl/intl.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final _childRepository = ChildRepository();
+  final _alertRepository = AlertRepository();
+
+  ChildModel? _child;
+  List<AlertModel> _recentAlerts = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final childId = await AppModeManager.getChildId();
+    if (childId != null) {
+      final child = await _childRepository.getById(childId);
+      final alerts = await _alertRepository.getRecent(childId, 24);
+      if (mounted) {
+        setState(() {
+          _child = child;
+          _recentAlerts = alerts;
+          _isLoading = false;
+        });
+      }
+    } else {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final childName = _child?.name ?? 'Child';
+    final initial = childName.isNotEmpty ? childName[0].toUpperCase() : 'C';
+
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -25,10 +76,10 @@ class DashboardScreen extends StatelessWidget {
                       shape: BoxShape.circle,
                       color: Color(0xFF1E2A5D),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Text(
-                        'C',
-                        style: TextStyle(
+                        initial,
+                        style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
@@ -37,20 +88,20 @@ class DashboardScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'You are protected',
-                          style: TextStyle(
+                          'Welcome, $childName',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: Color(0xFF1E2A5D),
                           ),
                         ),
-                        Text(
-                          'By your parents',
+                        const Text(
+                          'Protected by your parents',
                           style: TextStyle(
                             fontSize: 12,
                             color: Color(0xFF6B7280),
@@ -228,43 +279,27 @@ class DashboardScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     Expanded(
-                      child: ListView(
-                        physics: const BouncingScrollPhysics(),
-                        children: [
-                          _buildActivityItem(
-                            icon: Icons.chat_bubble_outline,
-                            title: 'WhatsApp Check',
-                            time: 'Just now',
-                            status: 'Clear',
-                            statusColor: const Color(0xFF10B981),
-                          ),
-                          _buildActivityItem(
-                            icon: Icons.block,
-                            title: 'Website Blocked',
-                            time: '2 hours ago',
-                            status: 'Gambling',
-                            statusColor: const Color(0xFFEF4444),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const BlockedOverlayScreen(
-                                        appName: 'Website',
-                                      ),
-                                ),
+                      child: _recentAlerts.isEmpty 
+                        ? const Center(
+                            child: Text(
+                              'No recent activity',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          )
+                        : ListView.builder(
+                            physics: const BouncingScrollPhysics(),
+                            itemCount: _recentAlerts.length,
+                            itemBuilder: (context, index) {
+                              final alert = _recentAlerts[index];
+                              return _buildActivityItem(
+                                icon: _getIconForAlert(alert.type),
+                                title: alert.app,
+                                time: _formatTime(alert.createdAt),
+                                status: alert.type,
+                                statusColor: alert.isCritical ? const Color(0xFFEF4444) : const Color(0xFF10B981),
                               );
                             },
                           ),
-                          _buildActivityItem(
-                            icon: Icons.timer_outlined,
-                            title: 'Screen Time',
-                            time: '5 hours ago',
-                            status: '2h 15m remaining',
-                            statusColor: const Color(0xFF6B7280),
-                          ),
-                        ],
-                      ),
                     ),
                   ],
                 ),
@@ -274,6 +309,26 @@ class DashboardScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  IconData _getIconForAlert(String type) {
+    if (type.contains('blocked')) return Icons.block;
+    if (type.contains('time')) return Icons.timer_outlined;
+    if (type.contains('app')) return Icons.apps;
+    return Icons.chat_bubble_outline;
+  }
+
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final difference = now.difference(time);
+    if (difference.inMinutes < 60) {
+      if (difference.inMinutes <= 1) return 'Just now';
+      return '${difference.inMinutes} minutes ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours} hours ago';
+    } else {
+      return DateFormat('MMM d, yyyy').format(time);
+    }
   }
 
   Widget _buildActionBtn({

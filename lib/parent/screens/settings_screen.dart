@@ -332,10 +332,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ? "$childName's view"
                   : 'Not configured',
               trailing: _buildActionButton('Switch', onTap: () async {
-                // Switch to child mode — use the linked child's pair code
+                // Switch to child mode — use the child's UUID (pair code is
+                // cleared after linking, so we use the persistent child ID).
                 final child = dashboard.activeChild;
-                if (child != null && child.pairCode != null) {
-                  await AppModeManager.setChildMode(child.pairCode!);
+                if (child != null) {
+                  await AppModeManager.setChildMode(child.id);
                 }
                 if (!mounted) return;
                 context.go(AppRoutes.childDashboard);

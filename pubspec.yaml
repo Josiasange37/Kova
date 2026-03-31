@@ -1,70 +1,78 @@
 name: kova
-description: "KOVA — One APK, two modes (parent & child), fully local, no server"
+description: "KOVA — Kids Online Vigilance & AI"
 publish_to: 'none'
-version: 0.2.0+1
+version: 1.0.0+1
 
 environment:
-  sdk: ^3.11.0
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
 
-  # ── Navigation & Routing ──
+  # Navigation
   go_router: ^13.2.0
 
-  # ── State Management ──
+  # State management
   provider: ^6.1.1
 
-  # ── Local Database ──
+  # Local database
   sqflite: ^2.3.0
-  sqflite_common_ffi: ^2.4.0+2
   path: ^1.9.0
   path_provider: ^2.1.2
 
-  # ── Local Storage ──
+  # Storage
   shared_preferences: ^2.2.2
 
-  # ── HTTP & Networking ──
+  # Networking (for future WiFi sync only)
   http: ^1.2.0
-  connectivity_plus: ^5.0.2
-
-  # ── UI & Design ──
+  
+  # UI dependencies from original project
   google_fonts: ^6.2.1
   flutter_svg: ^2.0.17
-  qr_flutter: ^4.1.0
-  mobile_scanner: ^5.1.1
-  percent_indicator: ^4.2.3
   font_awesome_flutter: ^11.0.0
 
-  # ── Local Notifications ──
+  # QR code display
+  qr_flutter: ^4.1.0
+
+  # QR code scanner
+  mobile_scanner: ^5.1.1
+
+  # Notifications
   flutter_local_notifications: ^17.0.0
 
-  # ── Permissions ──
+  # Permissions
   permission_handler: ^11.0.1
 
-  # ── Utilities ──
+  # ID generation
   uuid: ^4.4.0
-  crypto: ^3.0.3
-  image: ^4.1.7
-  intl: ^0.20.2
 
+  # PIN hashing
+  crypto: ^3.0.3
+
+  # Progress indicators
+  percent_indicator: ^4.2.3
+
+  # Connectivity
+  connectivity_plus: ^5.0.2
+
+  # Image processing
+  image: ^4.1.7
+
+  # Icons
+  cupertino_icons: ^1.0.6
+
+  intl: any
+  image_picker: any
+  sqflite_common_ffi: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^3.0.0
+
   integration_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
-  flutter_launcher_icons: ^0.13.1
-
-flutter_icons:
-  android: "launcher_icon"
-  ios: true
-  image_path: "assets/kova_logo.png"
-
 flutter:
   uses-material-design: true
-
   assets:
     - assets/svg/
-    - assets/models/

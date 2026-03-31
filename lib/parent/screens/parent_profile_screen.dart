@@ -296,15 +296,15 @@ class _ParentProfileScreenState extends State<ParentProfileScreen>
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(KovaRadius.button),
-          borderSide: BorderSide(color: KovaColors.divider, width: 1),
+          borderSide: const BorderSide(color: KovaColors.divider, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(KovaRadius.button),
-          borderSide: BorderSide(color: KovaColors.divider, width: 1),
+          borderSide: const BorderSide(color: KovaColors.divider, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(KovaRadius.button),
-          borderSide: BorderSide(color: KovaColors.primary, width: 1.5),
+          borderSide: const BorderSide(color: KovaColors.primary, width: 1.5),
         ),
       ),
     );
@@ -342,15 +342,15 @@ class _ParentProfileScreenState extends State<ParentProfileScreen>
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(KovaRadius.button),
-          borderSide: BorderSide(color: KovaColors.divider, width: 1),
+          borderSide: const BorderSide(color: KovaColors.divider, width: 1),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(KovaRadius.button),
-          borderSide: BorderSide(color: KovaColors.divider, width: 1),
+          borderSide: const BorderSide(color: KovaColors.divider, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(KovaRadius.button),
-          borderSide: BorderSide(color: KovaColors.primary, width: 1.5),
+          borderSide: const BorderSide(color: KovaColors.primary, width: 1.5),
         ),
         suffixIcon: IconButton(
           icon: Icon(

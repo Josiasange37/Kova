@@ -296,8 +296,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         height: 52,
                         child: ElevatedButton(
                           onPressed: () {
-                            // Navigate to WhatsApp connection in child flow
-                            context.go(AppRoutes.childWhatsappConnect);
+                            context.go(AppRoutes.childParentConnection);
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: KovaColors.primary,

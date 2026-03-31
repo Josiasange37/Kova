@@ -114,7 +114,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
                           opacity: _bannerFade.value,
                           child: Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.music_note_rounded,
                                 size: 16,
                                 color: KovaColors.textSecondary,
@@ -532,7 +532,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
         Center(
           child: TextButton.icon(
             onPressed: () {},
-            icon: Icon(
+            icon: const Icon(
               Icons.flag_outlined,
               size: 16,
               color: KovaColors.textSecondary,
@@ -752,7 +752,7 @@ class _PinEntrySheetState extends State<_PinEntrySheet> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: isBackspace
-                      ? Icon(
+                      ? const Icon(
                           Icons.backspace_outlined,
                           color: KovaColors.textSecondary,
                           size: 22,

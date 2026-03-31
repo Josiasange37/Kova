@@ -69,7 +69,7 @@ class _SuccessScreenState extends State<SuccessScreen>
                               color: KovaColors.primary.withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(
+                            child: const Icon(
                               Icons.check_circle_rounded,
                               color: KovaColors.primary,
                               size: 80,
@@ -134,7 +134,7 @@ class _SuccessScreenState extends State<SuccessScreen>
                           ),
                           child: Row(
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.visibility_off_rounded,
                                 color: KovaColors.primary,
                                 size: 24,

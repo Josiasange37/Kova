@@ -1,4 +1,4 @@
-package com.example.kova
+package com.kova.child
 
 import android.content.BroadcastReceiver
 import android.content.Context

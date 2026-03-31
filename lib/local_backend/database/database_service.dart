@@ -42,6 +42,7 @@ class DatabaseService {
         id              TEXT PRIMARY KEY,
         name            TEXT NOT NULL,
         age             INTEGER DEFAULT 10,
+        avatar_path     TEXT,
         pair_code       TEXT,
         pair_code_exp   INTEGER,
         linked          INTEGER DEFAULT 0,

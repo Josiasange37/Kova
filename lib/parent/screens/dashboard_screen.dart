@@ -488,7 +488,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         children: [
           Row(
             children: [
-              Icon(
+              const Icon(
                 Icons.check_circle_rounded,
                 color: KovaColors.success,
                 size: 20,
@@ -536,7 +536,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         children: [
           Row(
             children: [
-              Icon(Icons.warning_rounded, color: KovaColors.danger, size: 20),
+              const Icon(Icons.warning_rounded, color: KovaColors.danger, size: 20),
               const SizedBox(width: 8),
               Text(
                 '$alertCount threats detected',

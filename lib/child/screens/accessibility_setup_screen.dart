@@ -41,21 +41,20 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
     final isGranted =
         await AccessibilityService.isAccessibilityPermissionGranted();
     if (isGranted && mounted) {
-      // Navigate to child dashboard after permission granted
-      context.go(AppRoutes.childDashboard);
+      // Navigate to monitored apps after permission granted
+      context.go(AppRoutes.childMonitoredApps);
     }
   }
 
   Future<void> _requestPermission() async {
     setState(() => _isChecking = true);
-    // await AccessibilityService.requestAccessibilityPermission();
-    await Future.delayed(const Duration(milliseconds: 500)); // Simulate delay
+    await AccessibilityService.requestAccessibilityPermission();
     setState(() => _isChecking = false);
-
-    if (mounted) {
-      // Navigate to child dashboard
-      context.go(AppRoutes.childDashboard);
-    }
+    
+    // In debug mode, if you need to bypass because the native service 
+    // is not fully compiled in the emulator, uncomment the following:
+    // await Future.delayed(const Duration(seconds: 1));
+    // if (mounted) context.go(AppRoutes.childMonitoredApps);
   }
 
   @override
@@ -98,17 +97,17 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
               const SizedBox(height: 32),
 
               // Feature list
-              _SetupFeatureItem(
+              const _SetupFeatureItem(
                 icon: Icons.chat_bubble_outline_rounded,
                 text: "Monitor social networks in real-time",
               ),
               const SizedBox(height: 24),
-              _SetupFeatureItem(
+              const _SetupFeatureItem(
                 icon: Icons.warning_amber_rounded,
                 text: "Detect inappropriate content",
               ),
               const SizedBox(height: 24),
-              _SetupFeatureItem(
+              const _SetupFeatureItem(
                 icon: Icons.block_flipped,
                 text: "Block dangerous apps",
               ),

@@ -79,8 +79,8 @@ class MonitoredAppsScreen extends StatelessWidget {
                 height: 56,
                 child: ElevatedButton(
                   onPressed: () {
-                    // Navigate to parent connection screen
-                    context.go(AppRoutes.childParentConnection);
+                    // Navigate to child dashboard screen
+                    context.go(AppRoutes.childDashboard);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1E2A5D),

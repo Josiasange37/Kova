@@ -33,17 +33,15 @@ class AppModeManager {
     await prefs.setString(_parentPinHashKey, hash);
   }
 
-  /// Initialize app as CHILD MODE using a pairing code
-  /// The pairing code links to a parent's child record
-  /// This is called from child_pairing_screen after code entry
-  static Future<bool> setChildMode(String pairCode) async {
-    // Import will be resolved when repositories are ready
-    // For now, validate code format (8 chars alphanumeric)
-    if (pairCode.length != 8) return false;
+  /// Initialize app as CHILD MODE with the resolved child UUID.
+  /// Called from ParentConnectionScreen after the pair code is validated and
+  /// the child record is found — passes the child's UUID (not the raw code).
+  static Future<bool> setChildMode(String childId) async {
+    if (childId.isEmpty) return false;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_modeKey, 'child');
-    await prefs.setString(_childIdKey, pairCode);
+    await prefs.setString(_childIdKey, childId);
 
     return true;
   }

@@ -9,6 +9,7 @@ class ChildModel {
   final String id;
   final String name;
   final int age;
+  final String? avatarPath;
   final String? pairCode;
   final int? pairCodeExp;
   final bool linked;
@@ -20,6 +21,7 @@ class ChildModel {
     required this.id,
     required this.name,
     this.age = 10,
+    this.avatarPath,
     this.pairCode,
     this.pairCodeExp,
     required this.linked,
@@ -33,6 +35,7 @@ class ChildModel {
       id: map['id'] as String,
       name: map['name'] as String,
       age: map['age'] as int? ?? 10,
+      avatarPath: map['avatar_path'] as String?,
       pairCode: map['pair_code'] as String?,
       pairCodeExp: map['pair_code_exp'] as int?,
       linked: (map['linked'] as int? ?? 0) == 1,
@@ -54,6 +57,7 @@ class ChildModel {
     'id': id,
     'name': name,
     'age': age,
+    'avatar_path': avatarPath,
     'pair_code': pairCode,
     'pair_code_exp': pairCodeExp,
     'linked': linked ? 1 : 0,
@@ -70,6 +74,7 @@ class ChildModel {
     String? id,
     String? name,
     int? age,
+    String? avatarPath,
     String? pairCode,
     int? pairCodeExp,
     bool? linked,
@@ -81,6 +86,7 @@ class ChildModel {
       id: id ?? this.id,
       name: name ?? this.name,
       age: age ?? this.age,
+      avatarPath: avatarPath ?? this.avatarPath,
       pairCode: pairCode ?? this.pairCode,
       pairCodeExp: pairCodeExp ?? this.pairCodeExp,
       linked: linked ?? this.linked,
@@ -111,7 +117,7 @@ class ChildRepository {
 
   /// Create a new child and generate a pairing code
   /// Returns the child ID
-  Future<String> create(String name, {int age = 10}) async {
+  Future<String> create(String name, {int age = 10, String? avatarPath}) async {
     final db = await _db.database;
     final id = const Uuid().v4();
     final code = _generateCode();
@@ -123,6 +129,7 @@ class ChildRepository {
       'id': id,
       'name': name,
       'age': age,
+      'avatar_path': avatarPath,
       'pair_code': code,
       'pair_code_exp': expiration,
       'linked': 0,
@@ -213,11 +220,9 @@ class ChildRepository {
     });
   }
 
-  /// Generate a random 8-character pairing code
-  /// Uses uppercase alphanumeric, avoiding confusing characters (0/O, 1/I/L)
+  /// Generate a random 6-digit pairing code
   String _generateCode() {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     final rand = Random.secure();
-    return List.generate(8, (_) => chars[rand.nextInt(chars.length)]).join();
+    return List.generate(6, (_) => rand.nextInt(10).toString()).join();
   }
 }

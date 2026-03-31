@@ -1,4 +1,4 @@
-package com.example.kova
+package com.kova.child
 
 import android.app.Activity
 import android.content.Intent

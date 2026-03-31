@@ -122,7 +122,7 @@ class _PinEntryScreenState extends State<PinEntryScreen> {
                   ),
                   decoration: InputDecoration(
                     hintText: '••••',
-                    hintStyle: TextStyle(color: Colors.white30),
+                    hintStyle: const TextStyle(color: Colors.white30),
                     filled: true,
                     fillColor: Colors.white.withValues(alpha: 0.1),
                     border: OutlineInputBorder(

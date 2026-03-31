@@ -10,6 +10,7 @@ class ChildProfileService extends ChangeNotifier {
   String? _childId;
   String _childName = '';
   int _age = 10;
+  String? _avatarPath;
   String? _pairCode;
   DateTime? _pairCodeExpiry;
   bool _saving = false;
@@ -19,6 +20,7 @@ class ChildProfileService extends ChangeNotifier {
   String? get childId => _childId;
   String get childName => _childName;
   int get age => _age;
+  String? get avatarPath => _avatarPath;
   String? get pairCode => _pairCode;
   DateTime? get pairCodeExpiry => _pairCodeExpiry;
   bool get saving => _saving;
@@ -49,6 +51,12 @@ class ChildProfileService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Update avatar
+  void setAvatarPath(String? path) {
+    _avatarPath = path;
+    notifyListeners();
+  }
+
   // Save child profile and generate pairing code
   Future<bool> saveChildProfile() async {
     if (_childName.trim().isEmpty) {
@@ -63,7 +71,7 @@ class ChildProfileService extends ChangeNotifier {
 
     try {
       // Create child in repository (generates pairing code automatically)
-      _childId = await _childRepo.create(_childName, age: _age);
+      _childId = await _childRepo.create(_childName, age: _age, avatarPath: _avatarPath);
 
       // Get the created child to retrieve the pairing code
       final child = await _childRepo.getById(_childId!);
@@ -103,6 +111,7 @@ class ChildProfileService extends ChangeNotifier {
     _childId = null;
     _childName = '';
     _age = 10;
+    _avatarPath = null;
     _pairCode = null;
     _pairCodeExpiry = null;
     _error = null;

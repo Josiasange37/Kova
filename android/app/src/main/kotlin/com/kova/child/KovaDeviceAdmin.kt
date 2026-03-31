@@ -1,4 +1,4 @@
-package com.example.kova
+package com.kova.child
 
 import android.app.admin.DeviceAdminReceiver
 import android.app.admin.DevicePolicyManager
