@@ -23,20 +23,6 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen>
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
   bool _isLoading = false;
-  
-  // Generate 8 random 6-digit pairing codes using deterministic seed
-  static List<String> _generatePairingCodes() {
-    // Use a fixed seed based on current timestamp for this session
-    final seed = DateTime.now().millisecondsSinceEpoch ~/ 1000000;
-    final random = Random(seed);
-    final codes = <String>{};
-    while (codes.length < 8) {
-      // Generate 6-digit code (000000 to 999999)
-      final code = random.nextInt(1000000).toString().padLeft(6, '0');
-      codes.add(code);
-    }
-    return codes.toList();
-  }
 
   @override
   void initState() {
