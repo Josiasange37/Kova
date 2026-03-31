@@ -70,22 +70,6 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen>
 
   bool get _allFilled => _controllers.every((c) => c.text.isNotEmpty);
 
-  // Generate 8 random 6-digit pairing codes using deterministic seed
-  List<String> get _validPairingCodes => _generatePairingCodes();
-
-  static List<String> _generatePairingCodes() {
-    // Use a fixed seed based on current timestamp for this session
-    final seed = DateTime.now().millisecondsSinceEpoch ~/ 1000000;
-    final random = Random(seed);
-    final codes = <String>{};
-    while (codes.length < 8) {
-      // Generate 6-digit code (000000 to 999999)
-      final code = random.nextInt(1000000).toString().padLeft(6, '0');
-      codes.add(code);
-    }
-    return codes.toList();
-  }
-
   Future<void> _handleConnect() async {
     final code = _controllers.map((c) => c.text).join();
     if (code.length != 6) {
@@ -93,21 +77,26 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen>
       return;
     }
 
-    // Check if entered code matches any of the 8 valid codes
-    if (!_validPairingCodes.contains(code)) {
-      _showSnack('Invalid pairing code. Please check and try again.', isError: true);
-      return;
-    }
-
     setState(() => _isLoading = true);
 
     try {
       final repo = ChildRepository();
-      final child = await repo.getByCode(code);
+      
+      // Get all unlinked children and check if code matches any of their 8 generated codes
+      final children = await repo.getAllUnlinked();
+      ChildModel? matchedChild;
+      
+      for (final child in children) {
+        final validCodes = repo.generatePairingCodes(child.id);
+        if (validCodes.contains(code)) {
+          matchedChild = child;
+          break;
+        }
+      }
 
-      if (child != null) {
-        await repo.markLinked(child.id);
-        final success = await AppModeManager.setChildMode(child.id);
+      if (matchedChild != null) {
+        await repo.markLinked(matchedChild.id);
+        final success = await AppModeManager.setChildMode(matchedChild.id);
 
         if (success && mounted) {
           _showSnack('Successfully connected to parent!', isError: false);

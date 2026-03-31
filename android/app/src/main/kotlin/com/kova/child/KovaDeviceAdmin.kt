@@ -66,14 +66,6 @@ class KovaDeviceAdmin : DeviceAdminReceiver() {
     }
 
     /**
-     * Called by system when admin starts
-     */
-    override fun onBugreportFailed(context: Context, intent: Intent) {
-        super.onBugreportFailed(context, intent)
-        Log.d(TAG, "Bug report failed")
-    }
-
-    /**
      * Lock device - called when critical threat detected
      */
     fun lockDevice(context: Context) {

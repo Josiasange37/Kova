@@ -141,7 +141,7 @@ class BlockOverlayActivity : Activity() {
     private fun logBlockEvent() {
         try {
             val prefs = getSharedPreferences("com.example.kova", MODE_PRIVATE)
-            val eventLog = prefs.getStringSet("block_events", mutableSetOf()).toMutableSet()
+            val eventLog = (prefs.getStringSet("block_events", mutableSetOf()) ?: mutableSetOf()).toMutableSet()
             eventLog.add("${System.currentTimeMillis()}: $blockedPackage - $blockReason")
             prefs.edit().putStringSet("block_events", eventLog).apply()
             
@@ -157,14 +157,6 @@ class BlockOverlayActivity : Activity() {
     override fun onBackPressed() {
         Log.d(TAG, "Back button pressed - blocked")
         // Do nothing - block stays
-    }
-
-    /**
-     * Prevent home button press
-     */
-    override fun onHomePressed() {
-        Log.d(TAG, "Home button pressed - blocked")
-        // Do nothing
     }
 
     /**

@@ -108,6 +108,19 @@ class ChildRepository {
     return rows.map(ChildModel.fromMap).toList();
   }
 
+  /// Get all unlinked children (pending connection)
+  Future<List<ChildModel>> getAllUnlinked() async {
+    final db = await _db.database;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final rows = await db.query(
+      'children',
+      where: 'linked = 0 AND pair_code_exp > ?',
+      whereArgs: [now],
+      orderBy: 'created_at DESC',
+    );
+    return rows.map(ChildModel.fromMap).toList();
+  }
+
   /// Get a specific child by ID
   /// Generate 8 deterministic 6-digit pairing codes based on child ID
   /// This ensures both parent and child generate the same codes
