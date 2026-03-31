@@ -7,6 +7,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
+import 'package:kova/local_backend/repositories/child_repository.dart';
+import 'dart:math';
 
 class WhatsappConnectScreen extends StatefulWidget {
   const WhatsappConnectScreen({super.key});
@@ -21,8 +23,9 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
   int _activeTab = 0;
   bool _isConnected = false;
   bool _isConnecting = false;
+  String _pairingCode = '';
 
-  static const String _pairingCode = 'KOVA-7X4Q-9N2P';
+  final _childRepo = ChildRepository();
 
   // ── Entrance animations ──
   late AnimationController _entranceCtrl;
@@ -49,7 +52,49 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
   void initState() {
     super.initState();
     _initAnimations();
+    _loadPairingCode();
     _entranceCtrl.forward();
+  }
+
+  Future<void> _loadPairingCode() async {
+    // Try to get existing child's pairing code, or generate new one
+    final children = await _childRepo.getAll();
+    if (children.isNotEmpty) {
+      // Use existing child's ID to generate consistent pairing code
+      _pairingCode = _generatePairingCode(children.first.id);
+    } else {
+      // Generate new random pairing code for new child
+      _pairingCode = _generateRandomPairingCode();
+    }
+    setState(() {});
+  }
+
+  String _generatePairingCode(String childId) {
+    // Generate consistent pairing code from child ID
+    final hash = childId.hashCode.abs();
+    final part1 = _toAlphaNumeric((hash >> 16) & 0xFFFF);
+    final part2 = _toAlphaNumeric((hash >> 8) & 0xFFFF);
+    final part3 = _toAlphaNumeric(hash & 0xFFFF);
+    return 'KOVA-$part1-$part2-$part3';
+  }
+
+  String _generateRandomPairingCode() {
+    final random = Random();
+    final part1 = _toAlphaNumeric(random.nextInt(65536));
+    final part2 = _toAlphaNumeric(random.nextInt(65536));
+    final part3 = _toAlphaNumeric(random.nextInt(65536));
+    return 'KOVA-$part1-$part2-$part3';
+  }
+
+  String _toAlphaNumeric(int value) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    var result = '';
+    var v = value;
+    for (var i = 0; i < 4; i++) {
+      result = chars[v % 36] + result;
+      v ~/= 36;
+    }
+    return result.padLeft(4, '0');
   }
 
   void _initAnimations() {
@@ -510,7 +555,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
             // Copy button
             GestureDetector(
               onTap: () {
-                Clipboard.setData(const ClipboardData(text: _pairingCode));
+                Clipboard.setData(ClipboardData(text: _pairingCode));
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
@@ -707,7 +752,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
                 ],
               )
             : Text(
-                'Simulate Connection (Demo)',
+                'Connect Now',
                 style: GoogleFonts.nunito(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,

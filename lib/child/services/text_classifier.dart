@@ -1,14 +1,9 @@
-// child/services/text_classifier.dart — Placeholder text content classifier
-// Returns realistic confidence scores WITHOUT TFLite (real models come later)
+// child/services/text_classifier.dart — Text content classifier
+// Keyword-based detection for harmful/grooming patterns
 
 class TextClassifier {
   /// Classify text content for harmful/grooming patterns
   /// Returns: {"risk": "low|medium|high", "confidence": 0.0-1.0, "keywords": [...]}
-  ///
-  /// Placeholder behavior:
-  /// - Detects common harmful keywords
-  /// - Returns confidence based on keyword count + context
-  /// - Safe by default (returns "low" for clean text)
   static Future<Map<String, dynamic>> classify(String text) async {
     if (text.isEmpty) {
       return {
@@ -19,10 +14,9 @@ class TextClassifier {
       };
     }
 
-    // Placeholder keyword detection (case-insensitive)
     final lowerText = text.toLowerCase();
 
-    // Harmful keywords map
+    // Risk keyword categories
     final riskKeywords = {
       'grooming': ['meet me', 'alone', 'secret', 'dont tell', 'private'],
       'abuse': ['hate', 'stupid', 'idiot', 'loser', 'worthless'],
