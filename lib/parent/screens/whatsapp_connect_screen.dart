@@ -57,18 +57,23 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
   }
 
   Future<void> _loadPairingCode() async {
-    // Try to get existing child's pairing code, or generate new one
+    // Get existing child's ID or create new child
     final children = await _childRepo.getAll();
     if (children.isNotEmpty) {
-      // Use existing child's ID to generate consistent pairing code
-      _pairingCode = _generatePairingCode(children.first.id);
+      final childId = children.first.id;
+      // Generate 8 deterministic codes based on child ID and pick one randomly
+      final codes = _childRepo.generatePairingCodes(childId);
+      _pairingCode = codes[Random().nextInt(codes.length)];
     } else {
-      // Generate new random pairing code for new child
-      _pairingCode = _generateRandomPairingCode();
+      // No child exists yet - create one first
+      final childId = await _childRepo.create('Child');
+      final codes = _childRepo.generatePairingCodes(childId);
+      _pairingCode = codes[Random().nextInt(codes.length)];
     }
     setState(() {});
   }
 
+  // Legacy methods - kept for reference but not used
   String _generatePairingCode(String childId) {
     // Generate consistent pairing code from child ID
     final hash = childId.hashCode.abs();

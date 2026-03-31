@@ -109,10 +109,34 @@ class ChildRepository {
   }
 
   /// Get a specific child by ID
+  /// Generate 8 deterministic 6-digit pairing codes based on child ID
+  /// This ensures both parent and child generate the same codes
+  List<String> generatePairingCodes(String childId) {
+    final random = Random(childId.hashCode); // Seed with child ID for determinism
+    final codes = <String>{};
+    while (codes.length < 8) {
+      // Generate 6-digit code (000000 to 999999)
+      final code = random.nextInt(1000000).toString().padLeft(6, '0');
+      codes.add(code);
+    }
+    return codes.toList();
+  }
+
+  /// Validate if a 6-digit code matches any of the 8 valid codes for this child
+  Future<bool> validatePairingCode(String childId, String code) async {
+    final validCodes = generatePairingCodes(childId);
+    return validCodes.contains(code);
+  }
+
   Future<ChildModel?> getById(String id) async {
     final db = await _db.database;
-    final rows = await db.query('children', where: 'id = ?', whereArgs: [id]);
-    return rows.isEmpty ? null : ChildModel.fromMap(rows.first);
+    final result = await db.query(
+      'children',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (result.isEmpty) return null;
+    return ChildModel.fromMap(result.first);
   }
 
   /// Create a new child and generate a pairing code
@@ -141,15 +165,28 @@ class ChildRepository {
 
   /// Get a child by their pairing code (if still valid)
   /// Used during child setup when entering the code
+  /// Now validates against all 8 generated pairing codes
   Future<ChildModel?> getByCode(String code) async {
     final db = await _db.database;
     final now = DateTime.now().millisecondsSinceEpoch;
+    
+    // Get all unlinked children
     final rows = await db.query(
       'children',
-      where: 'pair_code = ? AND pair_code_exp > ? AND linked = 0',
-      whereArgs: [code, now],
+      where: 'linked = 0 AND pair_code_exp > ?',
+      whereArgs: [now],
     );
-    return rows.isEmpty ? null : ChildModel.fromMap(rows.first);
+    
+    // Check if code matches any of the 8 generated codes for each child
+    for (final row in rows) {
+      final child = ChildModel.fromMap(row);
+      final validCodes = generatePairingCodes(child.id);
+      if (validCodes.contains(code)) {
+        return child;
+      }
+    }
+    
+    return null;
   }
 
   /// Mark a child as linked (code accepted, setup complete)

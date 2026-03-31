@@ -22,6 +22,20 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen>
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
   bool _isLoading = false;
+  
+  // Generate 8 random 6-digit pairing codes
+  final List<String> _validPairingCodes = _generatePairingCodes();
+  
+  static List<String> _generatePairingCodes() {
+    final random = Random();
+    final codes = <String>{};
+    while (codes.length < 8) {
+      // Generate 6-digit code (000000 to 999999)
+      final code = random.nextInt(1000000).toString().padLeft(6, '0');
+      codes.add(code);
+    }
+    return codes.toList();
+  }
 
   @override
   void initState() {
@@ -73,6 +87,12 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen>
     final code = _controllers.map((c) => c.text).join();
     if (code.length != 6) {
       _showSnack('Please enter all 6 digits of the pairing code.', isError: true);
+      return;
+    }
+
+    // Check if entered code matches any of the 8 valid codes
+    if (!_validPairingCodes.contains(code)) {
+      _showSnack('Invalid pairing code. Please check and try again.', isError: true);
       return;
     }
 
