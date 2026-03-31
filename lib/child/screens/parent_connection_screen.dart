@@ -84,6 +84,22 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen>
 
   bool get _allFilled => _controllers.every((c) => c.text.isNotEmpty);
 
+  // Generate 8 random 6-digit pairing codes using deterministic seed
+  List<String> get _validPairingCodes => _generatePairingCodes();
+
+  static List<String> _generatePairingCodes() {
+    // Use a fixed seed based on current timestamp for this session
+    final seed = DateTime.now().millisecondsSinceEpoch ~/ 1000000;
+    final random = Random(seed);
+    final codes = <String>{};
+    while (codes.length < 8) {
+      // Generate 6-digit code (000000 to 999999)
+      final code = random.nextInt(1000000).toString().padLeft(6, '0');
+      codes.add(code);
+    }
+    return codes.toList();
+  }
+
   Future<void> _handleConnect() async {
     final code = _controllers.map((c) => c.text).join();
     if (code.length != 6) {
