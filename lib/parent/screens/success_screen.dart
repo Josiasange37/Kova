@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
 import 'package:kova/providers/app_state.dart';
+import 'package:kova/parent/services/dashboard_data_service.dart';
+import 'package:kova/parent/services/app_control_service.dart';
 
 class SuccessScreen extends StatefulWidget {
   const SuccessScreen({super.key});
@@ -43,6 +45,17 @@ class _SuccessScreenState extends State<SuccessScreen>
 
   @override
   Widget build(BuildContext context) {
+    final dashboard = context.watch<DashboardDataService>();
+    final appControl = context.watch<AppControlService>();
+    final activeChild = dashboard.activeChild;
+    final childName = activeChild?.name ?? 'your child';
+    
+    // Get enabled apps from app control service
+    final enabledApps = appControl.appData.entries
+        .where((e) => e.value.enabled)
+        .map((e) => e.value.name)
+        .toList();
+
     return Scaffold(
       backgroundColor: KovaColors.background,
       body: SafeArea(
@@ -80,7 +93,7 @@ class _SuccessScreenState extends State<SuccessScreen>
 
                         // Title
                         Text(
-                          'KOVA is active on Alex\'s phone!',
+                          'KOVA is active on $childName\'s phone!',
                           textAlign: TextAlign.center,
                           style: GoogleFonts.nunito(
                             fontSize: 26,
@@ -103,22 +116,54 @@ class _SuccessScreenState extends State<SuccessScreen>
                         ),
                         const SizedBox(height: 48),
 
-                        // Status list
-                        _buildStatusItem(
-                          Icons.chat_rounded,
-                          'WhatsApp',
-                          'Monitoring Active',
-                        ),
-                        _buildStatusItem(
-                          Icons.music_note_rounded,
-                          'TikTok',
-                          'Monitoring Active',
-                        ),
-                        _buildStatusItem(
-                          Icons.facebook_rounded,
-                          'Facebook',
-                          'Monitoring Active',
-                        ),
+                        // Status list - dynamically show enabled apps
+                        if (enabledApps.isEmpty) ...[
+                          _buildStatusItem(
+                            Icons.chat_rounded,
+                            'WhatsApp',
+                            'Monitoring Active',
+                          ),
+                          _buildStatusItem(
+                            Icons.music_note_rounded,
+                            'TikTok',
+                            'Monitoring Active',
+                          ),
+                          _buildStatusItem(
+                            Icons.facebook_rounded,
+                            'Facebook',
+                            'Monitoring Active',
+                          ),
+                        ] else
+                          ...enabledApps.map((appName) {
+                            IconData icon;
+                            switch (appName.toLowerCase()) {
+                              case 'whatsapp':
+                                icon = Icons.chat_rounded;
+                                break;
+                              case 'tiktok':
+                                icon = Icons.music_note_rounded;
+                                break;
+                              case 'facebook':
+                                icon = Icons.facebook_rounded;
+                                break;
+                              case 'instagram':
+                                icon = Icons.camera_alt_rounded;
+                                break;
+                              case 'x':
+                                icon = Icons.close_rounded;
+                                break;
+                              case 'sms':
+                                icon = Icons.sms_rounded;
+                                break;
+                              default:
+                                icon = Icons.apps_rounded;
+                            }
+                            return _buildStatusItem(
+                              icon,
+                              appName,
+                              'Monitoring Active',
+                            );
+                          }),
 
                         const SizedBox(height: 40),
 

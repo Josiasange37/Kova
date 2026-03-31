@@ -73,13 +73,8 @@ class ModeSelectScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    // Navigate to child pairing screen
-                    // TODO: Implement child pairing screen navigation
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Child mode setup coming soon...'),
-                      ),
-                    );
+                    // Navigate to child welcome screen for pairing
+                    context.go('/child-welcome');
                   },
                   icon: const Icon(Icons.child_care),
                   label: const Text('Je configure mon ENFANT'),
