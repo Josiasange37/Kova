@@ -13,6 +13,7 @@ class DashboardDataService extends ChangeNotifier {
   List<ChildModel>? _children;
   List<AlertModel>? _alerts;
   String? _parentName;
+  String? _activeChildId;
   bool _loading = false;
   String? _error;
 
@@ -23,9 +24,18 @@ class DashboardDataService extends ChangeNotifier {
   bool get loading => _loading;
   String? get error => _error;
 
-  // Active child (first child for now, can be expanded later)
-  ChildModel? get activeChild =>
-      _children != null && _children!.isNotEmpty ? _children!.first : null;
+  // Active child (use stored active child or first child)
+  ChildModel? get activeChild {
+    if (_children == null || _children!.isEmpty) return null;
+    if (_activeChildId != null) {
+      try {
+        return _children!.firstWhere((c) => c.id == _activeChildId);
+      } catch (_) {
+        return _children!.first;
+      }
+    }
+    return _children!.first;
+  }
 
   // Dashboard metrics
   int get alertCount => _alerts?.where((a) => !a.read).length ?? 0;
@@ -81,6 +91,13 @@ class DashboardDataService extends ChangeNotifier {
     await _childRepo.updateAge(childId, age);
     // Reload to reflect changes
     await loadDashboardData();
+  }
+
+  // Update active child
+  Future<void> setActiveChild(String childId) async {
+    _activeChildId = childId;
+    await LocalStorage.setChildId(childId);
+    notifyListeners();
   }
 
   // Get child by ID

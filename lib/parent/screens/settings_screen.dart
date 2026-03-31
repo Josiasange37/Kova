@@ -7,6 +7,7 @@ import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
 import 'package:kova/parent/services/settings_service.dart';
 import 'package:kova/parent/services/dashboard_data_service.dart';
+import 'package:kova/parent/services/alert_history_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -220,6 +221,113 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _exportWeeklyPDF() async {
+    final dashboard = context.read<DashboardDataService>();
+    final alertService = context.read<AlertHistoryService>();
+    
+    // Get all alerts from the past week
+    final now = DateTime.now();
+    final weekAgo = now.subtract(const Duration(days: 7));
+    final allAlerts = alertService.allAlerts;
+    final weeklyAlerts = allAlerts.where((a) => a.createdAt.isAfter(weekAgo)).toList();
+    
+    // Calculate stats
+    final totalAlerts = weeklyAlerts.length;
+    final resolvedAlerts = weeklyAlerts.where((a) => a.resolved).length;
+    final criticalAlerts = weeklyAlerts.where((a) => a.severity == 'critical').length;
+    
+    // Show PDF generation dialog
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Weekly Report', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Report Period: ${weekAgo.day}/${weekAgo.month} - ${now.day}/${now.month}/${now.year}'),
+            const SizedBox(height: 16),
+            _buildReportStat('Total Alerts', totalAlerts.toString()),
+            _buildReportStat('Resolved', resolvedAlerts.toString()),
+            _buildReportStat('Critical', criticalAlerts.toString()),
+            const SizedBox(height: 16),
+            const Text('PDF export functionality requires pdf package integration.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportStat(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: GoogleFonts.nunito()),
+          Text(
+            value,
+            style: GoogleFonts.nunito(fontWeight: FontWeight.w800, color: KovaColors.primary),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLegalDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Legal Information', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Privacy Policy', style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text(
+                'KOVA collects and processes data solely for child safety monitoring. '
+                'All data is stored locally on your device. We do not share data with third parties.',
+                style: GoogleFonts.nunito(fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              Text('Terms of Service', style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text(
+                'By using KOVA, you agree to use this app responsibly for protecting children. '
+                'This app is intended for parental monitoring of minor children only.',
+                style: GoogleFonts.nunito(fontSize: 13),
+              ),
+              const SizedBox(height: 16),
+              Text('Data Protection', style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              Text(
+                'All monitoring data is stored locally on your device. '
+                'No data is transmitted to external servers without your explicit consent.',
+                style: GoogleFonts.nunito(fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildActionButton(String label, {VoidCallback? onTap}) {
     return TextButton(
       onPressed: onTap ?? () {},
@@ -323,7 +431,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Icons.lock_outline_rounded,
               'Change PIN',
               trailing: _buildActionButton('Change', onTap: () {
-                context.push(AppRoutes.pinEntry);
+                context.push(AppRoutes.pinModification);
               }),
               showDivider: false,
             ),
@@ -393,7 +501,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSettingItem(
               Icons.description_outlined,
               'Export weekly PDF',
-              trailing: _buildActionButton('Export'),
+              trailing: _buildActionButton('Export', onTap: _exportWeeklyPDF),
               showDivider: false,
             ),
           ]),
@@ -406,7 +514,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSettingItem(
               Icons.description_outlined,
               'Legal',
-              trailing: _buildActionButton('View'),
+              trailing: _buildActionButton('View', onTap: _showLegalDialog),
               showDivider: false,
             ),
           ]),

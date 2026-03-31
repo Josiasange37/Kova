@@ -7,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/parent/services/dashboard_data_service.dart';
+import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/parent/screens/app_control_screen.dart';
 import 'package:kova/parent/screens/alert_history_screen.dart';
 import 'package:kova/parent/screens/settings_screen.dart';
@@ -119,7 +120,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   Widget _buildDashboardTab() {
     return Consumer<DashboardDataService>(
       builder: (context, service, _) {
-        final child = service.activeChild;
+        final children = service.children ?? [];
+        final activeChild = service.activeChild;
         final hasAlerts = service.hasAlerts;
         final safetyScore = service.safetyScore;
         final alertCount = service.alertCount;
@@ -142,7 +144,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             children: [
               const SizedBox(height: 20),
 
-              // ── Header: greeting + logo ──
+              // ── Header: greeting + logo + child selector ──
               SlideTransition(
                 position: _headerSlide,
                 child: Opacity(
@@ -151,35 +153,42 @@ class _DashboardScreenState extends State<DashboardScreen>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '$greeting, $parentName',
-                            style: GoogleFonts.nunito(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: KovaColors.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 300),
-                            child: Text(
-                              hasAlerts
-                                  ? 'Action required'
-                                  : 'Everything looks good today',
-                              key: ValueKey(hasAlerts),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$greeting, $parentName',
                               style: GoogleFonts.nunito(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: hasAlerts
-                                    ? KovaColors.danger
-                                    : KovaColors.textSecondary,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: KovaColors.primary,
                               ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 4),
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 300),
+                              child: Text(
+                                hasAlerts
+                                    ? 'Action required'
+                                    : 'Everything looks good today',
+                                key: ValueKey(hasAlerts),
+                                style: GoogleFonts.nunito(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: hasAlerts
+                                      ? KovaColors.danger
+                                      : KovaColors.textSecondary,
+                                ),
+                              ),
+                            ),
+                            // Child selector dropdown
+                            if (children.length > 1) ...[
+                              const SizedBox(height: 8),
+                              _buildChildSelector(children, activeChild, service),
+                            ],
+                          ],
+                        ),
                       ),
                       // Kova logo icon
                       SvgPicture.asset(KovaAssets.logoSvg, height: 32),
@@ -189,21 +198,48 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
               const SizedBox(height: 28),
 
-              // ── Child card ──
-              SlideTransition(
-                position: _cardSlide,
-                child: Opacity(
-                  opacity: _cardFade.value,
-                  child: _buildChildCard(
-                    childName: child?.name ?? 'No child added',
-                    childAge: child?.age ?? 0,
-                    hasAlerts: hasAlerts,
-                    safetyScore: safetyScore,
-                    alertCount: alertCount,
+              // ── Child cards for all children ──
+              if (children.isEmpty)
+                _buildNoChildCard()
+              else if (children.length == 1)
+                SlideTransition(
+                  position: _cardSlide,
+                  child: Opacity(
+                    opacity: _cardFade.value,
+                    child: _buildChildCard(
+                      child: activeChild!,
+                      hasAlerts: hasAlerts,
+                      safetyScore: safetyScore,
+                      alertCount: alertCount,
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 28),
+                )
+              else
+                // Show summary cards for all children
+                ...children.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final child = entry.value;
+                  // Calculate per-child stats
+                  final childAlerts = service.alerts?.where((a) => a.childId == child.id).toList() ?? [];
+                  final childAlertCount = childAlerts.where((a) => !a.read).length;
+                  final childHasAlerts = childAlertCount > 0;
+                  
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: SlideTransition(
+                      position: _cardSlide,
+                      child: Opacity(
+                        opacity: _cardFade.value,
+                        child: _buildChildCard(
+                          child: child,
+                          hasAlerts: childHasAlerts,
+                          safetyScore: child.score,
+                          alertCount: childAlertCount,
+                        ),
+                      ),
+                    ),
+                  );
+                }),
 
               // ── Monitored apps ──
               SlideTransition(
@@ -235,11 +271,111 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   // ═══════════════════════════════════════════
+  // ──  Child Selector Dropdown
+  // ═══════════════════════════════════════════
+  Widget _buildChildSelector(List<ChildModel> children, ChildModel? activeChild, DashboardDataService service) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: KovaColors.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<ChildModel>(
+          value: activeChild,
+          isDense: true,
+          icon: const Icon(Icons.arrow_drop_down, color: KovaColors.primary, size: 20),
+          style: GoogleFonts.nunito(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: KovaColors.primary,
+          ),
+          items: children.map((child) {
+            return DropdownMenuItem<ChildModel>(
+              value: child,
+              child: Text(
+                child.name,
+                style: GoogleFonts.nunito(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            );
+          }).toList(),
+          onChanged: (ChildModel? newChild) {
+            if (newChild != null) {
+              service.setActiveChild(newChild.id);
+            }
+          },
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════
+  // ──  No Child Card
+  // ═══════════════════════════════════════════
+  Widget _buildNoChildCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: KovaColors.cardWhite,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: KovaColors.primary.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.child_care,
+            size: 48,
+            color: KovaColors.primary.withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'No child added yet',
+            style: GoogleFonts.nunito(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: KovaColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Add a child to start monitoring',
+            style: GoogleFonts.nunito(
+              fontSize: 13,
+              color: KovaColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () {
+              context.push(AppRoutes.childProfile);
+            },
+            icon: const Icon(Icons.add),
+            label: const Text('Add Child'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: KovaColors.primary,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════
   // ──  Child Card
   // ═══════════════════════════════════════════
   Widget _buildChildCard({
-    required String childName,
-    required int childAge,
+    required ChildModel child,
     required bool hasAlerts,
     required int safetyScore,
     required int alertCount,
@@ -277,7 +413,7 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
             child: Text(
-              childName.isNotEmpty ? childName[0].toUpperCase() : '?',
+              child.name.isNotEmpty ? child.name[0].toUpperCase() : '?',
               style: GoogleFonts.nunito(
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
@@ -289,7 +425,7 @@ class _DashboardScreenState extends State<DashboardScreen>
 
           // Name + age
           Text(
-            childName,
+            child.name,
             style: GoogleFonts.nunito(
               fontSize: 16,
               fontWeight: FontWeight.w800,
@@ -297,7 +433,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
           Text(
-            '$childAge years',
+            '${child.age} years',
             style: GoogleFonts.nunito(
               fontSize: 12,
               fontWeight: FontWeight.w500,
