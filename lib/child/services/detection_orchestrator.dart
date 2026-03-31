@@ -1,14 +1,282 @@
 // child/services/detection_orchestrator.dart — Master coordinator for all detection services
-// Orchestrates: TextClassifier, ImageClassifier, ContextDetector, SeverityEngine
+// Real implementation using TextAnalyzer, ContextDetector, SeverityEngine
 
-import 'text_classifier.dart';
-import 'image_classifier.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:kova/core/app_mode.dart';
+import 'package:kova/local_backend/repositories/child_repository.dart';
+import 'package:kova/local_backend/repositories/alert_repository.dart';
+import 'package:kova/shared/services/notification_service.dart';
+
+import 'text_analyzer.dart';
 import 'context_detector.dart';
 import 'severity_engine.dart';
+import 'monitoring_bridge.dart';
 
+/// Master service that coordinates all detection and alerting
+/// Only active when mode == AppMode.child
 class DetectionOrchestrator {
-  /// Analyze a single message from WhatsApp/messaging app
-  /// Returns complete alert data if harmful content detected
+  static final DetectionOrchestrator instance = DetectionOrchestrator._internal();
+  DetectionOrchestrator._internal();
+
+  final ChildRepository _childRepo = ChildRepository();
+  final AlertRepository _alertRepo = AlertRepository();
+  final ContextDetector _contextDetector = ContextDetector();
+  
+  bool _active = false;
+  String? _childId;
+
+  /// Start detection services
+  Future<void> start() async {
+    if (_active) return;
+    
+    // Get child ID
+    _childId = await AppModeManager.getChildId();
+    if (_childId == null) {
+      if (kDebugMode) debugPrint('❌ DetectionOrchestrator: No child ID found');
+      return;
+    }
+
+    _active = true;
+
+    // Set up bridge callback
+    MonitoringBridge.onContent = _processContent;
+    MonitoringBridge.onConversation = _processConversation;
+    
+    // Initialize bridge
+    MonitoringBridge.init();
+
+    if (kDebugMode) debugPrint('🛡️ KOVA Detection Orchestrator: ACTIVE');
+  }
+
+  /// Stop detection services
+  void stop() {
+    _active = false;
+    MonitoringBridge.reset();
+    if (kDebugMode) debugPrint('🛑 KOVA Detection Orchestrator: STOPPED');
+  }
+
+  /// Process single content from monitoring services
+  Future<void> _processContent(
+    String app,
+    String text,
+    String source,
+    String conversationId,
+    String? senderName,
+  ) async {
+    if (!_active || _childId == null) return;
+
+    // Check if monitoring is enabled for this app
+    final child = await _childRepo.getById(_childId!);
+    if (child == null) return;
+
+    final appKey = _normalizeAppName(app);
+    final isEnabled = child.appControls[appKey] ?? true;
+    if (!isEnabled) {
+      if (kDebugMode) debugPrint('⏸️ Monitoring disabled for $appKey');
+      return;
+    }
+
+    // Add to conversation context
+    _contextDetector.addMessage(conversationId, text, sender: senderName);
+
+    // Analyze text
+    final textScores = TextAnalyzer.analyze(text);
+    final contextResult = _contextDetector.analyze(conversationId);
+
+    // Calculate severity
+    final severity = SeverityEngine.calculate(
+      textScores: textScores,
+      contextScores: contextResult,
+    );
+
+    if (kDebugMode) {
+      debugPrint('🔍 [$app] severity=$severity text=${textScores['unsafe']?.toStringAsFixed(2)} ctx=${contextResult['grooming_risk']?.toStringAsFixed(2)}');
+    }
+
+    // Skip safe content
+    if (severity == 'safe') return;
+
+    // Handle high/critical severity
+    if (severity == 'critical' || severity == 'high') {
+      await _blockApp(appKey);
+    }
+
+    // Update child score
+    final delta = SeverityEngine.scoreDelta(severity);
+    await _childRepo.updateScore(_childId!, delta);
+
+    // Create alert
+    final alertType = SeverityEngine.getType(
+      textScores: textScores,
+      contextScores: contextResult,
+    );
+
+    final alertId = await _alertRepo.create(
+      childId: _childId!,
+      app: appKey,
+      type: alertType,
+      severity: severity,
+      scoreText: textScores['unsafe'] ?? 0.0,
+      scoreImage: 0.0,
+      scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+    );
+
+    // Show notification
+    await _showAlertNotification(appKey, severity, alertId, text);
+
+    if (kDebugMode) debugPrint('🚨 Alert created: $alertId');
+  }
+
+  /// Process conversation batch
+  Future<void> _processConversation(
+    String app,
+    List<Map<String, dynamic>> messages,
+    String? senderName,
+  ) async {
+    if (!_active || _childId == null || messages.isEmpty) return;
+
+    // Check if monitoring is enabled
+    final child = await _childRepo.getById(_childId!);
+    if (child == null) return;
+
+    final appKey = _normalizeAppName(app);
+    final isEnabled = child.appControls[appKey] ?? true;
+    if (!isEnabled) return;
+
+    // Extract texts for analysis
+    final texts = messages
+        .map((m) => m['text']?.toString() ?? '')
+        .where((t) => t.isNotEmpty)
+        .toList();
+
+    if (texts.isEmpty) return;
+
+    // Batch analyze
+    final batchResult = TextAnalyzer.analyzeBatch(texts);
+    final conversationId = '${appKey}_${_childId}';
+    
+    // Add all messages to context
+    for (final msg in messages) {
+      _contextDetector.addMessage(
+        conversationId,
+        msg['text']?.toString() ?? '',
+        sender: msg['sender']?.toString(),
+      );
+    }
+    
+    final contextResult = _contextDetector.analyze(conversationId);
+
+    // Calculate severity
+    final severity = SeverityEngine.calculate(
+      textScores: batchResult,
+      contextScores: contextResult,
+    );
+
+    if (severity == 'safe') return;
+
+    // Handle blocking
+    if (severity == 'critical' || severity == 'high') {
+      await _blockApp(appKey);
+    }
+
+    // Update score
+    final delta = SeverityEngine.scoreDelta(severity);
+    await _childRepo.updateScore(_childId!, delta);
+
+    // Create alert
+    final alertType = SeverityEngine.getType(
+      textScores: batchResult,
+      contextScores: contextResult,
+    );
+
+    final alertId = await _alertRepo.create(
+      childId: _childId!,
+      app: appKey,
+      type: alertType,
+      severity: severity,
+      scoreText: batchResult['unsafe'] ?? 0.0,
+      scoreImage: 0.0,
+      scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+    );
+
+    await _showAlertNotification(appKey, severity, alertId, 'Conversation batch');
+
+    if (kDebugMode) debugPrint('🚨 Conversation alert created: $alertId');
+  }
+
+  /// Block an app using native blocker
+  Future<void> _blockApp(String app) async {
+    const channel = MethodChannel('com.kova.child/blocker');
+    
+    final pkgMap = {
+      'whatsapp': 'com.whatsapp',
+      'whatsapp_business': 'com.whatsapp.w4b',
+      'facebook': 'com.facebook.katana',
+      'messenger': 'com.facebook.orca',
+      'tiktok': 'com.zhiliaoapp.musically',
+      'instagram': 'com.instagram.android',
+      'telegram': 'org.telegram.messenger',
+      'sms': 'com.google.android.apps.messaging',
+    };
+
+    final pkg = pkgMap[app];
+    if (pkg == null) return;
+
+    try {
+      await channel.invokeMethod('blockApp', {'pkg': pkg});
+      if (kDebugMode) debugPrint('🚫 App blocked: $app');
+    } catch (e) {
+      if (kDebugMode) debugPrint('❌ Failed to block app: $e');
+    }
+  }
+
+  /// Show alert notification to parent
+  Future<void> _showAlertNotification(
+    String app,
+    String severity,
+    String alertId,
+    String content,
+  ) async {
+    final title = _getAlertTitle(app, severity);
+    final body = _getAlertBody(app, severity, content);
+
+    if (severity == 'critical') {
+      await NotificationService.showCriticalAlert(title, body);
+    } else {
+      await NotificationService.showAlert(title, body, alertId: alertId);
+    }
+  }
+
+  String _getAlertTitle(String app, String severity) {
+    final appName = app.substring(0, 1).toUpperCase() + app.substring(1);
+    return switch (severity) {
+      'critical' => '🚨 CRITICAL: $appName Alert',
+      'high' => '⚠️ High Risk: $appName',
+      'medium' => '⚡ Medium Risk: $appName',
+      _ => 'KOVA Alert: $appName',
+    };
+  }
+
+  String _getAlertBody(String app, String severity, String content) {
+    final preview = content.length > 50 ? '${content.substring(0, 50)}...' : content;
+    return 'Potentially harmful content detected. Preview: "$preview"';
+  }
+
+  /// Normalize app name to internal key
+  String _normalizeAppName(String app) {
+    final lower = app.toLowerCase();
+    if (lower.contains('whatsapp')) return 'whatsapp';
+    if (lower.contains('facebook')) return 'facebook';
+    if (lower.contains('instagram')) return 'instagram';
+    if (lower.contains('tiktok')) return 'tiktok';
+    if (lower.contains('telegram')) return 'telegram';
+    if (lower.contains('snapchat')) return 'snapchat';
+    if (lower.contains('sms') || lower.contains('messaging')) return 'sms';
+    return lower;
+  }
+
+  // Legacy compatibility methods
   static Future<Map<String, dynamic>?> analyzeMessage({
     required String childId,
     required String app,
@@ -16,167 +284,101 @@ class DetectionOrchestrator {
     required String? senderName,
     required List<String> attachedImagePaths,
   }) async {
-    // Step 1: Classify text
-    final textResult = await TextClassifier.classify(messageText);
-    final textConfidence = (textResult['confidence'] as num).toDouble();
-
-    // Step 2: Classify images (if any)
-    double imageConfidence = 0.0;
-    for (final imagePath in attachedImagePaths) {
-      if (ImageClassifier.shouldAnalyze(imagePath)) {
-        final imageResult = await ImageClassifier.classify(imagePath);
-        final imgConfidence = (imageResult['confidence'] as num).toDouble();
-        imageConfidence = (imageConfidence + imgConfidence) / 2;
-      }
-    }
-
-    // Step 3: Detect grooming/abuse in single message
-    final abuseResult = await ContextDetector.detectAbuse([
-      {'text': messageText, 'sender': senderName},
-    ]);
-    final abuseConfidence = (abuseResult['confidence'] as num).toDouble();
-
-    // For single message, use text + abuse score as grooming indicator
-    final groomingConfidence = (textConfidence + abuseConfidence) / 2;
-
-    // Step 4: Calculate severity
-    final severity = SeverityEngine.determineSeverity(
-      textConfidence: textConfidence,
-      groomingConfidence: groomingConfidence,
-      imageConfidence: imageConfidence,
-      userReportedHarmful: false,
+    final textScores = TextAnalyzer.analyze(messageText);
+    
+    final detector = ContextDetector();
+    detector.addMessage('${app}_$childId', messageText, sender: senderName);
+    final contextResult = detector.analyze('${app}_$childId');
+    
+    final severity = SeverityEngine.calculate(
+      textScores: textScores,
+      contextScores: contextResult,
     );
 
-    // Only create alert if severity is medium or higher
-    if (severity == 'safe' || severity == 'low') {
-      return null;
-    }
+    if (severity == 'safe') return null;
 
-    // Step 5: Build alert data
-    final detectedKeywords = List<String>.from(
-      textResult['keywords'] as List? ?? [],
-    );
-
-    final alert = await SeverityEngine.buildAlertData(
+    return _buildAlertData(
       childId: childId,
       app: app,
-      textConfidence: textConfidence,
-      groomingConfidence: groomingConfidence,
-      imageConfidence: imageConfidence,
-      detectedKeywords: detectedKeywords,
-      detectedGroomingPhases: (abuseResult['keyword_count'] as int? ?? 0) > 0
-          ? ['abuse_detected']
-          : [],
+      textScores: textScores,
+      contextScores: contextResult,
       userReported: false,
     );
-
-    return alert;
   }
 
-  /// Analyze entire conversation thread
-  /// More powerful than single message - detects grooming progression
   static Future<Map<String, dynamic>?> analyzeConversation({
     required String childId,
     required String app,
     required String senderName,
-    required List<Map<String, dynamic>> messages, // [{text, imageCount}, ...]
+    required List<Map<String, dynamic>> messages,
     required String? metadata,
   }) async {
-    if (messages.isEmpty) return null;
-
-    // Step 1: Analyze text from all messages
-    final messageTexts = messages
-        .map((m) => (m['text'] ?? '') as String)
-        .where((t) => t.isNotEmpty)
-        .toList();
-
-    final textBatchResult = await TextClassifier.classifyBatch(messageTexts);
-    final textConfidence = (textBatchResult['confidence'] as num).toDouble();
-
-    // Step 2: Detect grooming patterns across conversation
-    final groomingResult = await ContextDetector.detectGrooming(messages);
-    final groomingConfidence = (groomingResult['confidence'] as num).toDouble();
-
-    // Step 3: Analyze abuse patterns
-    final abuseResult = await ContextDetector.detectAbuse(messages);
-    final abuseConfidence = (abuseResult['confidence'] as num).toDouble();
-
-    // Step 4: Check conversation velocity
-    final velocityResult = await ContextDetector.analyzeVelocity(messages);
-    final isEscalating = velocityResult['escalating'] as bool? ?? false;
-
-    // Boost grooming confidence if conversation is escalating
-    var finalGroomingConfidence = groomingConfidence;
-    if (isEscalating && groomingResult['detected'] == true) {
-      finalGroomingConfidence = (finalGroomingConfidence + 0.2).clamp(0.0, 1.0);
-    }
-
-    // Factor in abuse confidence if patterns detected
-    if (abuseResult['detected'] == true) {
-      finalGroomingConfidence = (finalGroomingConfidence + abuseConfidence) / 2;
-    }
-
-    // Step 5: Image analysis (if messages contain images)
-    double imageConfidence = 0.0;
-    int totalImageCount = 0;
+    final texts = messages.map((m) => m['text']?.toString() ?? '').where((t) => t.isNotEmpty).toList();
+    if (texts.isEmpty) return null;
+    
+    final batchResult = TextAnalyzer.analyzeBatch(texts);
+    final detector = ContextDetector();
+    
     for (final msg in messages) {
-      totalImageCount += (msg['imageCount'] as int? ?? 0);
+      detector.addMessage('${app}_$childId', msg['text']?.toString() ?? '');
     }
-    // Average confidence across all images
-    if (totalImageCount > 0) {
-      imageConfidence = 0.5; // Placeholder for real image analysis
-    }
-
-    // Step 6: Determine final severity
-    final severity = SeverityEngine.determineSeverity(
-      textConfidence: textConfidence,
-      groomingConfidence: finalGroomingConfidence,
-      imageConfidence: imageConfidence,
-      userReportedHarmful: false,
+    
+    final contextResult = detector.analyze('${app}_$childId');
+    final severity = SeverityEngine.calculate(
+      textScores: batchResult,
+      contextScores: contextResult,
     );
 
-    // Only create alert if severity is medium or higher
-    if (severity == 'safe' || severity == 'low') {
-      return null;
-    }
+    if (severity == 'safe') return null;
 
-    // Step 7: Extract detected phases and keywords
-    final detectedPhases = List<String>.from(
-      groomingResult['phases'] as List? ?? [],
-    );
-    if (abuseResult['detected'] == true) {
-      detectedPhases.add('abuse_detected');
-    }
-
-    final detectedKeywords = List<String>.from(
-      textBatchResult['keywords'] as List? ?? [],
-    );
-
-    // Step 8: Build comprehensive alert
-    final alert = await SeverityEngine.buildAlertData(
+    return _buildAlertData(
       childId: childId,
       app: app,
-      textConfidence: textConfidence,
-      groomingConfidence: finalGroomingConfidence,
-      imageConfidence: imageConfidence,
-      detectedKeywords: detectedKeywords,
-      detectedGroomingPhases: detectedPhases,
+      textScores: batchResult,
+      contextScores: contextResult,
       userReported: false,
     );
+  }
 
-    // Add conversation context
-    alert['conversationMetadata'] = {
-      'senderName': senderName,
-      'messageCount': messages.length,
-      'isEscalating': isEscalating,
-      'span': messages.isNotEmpty ? 'multi_message' : 'single_message',
+  static Map<String, dynamic> _buildAlertData({
+    required String childId,
+    required String app,
+    required Map<String, dynamic> textScores,
+    required Map<String, dynamic> contextScores,
+    required bool userReported,
+  }) {
+    final severity = SeverityEngine.calculate(
+      textScores: {
+        'unsafe': (textScores['unsafe'] as num?)?.toDouble() ?? 0.0,
+        'sexual': (textScores['sexual'] as num?)?.toDouble() ?? 0.0,
+        'grooming': (textScores['grooming'] as num?)?.toDouble() ?? 0.0,
+        'violence': (textScores['violence'] as num?)?.toDouble() ?? 0.0,
+      },
+      contextScores: contextScores,
+    );
+
+    final safetyScore = SeverityEngine.calculateSafetyScore(
+      textConfidence: (textScores['unsafe'] as num?)?.toDouble() ?? 0.0,
+      groomingConfidence: (contextScores['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+      imageConfidence: 0.0,
+    );
+
+    return {
+      'childId': childId,
+      'app': app,
+      'severity': severity,
+      'safetyScore': safetyScore,
+      'scores': {
+        'text': textScores['unsafe'] ?? 0.0,
+        'grooming': contextScores['grooming_risk'] ?? 0.0,
+        'image': 0.0,
+      },
+      'userReported': userReported,
+      'requiresImmediateAction': severity == 'critical' || severity == 'high',
     };
-
-    return alert;
   }
 
   /// User manually reports a conversation as harmful
-  /// Escalates confidence scores
   static Future<Map<String, dynamic>> analyzeUserReport({
     required String childId,
     required String app,
@@ -184,7 +386,6 @@ class DetectionOrchestrator {
     required List<Map<String, dynamic>> messages,
     required String? userReportText,
   }) async {
-    // Run normal analysis first
     var alert = await analyzeConversation(
       childId: childId,
       app: app,
@@ -193,11 +394,10 @@ class DetectionOrchestrator {
       metadata: userReportText,
     );
 
-    // If analysis found nothing, create alert anyway (user knows best)
     alert ??= {
       'childId': childId,
       'app': app,
-      'severity': 'high', // Escalate user reports
+      'severity': 'high',
       'safetyScore': 30,
       'message': userReportText ?? 'User reported this conversation as harmful',
       'scores': {'text': 0.5, 'grooming': 0.5, 'image': 0.0},
@@ -205,7 +405,6 @@ class DetectionOrchestrator {
       'requiresImmediateAction': true,
     };
 
-    // Mark as user reported and ensure high priority
     alert['userReported'] = true;
     alert['requiresImmediateAction'] = true;
     if (alert['severity'] == 'low' || alert['severity'] == 'safe') {
@@ -220,13 +419,12 @@ class DetectionOrchestrator {
     required String childId,
     required String severity,
   }) async {
-    const testMessages = [
+    final testMessages = [
       {'text': 'hey you look special today'},
       {'text': 'but dont tell your parents about our chats ok'},
       {'text': 'you seem so mature for your age'},
     ];
 
-    // Return test alert with requested severity
     final alert = await analyzeConversation(
       childId: childId,
       app: 'WhatsApp',
@@ -235,20 +433,18 @@ class DetectionOrchestrator {
       metadata: 'test_alert',
     );
 
-    // Force severity if needed
     if (alert != null) {
       alert['severity'] = severity;
       alert['isTestAlert'] = true;
     }
 
-    return alert ??
-        {
-          'childId': childId,
-          'app': 'WhatsApp',
-          'severity': severity,
-          'safetyScore': severity == 'high' ? 30 : 50,
-          'message': 'Test alert for demo',
-          'isTestAlert': true,
-        };
+    return alert ?? {
+      'childId': childId,
+      'app': 'WhatsApp',
+      'severity': severity,
+      'safetyScore': severity == 'high' ? 30 : 50,
+      'message': 'Test alert for demo',
+      'isTestAlert': true,
+    };
   }
 }

@@ -212,12 +212,25 @@ class ChildRepository {
   /// Delete a child and all associated alerts
   Future<void> delete(String id) async {
     final db = await _db.database;
+    await _db.reset(); // Also reset global state if needed, but repository specific:
     await db.transaction((txn) async {
       await txn.delete('alerts', where: 'child_id = ?', whereArgs: [id]);
       await txn.delete('score_history', where: 'child_id = ?', whereArgs: [id]);
       await txn.delete('app_controls', where: 'child_id = ?', whereArgs: [id]);
       await txn.delete('children', where: 'id = ?', whereArgs: [id]);
     });
+  }
+
+  /// Update child name
+  Future<void> updateName(String id, String name) async {
+    final db = await _db.database;
+    await db.update('children', {'name': name}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Update child age
+  Future<void> updateAge(String id, int age) async {
+    final db = await _db.database;
+    await db.update('children', {'age': age}, where: 'id = ?', whereArgs: [id]);
   }
 
   /// Generate a random 6-digit pairing code

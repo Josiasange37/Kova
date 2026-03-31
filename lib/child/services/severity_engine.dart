@@ -1,6 +1,80 @@
 // child/services/severity_engine.dart — Combines all detector scores into final severity
 
 class SeverityEngine {
+  /// Calculate severity from text and context scores
+  /// Returns: 'safe', 'low', 'medium', 'high', 'critical'
+  static String calculate({
+    required Map<String, dynamic> textScores,
+    required Map<String, dynamic> contextScores,
+  }) {
+    final unsafe = (textScores['unsafe'] as num?)?.toDouble() ?? 0.0;
+    final sexual = (textScores['sexual'] as num?)?.toDouble() ?? 0.0;
+    final grooming = (textScores['grooming'] as num?)?.toDouble() ?? 0.0;
+    final violence = (textScores['violence'] as num?)?.toDouble() ?? 0.0;
+    final ctxRisk = (contextScores['grooming_risk'] as num?)?.toDouble() ?? 0.0;
+    final escalation = contextScores['escalation'] as bool? ?? false;
+
+    // CRITICAL
+    if (sexual > 0.6 ||
+        violence > 0.7 ||
+        ctxRisk > 0.75 ||
+        (escalation && ctxRisk > 0.5)) {
+      return 'critical';
+    }
+
+    // HIGH
+    if (sexual > 0.3 ||
+        grooming > 0.5 ||
+        violence > 0.4 ||
+        ctxRisk > 0.5 ||
+        unsafe > 0.7) {
+      return 'high';
+    }
+
+    // MEDIUM
+    if (grooming > 0.25 ||
+        violence > 0.2 ||
+        ctxRisk > 0.3 ||
+        unsafe > 0.5) {
+      return 'medium';
+    }
+
+    // LOW
+    if (unsafe > 0.3 || ctxRisk > 0.15) {
+      return 'low';
+    }
+
+    return 'safe';
+  }
+
+  /// Get alert type from scores
+  static String getType({
+    required Map<String, dynamic> textScores,
+    required Map<String, dynamic> contextScores,
+  }) {
+    final sexual = (textScores['sexual'] as num?)?.toDouble() ?? 0.0;
+    final grooming = (textScores['grooming'] as num?)?.toDouble() ?? 0.0;
+    final violence = (textScores['violence'] as num?)?.toDouble() ?? 0.0;
+    final ctxRisk = (contextScores['grooming_risk'] as num?)?.toDouble() ?? 0.0;
+
+    if (ctxRisk > 0.4) return 'grooming';
+    if (sexual > 0.3) return 'nsfw_text';
+    if (violence > 0.3) return 'violence_text';
+    if (grooming > 0.2) return 'grooming_attempt';
+    return 'unsafe_content';
+  }
+
+  /// Get score delta based on severity
+  static int scoreDelta(String severity) {
+    return switch (severity) {
+      'critical' => -20,
+      'high' => -10,
+      'medium' => -5,
+      'low' => -2,
+      _ => 0,
+    };
+  }
+
   /// Calculate final safety score (0-100) from all classifiers
   /// 100 = completely safe, 0 = critical threat
   ///

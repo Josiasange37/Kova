@@ -27,6 +27,7 @@ import 'package:kova/parent/screens/alert_history_screen.dart';
 import 'package:kova/parent/screens/alert_detail_screen.dart';
 import 'package:kova/parent/screens/app_control_screen.dart';
 import 'package:kova/parent/screens/settings_screen.dart';
+import 'package:kova/parent/screens/pin_modification_screen.dart';
 
 // ══════════════════════════════════════════
 // ── CHILD SCREENS ──
@@ -61,6 +62,7 @@ class AppRoutes {
   static const String alertDetail = '/parent/alert-detail';
   static const String appControl = '/parent/app-control';
   static const String settings = '/parent/settings';
+  static const String pinModification = '/parent/settings/pin-modification';
 
   // ── Child Flow Routes ──
   static const String childWelcome = '/child/welcome';
@@ -174,6 +176,12 @@ GoRouter buildRouter(AppMode initialMode) {
       GoRoute(
         path: AppRoutes.settings,
         builder: (context, state) => const SettingsScreen(),
+      ),
+
+      // PIN Modification Screen
+      GoRoute(
+        path: AppRoutes.pinModification,
+        builder: (context, state) => const PinModificationScreen(),
       ),
 
       // ══════════════════════════════════════════

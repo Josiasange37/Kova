@@ -4,6 +4,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
+import 'package:kova/shared/services/local_storage.dart';
 
 class AppControlService extends ChangeNotifier {
   final _childRepo = ChildRepository();
@@ -56,13 +57,17 @@ class AppControlService extends ChangeNotifier {
       // Check if app is enabled for any child
       final isEnabled = _children.any((c) => c.appControls[app] ?? true);
 
+      // Load sensitivity and blocking from LocalStorage
+      final sensitivity = LocalStorage.getInt('app_sensitivity_$app', 1);
+      final blocking = LocalStorage.getInt('app_blocking_$app', 0);
+
       _appData[app] = AppControlData(
         name: _formatAppName(app),
         alerts: alertCount,
         blocks: blockCount,
         enabled: isEnabled,
-        sensitivity: 1, // Default sensitivity
-        blocking: blockCount > 0 ? 1 : 0,
+        sensitivity: sensitivity,
+        blocking: blocking,
       );
     }
   }
@@ -95,18 +100,28 @@ class AppControlService extends ChangeNotifier {
     try {
       await _childRepo.updateAppControl(childId, app, enabled);
 
-      // Update local state
-      final index = _children.indexWhere((c) => c.id == childId);
-      if (index >= 0) {
-        _children[index] = _children[index].copyWith(
-          appControls: {..._children[index].appControls, app: enabled},
-        );
-      }
-
-      // Recalculate app data
-      await _calculateAppData();
+      // Update local state and notify
+      await loadAppControls();
     } catch (e) {
       debugPrint('Error toggling app control: $e');
+    }
+  }
+
+  // Update sensitivity for an app
+  Future<void> setSensitivity(String app, int value) async {
+    await LocalStorage.setInt('app_sensitivity_$app', value);
+    if (_appData.containsKey(app)) {
+      _appData[app] = _appData[app]!.copyWith(sensitivity: value);
+      notifyListeners();
+    }
+  }
+
+  // Update blocking level for an app
+  Future<void> setBlocking(String app, int value) async {
+    await LocalStorage.setInt('app_blocking_$app', value);
+    if (_appData.containsKey(app)) {
+      _appData[app] = _appData[app]!.copyWith(blocking: value);
+      notifyListeners();
     }
   }
 
@@ -131,4 +146,22 @@ class AppControlData {
     required this.sensitivity,
     required this.blocking,
   });
+
+  AppControlData copyWith({
+    String? name,
+    int? alerts,
+    int? blocks,
+    bool? enabled,
+    int? sensitivity,
+    int? blocking,
+  }) {
+    return AppControlData(
+      name: name ?? this.name,
+      alerts: alerts ?? this.alerts,
+      blocks: blocks ?? this.blocks,
+      enabled: enabled ?? this.enabled,
+      sensitivity: sensitivity ?? this.sensitivity,
+      blocking: blocking ?? this.blocking,
+    );
+  }
 }

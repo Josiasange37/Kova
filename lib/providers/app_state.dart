@@ -1,5 +1,6 @@
 // providers/app_state.dart — Central state management for KOVA (bridges old screens to new repositories)
 import 'package:flutter/foundation.dart';
+import 'package:kova/core/app_mode.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
 import 'package:kova/shared/services/local_storage.dart';
@@ -144,39 +145,63 @@ class AppState extends ChangeNotifier {
         )
         .toList();
 
-    // Load monitored apps (placeholder for now)
-    _monitoredApps = [
-      AppControl(
-        id: 'whatsapp',
-        childId: _activeChildId!,
-        appName: 'WhatsApp',
-        category: 'messaging',
-        sensitivity: 'normal',
-        isMonitored: true,
-        isBlocked: false,
-        createdAt: DateTime.now(),
-      ),
-      AppControl(
-        id: 'instagram',
-        childId: _activeChildId!,
-        appName: 'Instagram',
-        category: 'social',
-        sensitivity: 'normal',
-        isMonitored: true,
-        isBlocked: false,
-        createdAt: DateTime.now(),
-      ),
-      AppControl(
-        id: 'tiktok',
-        childId: _activeChildId!,
-        appName: 'TikTok',
-        category: 'social',
-        sensitivity: 'high',
-        isMonitored: true,
-        isBlocked: false,
-        createdAt: DateTime.now(),
-      ),
-    ];
+    // Load monitored apps from child appControls
+    final child = await _childRepo.getById(_activeChildId!);
+    if (child != null) {
+      final appControls = child.appControls;
+      _monitoredApps = [
+        AppControl(
+          id: 'whatsapp',
+          childId: _activeChildId!,
+          appName: 'WhatsApp',
+          category: 'messaging',
+          sensitivity: 'normal',
+          isMonitored: appControls['whatsapp'] ?? true,
+          isBlocked: false,
+          createdAt: DateTime.now(),
+        ),
+        AppControl(
+          id: 'instagram',
+          childId: _activeChildId!,
+          appName: 'Instagram',
+          category: 'social',
+          sensitivity: 'normal',
+          isMonitored: appControls['instagram'] ?? true,
+          isBlocked: false,
+          createdAt: DateTime.now(),
+        ),
+        AppControl(
+          id: 'tiktok',
+          childId: _activeChildId!,
+          appName: 'TikTok',
+          category: 'social',
+          sensitivity: 'high',
+          isMonitored: appControls['tiktok'] ?? true,
+          isBlocked: false,
+          createdAt: DateTime.now(),
+        ),
+        AppControl(
+          id: 'facebook',
+          childId: _activeChildId!,
+          appName: 'Facebook',
+          category: 'social',
+          sensitivity: 'normal',
+          isMonitored: appControls['facebook'] ?? true,
+          isBlocked: false,
+          createdAt: DateTime.now(),
+        ),
+        AppControl(
+          id: 'sms',
+          childId: _activeChildId!,
+          appName: 'SMS/Messages',
+          category: 'messaging',
+          sensitivity: 'normal',
+          isMonitored: appControls['sms'] ?? true,
+          isBlocked: false,
+          createdAt: DateTime.now(),
+        ),
+      ];
+    }
 
     // Dashboard
     final activeChild = _children.firstWhere((c) => c.id == _activeChildId!);
@@ -231,8 +256,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<bool> verifyPin(String pin) async {
-    // Placeholder: always return true for now
-    return true;
+    return await AppModeManager.verifyPin(pin);
   }
 
   /// Mark as logged in after onboarding
@@ -390,8 +414,14 @@ class AppState extends ChangeNotifier {
     bool? isBlocked,
     bool? isMonitored,
   }) async {
+    if (_activeChildId == null) return false;
     try {
-      // Placeholder: update app control in repository
+      // Update in repository
+      if (isMonitored != null) {
+        await _childRepo.updateAppControl(_activeChildId!, appId, isMonitored);
+      }
+      // Refresh to get updated state
+      await _refreshChildData();
       notifyListeners();
       return true;
     } catch (e) {
@@ -413,6 +443,12 @@ class AppState extends ChangeNotifier {
 
   Future<bool> updateSettings(KovaSettings updated) async {
     try {
+      // Persist to local storage
+      await LocalStorage.setNotificationsEnabled(updated.notificationsEnabled);
+      await LocalStorage.setAlertSoundEnabled(updated.alertSound);
+      await LocalStorage.setSensitivityLevel(updated.sensitivityLevel);
+      await LocalStorage.setAutoBlockEnabled(updated.autoBlock);
+      
       _settings = updated;
       notifyListeners();
       return true;

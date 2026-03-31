@@ -11,7 +11,9 @@ import 'package:kova/core/app_mode.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
 import 'package:kova/shared/services/local_storage.dart';
+import 'package:kova/shared/services/notification_service.dart';
 import 'package:kova/local_backend/database/database_service.dart';
+import 'package:kova/child/services/detection_orchestrator.dart';
 
 // App state
 import 'package:kova/providers/app_state.dart';
@@ -49,9 +51,15 @@ Future<void> main() async {
   // Initialize services
   await LocalStorage.init();
   await DatabaseService().database;
+  await NotificationService.init();
 
   // Get app mode
   final appMode = await AppModeManager.getMode();
+
+  // Start detection services ONLY if in child mode
+  if (appMode == AppMode.child) {
+    await DetectionOrchestrator.instance.start();
+  }
 
   runApp(KovaApp(initialMode: appMode));
 }
