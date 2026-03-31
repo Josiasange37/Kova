@@ -95,8 +95,8 @@ class MainActivity : FlutterActivity() {
         ComponentName(this, MainActivity::class.java)
       packageManager.setComponentEnabledSetting(
         componentName,
-        packageManager.COMPONENT_ENABLED_STATE_DISABLED,
-        packageManager.DONT_KILL_APP
+        PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+        PackageManager.DONT_KILL_APP
       )
     } catch (e: Exception) {
       e.printStackTrace()

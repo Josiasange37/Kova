@@ -2,6 +2,7 @@ package com.kova.child
 
 import android.app.admin.DeviceAdminReceiver
 import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -17,6 +18,13 @@ import android.util.Log
 class KovaDeviceAdmin : DeviceAdminReceiver() {
     companion object {
         private const val TAG = "KovaDeviceAdmin"
+
+        /**
+         * Get the ComponentName for this DeviceAdminReceiver
+         */
+        fun getComponentName(context: Context): ComponentName {
+            return ComponentName(context, KovaDeviceAdmin::class.java)
+        }
     }
 
     override fun onEnabled(context: Context, intent: Intent) {
@@ -28,7 +36,7 @@ class KovaDeviceAdmin : DeviceAdminReceiver() {
         // Disable uninstall of KOVA
         try {
             dpm.setUninstallBlocked(
-                getComponentName(context),
+                Companion.getComponentName(context),
                 context.packageName,
                 true
             )
@@ -71,7 +79,7 @@ class KovaDeviceAdmin : DeviceAdminReceiver() {
     fun lockDevice(context: Context) {
         try {
             val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-            if (dpm.isAdminActive(getComponentName(context))) {
+            if (dpm.isAdminActive(Companion.getComponentName(context))) {
                 dpm.lockNow()
                 Log.d(TAG, "Device locked")
             }
