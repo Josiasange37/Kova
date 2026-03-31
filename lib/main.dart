@@ -56,7 +56,7 @@ Future<void> main() async {
 
   // Initialize settings and load saved preferences
   final settingsService = SettingsService();
-  await settingsService.loadSettings();
+  settingsService.loadSettings();
 
   // Get app mode
   final appMode = await AppModeManager.getMode();
