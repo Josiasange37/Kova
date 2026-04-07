@@ -6,7 +6,10 @@ import 'package:flutter/services.dart';
 import 'package:kova/core/app_mode.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
+import 'package:kova/shared/models/network_alert.dart';
+import 'package:kova/shared/services/network_sync_service.dart';
 import 'package:kova/shared/services/notification_service.dart';
+import 'package:kova/shared/services/local_storage.dart';
 
 import 'text_analyzer.dart';
 import 'context_detector.dart';
@@ -21,6 +24,7 @@ class DetectionOrchestrator {
 
   final ChildRepository _childRepo = ChildRepository();
   final AlertRepository _alertRepo = AlertRepository();
+  final NetworkSyncService _networkSync = NetworkSyncService();
   final ContextDetector _contextDetector = ContextDetector();
   
   bool _active = false;
@@ -39,11 +43,12 @@ class DetectionOrchestrator {
 
     _active = true;
 
-    // Set up bridge callback
+    // Set up bridge callbacks for all 3 channels
     MonitoringBridge.onContent = _processContent;
     MonitoringBridge.onConversation = _processConversation;
+    MonitoringBridge.onMetadata = _processMetadata;
     
-    // Initialize bridge
+    // Initialize bridge (registers handlers on 3 channels)
     MonitoringBridge.init();
 
     if (kDebugMode) debugPrint('🛡️ KOVA Detection Orchestrator: ACTIVE');
@@ -57,10 +62,12 @@ class DetectionOrchestrator {
   }
 
   /// Process single content from monitoring services
+  /// direction = 'incoming' (notification) or 'outgoing' (keyboard)
   Future<void> _processContent(
     String app,
     String text,
     String source,
+    String direction,
     String conversationId,
     String? senderName,
   ) async {
@@ -77,8 +84,12 @@ class DetectionOrchestrator {
       return;
     }
 
-    // Add to conversation context
-    _contextDetector.addMessage(conversationId, text, sender: senderName);
+    // Add to conversation context with direction info
+    _contextDetector.addMessage(
+      conversationId,
+      text,
+      sender: direction == 'outgoing' ? 'child' : senderName,
+    );
 
     // Analyze text
     final textScores = TextAnalyzer.analyze(text);
@@ -91,7 +102,7 @@ class DetectionOrchestrator {
     );
 
     if (kDebugMode) {
-      debugPrint('🔍 [$app] severity=$severity text=${textScores['unsafe']?.toStringAsFixed(2)} ctx=${contextResult['grooming_risk']?.toStringAsFixed(2)}');
+      debugPrint('🔍 [$app] dir=$direction severity=$severity text=${textScores['unsafe']?.toStringAsFixed(2)} ctx=${contextResult['grooming_risk']?.toStringAsFixed(2)}');
     }
 
     // Skip safe content
@@ -124,6 +135,18 @@ class DetectionOrchestrator {
 
     // Show notification
     await _showAlertNotification(appKey, severity, alertId, text);
+
+    // Push alert to parent via network (LAN full data or Vercel summary)
+    await _pushAlertToNetwork(
+      severity: severity,
+      app: appKey,
+      alertType: alertType,
+      aiConfidence: textScores['unsafe'] ?? 0.0,
+      contentPreview: text.length > 200 ? '${text.substring(0, 200)}...' : text,
+      scoreText: textScores['unsafe'] ?? 0.0,
+      scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+      scoreDelta: delta,
+    );
 
     if (kDebugMode) debugPrint('🚨 Alert created: $alertId');
   }
@@ -202,7 +225,72 @@ class DetectionOrchestrator {
 
     await _showAlertNotification(appKey, severity, alertId, 'Conversation batch');
 
+    // Push alert to parent via network
+    await _pushAlertToNetwork(
+      severity: severity,
+      app: appKey,
+      alertType: alertType,
+      aiConfidence: batchResult['unsafe'] ?? 0.0,
+      contentPreview: texts.take(3).join(' | '),
+      scoreText: batchResult['unsafe'] ?? 0.0,
+      scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+      scoreDelta: delta,
+    );
+
     if (kDebugMode) debugPrint('🚨 Conversation alert created: $alertId');
+  }
+
+  /// Process metadata from accessibility service
+  /// Tracks which apps the child navigates to
+  void _processMetadata(
+    String event,
+    String app,
+    Map<String, dynamic> data,
+  ) {
+    if (!_active) return;
+
+    // Track app navigation for context correlation
+    if (event == 'window_changed' && data['isMonitored'] == true) {
+      final windowType = data['windowType'] as String? ?? 'other';
+      if (kDebugMode) {
+        debugPrint('🪟 Child navigated to $app ($windowType)');
+      }
+    }
+  }
+
+  /// Push alert to parent device via network (LAN or Internet)
+  Future<void> _pushAlertToNetwork({
+    required String severity,
+    required String app,
+    required String alertType,
+    required double aiConfidence,
+    String? contentPreview,
+    double scoreText = 0.0,
+    double scoreGrooming = 0.0,
+    int scoreDelta = 0,
+  }) async {
+    try {
+      final childName = LocalStorage.getString('child_name', 'Child');
+
+      final alert = NetworkAlertFull(
+        severity: severity,
+        app: app,
+        alertType: alertType,
+        childName: childName,
+        timestamp: DateTime.now(),
+        aiConfidence: aiConfidence,
+        contentPreview: contentPreview,
+        scoreText: scoreText,
+        scoreGrooming: scoreGrooming,
+        scoreDelta: scoreDelta,
+      );
+
+      await _networkSync.pushAlert(alert);
+
+      if (kDebugMode) debugPrint('📤 Alert pushed to parent network');
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ Network push failed (local alert saved): $e');
+    }
   }
 
   /// Block an app using native blocker

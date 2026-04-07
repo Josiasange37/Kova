@@ -1,5 +1,6 @@
 // local_backend/database/database_service.dart — SQLite initialization & management
 import 'dart:io';
+import 'dart:math';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -122,6 +123,43 @@ class DatabaseService {
         created_at      INTEGER DEFAULT (strftime('%s','now'))
       )
     ''');
+
+    // ── Pairing Codes Table ──
+    // Pre-registered pool of 100 unique 6-digit codes
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pairing_codes (
+        code            TEXT PRIMARY KEY,
+        used            INTEGER DEFAULT 0,
+        child_id        TEXT,
+        assigned_at     INTEGER,
+        used_at         INTEGER
+      )
+    ''');
+
+    // Seed 100 unique 6-digit pairing codes
+    await _seedPairingCodes(db);
+  }
+
+  /// Generate and insert 100 unique 6-digit codes
+  static Future<void> _seedPairingCodes(Database db) async {
+    final random = Random.secure();
+    final codes = <String>{};
+
+    // Generate 100 unique 6-digit codes
+    while (codes.length < 100) {
+      final code = random.nextInt(1000000).toString().padLeft(6, '0');
+      codes.add(code);
+    }
+
+    // Batch insert
+    final batch = db.batch();
+    for (final code in codes) {
+      batch.insert('pairing_codes', {
+        'code': code,
+        'used': 0,
+      });
+    }
+    await batch.commit(noResult: true);
   }
 
   /// Close the database
@@ -139,5 +177,7 @@ class DatabaseService {
     await db.execute('DELETE FROM alerts');
     await db.execute('DELETE FROM children');
     await db.execute('DELETE FROM config');
+    // Reset pairing codes to unused (don't delete — re-mark available)
+    await db.execute('UPDATE pairing_codes SET used = 0, child_id = NULL, assigned_at = NULL, used_at = NULL');
   }
 }

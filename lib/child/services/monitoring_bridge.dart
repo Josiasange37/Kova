@@ -1,145 +1,220 @@
-// child/services/monitoring_bridge.dart — Receives data from Kotlin services via MethodChannel
-// Bridges native Android monitoring to Flutter detection engine
+// child/services/monitoring_bridge.dart — MODULE 4
+// Receives data from THREE native Kotlin services via MethodChannel.
+// Tags each message with direction for the detection engine.
 
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 
-/// Callback type for content received from monitoring services
+/// Callback for single content items (text messages)
 typedef ContentCallback = void Function(
   String app,
   String text,
   String source,
+  String direction,
   String conversationId,
   String? senderName,
 );
 
-/// Bridge that receives messages from native Android monitoring services
-/// - KovaNotificationListener.kt (background notifications)
-/// - KovaAccessibilityService.kt (foreground screen content)
+/// Callback for metadata events from AccessibilityService
+typedef MetadataCallback = void Function(
+  String event,
+  String app,
+  Map<String, dynamic> data,
+);
+
+/// Bridge that receives messages from three native Android services:
+///
+/// Channel 1: 'com.kova.child/notifications'
+///   → Incoming messages captured from notification bar
+///   → direction = 'incoming'
+///
+/// Channel 2: 'com.kova.child/keyboard'
+///   → Outgoing text captured from custom IME
+///   → direction = 'outgoing'
+///
+/// Channel 3: 'com.kova.child/accessibility'
+///   → Metadata only (app switches, window changes, screen state)
+///   → No message content (FLAG_SECURE safe)
+///
 class MonitoringBridge {
-  // MethodChannel names must match Kotlin side
-  static const MethodChannel _notificationChannel = MethodChannel(
-    'com.kova.app/accessibility',
+  // ── Three distinct channels ──
+  static const MethodChannel _notificationsChannel = MethodChannel(
+    'com.kova.child/notifications',
+  );
+  static const MethodChannel _keyboardChannel = MethodChannel(
+    'com.kova.child/keyboard',
+  );
+  static const MethodChannel _accessibilityChannel = MethodChannel(
+    'com.kova.child/accessibility',
   );
 
-  static Function(String app, String text, String source, String conversationId, String? senderName)? onContent;
-  static Function(String app, List<Map<String, dynamic>> messages, String? senderName)? onConversation;
+  // ── Callbacks ──
+  static ContentCallback? onContent;
+  static Function(
+    String app,
+    List<Map<String, dynamic>> messages,
+    String? senderName,
+  )? onConversation;
+  static MetadataCallback? onMetadata;
 
   static bool _initialized = false;
 
-  /// Initialize the bridge and set up method call handlers
+  /// Initialize the bridge and set up handlers on all three channels
   static void init() {
     if (_initialized) return;
     _initialized = true;
 
-    _notificationChannel.setMethodCallHandler(_handleMethodCall);
-    
+    _notificationsChannel.setMethodCallHandler(_handleNotification);
+    _keyboardChannel.setMethodCallHandler(_handleKeyboard);
+    _accessibilityChannel.setMethodCallHandler(_handleAccessibility);
+
     if (kDebugMode) {
-      debugPrint('📡 MonitoringBridge initialized');
+      debugPrint('📡 MonitoringBridge initialized — 3 channels active');
     }
   }
 
-  /// Handle incoming method calls from Kotlin
-  static Future<dynamic> _handleMethodCall(MethodCall call) async {
-    if (kDebugMode) {
-      debugPrint('📨 MonitoringBridge received: ${call.method}');
-    }
+  // ─────────────────────────────────────────────
+  // Channel 1 — Notifications (INCOMING messages)
+  // ─────────────────────────────────────────────
 
-    switch (call.method) {
-      case 'onMessage':
-        _handleMessage(call.arguments);
-        break;
-      case 'onConversation':
-        _handleConversation(call.arguments);
-        break;
-      default:
-        if (kDebugMode) {
-          debugPrint('⚠️ Unknown method: ${call.method}');
-        }
+  static Future<dynamic> _handleNotification(MethodCall call) async {
+    if (call.method == 'onData') {
+      _processNotificationData(call.arguments);
     }
     return null;
   }
 
-  /// Handle single message from notification or accessibility
-  static void _handleMessage(dynamic arguments) {
+  static void _processNotificationData(dynamic arguments) {
     try {
       final args = Map<String, dynamic>.from(arguments as Map);
-      
+
       final app = args['app'] as String? ?? 'unknown';
-      final text = args['messageText'] as String? ?? '';
+      final text = args['text'] as String? ?? '';
       final senderName = args['senderName'] as String?;
-      final source = _determineSource(args);
-      final conversationId = _extractConversationId(args, app);
+      final conversationId = args['conversationId'] as String? ??
+          '${app}_${senderName ?? 'unknown'}';
 
       if (text.isEmpty) return;
 
       if (kDebugMode) {
-        debugPrint('📩 Message from $app: ${text.substring(0, text.length > 50 ? 50 : text.length)}...');
+        final preview = text.length > 50 ? '${text.substring(0, 50)}...' : text;
+        debugPrint('📩 [INCOMING] $app → $preview');
       }
 
-      onContent?.call(app, text, source, conversationId, senderName);
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error handling message: $e');
+      // Tag as incoming — these are received messages
+      onContent?.call(
+        app,
+        text,
+        'notification',   // source
+        'incoming',       // direction
+        conversationId,
+        senderName,
+      );
+
+      // If there are message lines, process each individually
+      final messageLines = args['messageLines'];
+      if (messageLines is List && messageLines.length > 1) {
+        for (final line in messageLines) {
+          final lineText = line?.toString() ?? '';
+          if (lineText.isNotEmpty && lineText != text) {
+            onContent?.call(
+              app,
+              lineText,
+              'notification',
+              'incoming',
+              conversationId,
+              senderName,
+            );
+          }
+        }
       }
+    } catch (e) {
+      if (kDebugMode) debugPrint('❌ Error in notification handler: $e');
     }
   }
 
-  /// Handle conversation batch from accessibility service
-  static void _handleConversation(dynamic arguments) {
+  // ─────────────────────────────────────────────
+  // Channel 2 — Keyboard (OUTGOING messages)
+  // ─────────────────────────────────────────────
+
+  static Future<dynamic> _handleKeyboard(MethodCall call) async {
+    if (call.method == 'onData') {
+      _processKeyboardData(call.arguments);
+    }
+    return null;
+  }
+
+  static void _processKeyboardData(dynamic arguments) {
     try {
       final args = Map<String, dynamic>.from(arguments as Map);
-      
+
       final app = args['app'] as String? ?? 'unknown';
-      final senderName = args['senderName'] as String?;
-      final messagesRaw = args['messages'] as List<dynamic>? ?? [];
-      
-      final messages = messagesRaw.map((m) {
-        if (m is Map) {
-          return Map<String, dynamic>.from(m);
-        }
-        return <String, dynamic>{};
-      }).toList();
+      final text = args['text'] as String? ?? '';
+      final trigger = args['trigger'] as String? ?? 'unknown';
+      final conversationId = args['conversationId'] as String? ??
+          '${app}_keyboard';
 
-      if (messages.isEmpty) return;
+      if (text.isEmpty) return;
 
       if (kDebugMode) {
-        debugPrint('📨 Conversation from $app: ${messages.length} messages');
+        final preview = text.length > 50 ? '${text.substring(0, 50)}...' : text;
+        debugPrint('📤 [OUTGOING] $app ($trigger) → $preview');
       }
 
-      onConversation?.call(app, messages, senderName);
+      // Tag as outgoing — this is what the child typed
+      onContent?.call(
+        app,
+        text,
+        'keyboard',       // source
+        'outgoing',       // direction
+        conversationId,
+        null,             // no sender name for own text
+      );
     } catch (e) {
+      if (kDebugMode) debugPrint('❌ Error in keyboard handler: $e');
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Channel 3 — Accessibility (METADATA only)
+  // ─────────────────────────────────────────────
+
+  static Future<dynamic> _handleAccessibility(MethodCall call) async {
+    if (call.method == 'onData') {
+      _processAccessibilityData(call.arguments);
+    }
+    return null;
+  }
+
+  static void _processAccessibilityData(dynamic arguments) {
+    try {
+      final args = Map<String, dynamic>.from(arguments as Map);
+
+      final event = args['event'] as String? ?? 'unknown';
+      final app = args['app'] as String? ?? 'unknown';
+
       if (kDebugMode) {
-        debugPrint('❌ Error handling conversation: $e');
+        debugPrint('🔍 [META] $event → $app');
       }
+
+      onMetadata?.call(event, app, args);
+    } catch (e) {
+      if (kDebugMode) debugPrint('❌ Error in accessibility handler: $e');
     }
   }
 
-  /// Determine message source based on arguments
-  static String _determineSource(Map<String, dynamic> args) {
-    // Check if it's from notification listener
-    if (args.containsKey('source')) {
-      return args['source'] as String;
-    }
-    return 'accessibility'; // Default
-  }
-
-  /// Extract or generate conversation ID
-  static String _extractConversationId(Map<String, dynamic> args, String app) {
-    // Use sender name + app as conversation identifier
-    final sender = args['senderName'] as String? ?? 'unknown';
-    return '${app}_$sender';
-  }
+  // ─────────────────────────────────────────────
+  // Utility methods
+  // ─────────────────────────────────────────────
 
   /// Request accessibility service status check
   static Future<bool> isAccessibilityEnabled() async {
     try {
-      final result = await _notificationChannel.invokeMethod<bool>('isEnabled');
+      const channel = MethodChannel('com.kova.child/setup');
+      final result = await channel.invokeMethod<bool>('isAccessibilityEnabled');
       return result ?? false;
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error checking accessibility: $e');
-      }
+      if (kDebugMode) debugPrint('❌ Error checking accessibility: $e');
       return false;
     }
   }
@@ -147,11 +222,10 @@ class MonitoringBridge {
   /// Open accessibility settings
   static Future<void> openAccessibilitySettings() async {
     try {
-      await _notificationChannel.invokeMethod('openSettings');
+      const channel = MethodChannel('com.kova.child/setup');
+      await channel.invokeMethod('openAccessibilitySettings');
     } catch (e) {
-      if (kDebugMode) {
-        debugPrint('❌ Error opening settings: $e');
-      }
+      if (kDebugMode) debugPrint('❌ Error opening settings: $e');
     }
   }
 
@@ -159,10 +233,33 @@ class MonitoringBridge {
   static Future<bool> isNotificationListenerEnabled() async {
     try {
       const channel = MethodChannel('com.kova.child/setup');
-      final result = await channel.invokeMethod<bool>('isNotificationListenerEnabled');
+      final result = await channel.invokeMethod<bool>(
+        'isNotificationListenerEnabled',
+      );
       return result ?? false;
     } catch (e) {
       return false;
+    }
+  }
+
+  /// Check if keyboard (IME) is active
+  static Future<bool> isKeyboardEnabled() async {
+    try {
+      const channel = MethodChannel('com.kova.child/setup');
+      final result = await channel.invokeMethod<bool>('isKeyboardEnabled');
+      return result ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Open input method settings to enable the KOVA keyboard
+  static Future<void> openInputMethodSettings() async {
+    try {
+      const channel = MethodChannel('com.kova.child/setup');
+      await channel.invokeMethod('openInputMethodSettings');
+    } catch (e) {
+      if (kDebugMode) debugPrint('❌ Error opening IME settings: $e');
     }
   }
 
@@ -171,5 +268,6 @@ class MonitoringBridge {
     _initialized = false;
     onContent = null;
     onConversation = null;
+    onMetadata = null;
   }
 }

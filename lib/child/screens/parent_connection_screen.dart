@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -7,7 +6,10 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
+import 'package:kova/shared/services/network_sync_service.dart';
+import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/core/app_mode.dart';
+import 'package:uuid/uuid.dart';
 
 class ParentConnectionScreen extends StatefulWidget {
   const ParentConnectionScreen({super.key});
@@ -81,26 +83,48 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen>
 
     try {
       final repo = ChildRepository();
-      
-      // Get all unlinked children and check if code matches any of their 8 generated codes
-      final children = await repo.getAllUnlinked();
-      ChildModel? matchedChild;
-      
-      for (final child in children) {
-        final validCodes = repo.generatePairingCodes(child.id);
-        if (validCodes.contains(code)) {
-          matchedChild = child;
-          break;
-        }
+      final networkSync = NetworkSyncService();
+
+      // Ensure device has an ID
+      var deviceId = LocalStorage.getString('device_id');
+      if (deviceId.isEmpty) {
+        deviceId = const Uuid().v4();
+        await LocalStorage.setString('device_id', deviceId);
       }
 
-      if (matchedChild != null) {
-        await repo.markLinked(matchedChild.id);
-        final success = await AppModeManager.setChildMode(matchedChild.id);
+      // Step 1: Register code with Vercel relay (so parent can verify)
+      final registered = await networkSync.registerPairingCode(code);
 
-        if (success && mounted) {
-          _showSnack('Successfully connected to parent!', isError: false);
-          context.go(AppRoutes.childAccessibility);
+      // Step 2: Also verify locally against the pre-registered pool
+      final childId = await repo.verifyPairingCode(code);
+
+      if (childId != null) {
+        // Code is valid — mark linked and set child mode
+        await repo.markLinked(childId);
+        final success = await AppModeManager.setChildMode(childId);
+
+        if (success) {
+          // If relay registration succeeded, pair token will come
+          // when parent verifies. For now, generate a local pair token
+          // that both devices will share.
+          final pairToken = LocalStorage.getString('pair_token');
+          if (pairToken.isEmpty) {
+            // Store code as temporary pair identifier until parent verifies
+            await LocalStorage.setString('pair_token', 'kova_pair_${code}_$deviceId');
+          }
+
+          // Start network sync services
+          await networkSync.start(role: 'child');
+
+          if (mounted) {
+            _showSnack(
+              registered
+                  ? 'Connected! Waiting for parent to verify online.'
+                  : 'Connected locally! Connect to internet for remote alerts.',
+              isError: false,
+            );
+            context.go(AppRoutes.childAccessibility);
+          }
         } else if (mounted) {
           _showSnack('Failed to set device mode. Please try again.', isError: true);
         }

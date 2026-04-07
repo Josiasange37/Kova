@@ -1,0 +1,9 @@
+{
+  "name": "kova-relay",
+  "version": "1.0.0",
+  "description": "KOVA lightweight relay server for pairing and alert forwarding",
+  "dependencies": {
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^10.0.0"
+  }
+}

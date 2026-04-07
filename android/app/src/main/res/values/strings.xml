@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">KOVA</string>
     <string name="accessibility_service_description">KOVA monitors messages and apps for child safety</string>
+    <string name="ime_label">KOVA Keyboard</string>
 </resources>

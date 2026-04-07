@@ -9,7 +9,6 @@ import 'package:kova/parent/services/settings_service.dart';
 import 'package:kova/parent/services/dashboard_data_service.dart';
 import 'package:kova/parent/services/alert_history_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
-import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/database/database_service.dart';
 
 class SettingsScreen extends StatefulWidget {

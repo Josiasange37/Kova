@@ -1,22 +1,26 @@
 package com.kova.child
 
+import android.app.Notification
+import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.content.Intent
 import android.util.Log
 
 /**
- * KovaNotificationListener — Monitors notifications from messaging apps
- * 
- * Extracts text and sender info from incoming notifications
- * (WhatsApp, etc.) while the apps are in the background or device is locked.
+ * MODULE 1 — KovaNotificationListener
+ *
+ * Standard NotificationListenerService.
+ * Captures incoming message previews from WhatsApp and other messaging apps.
+ * Tags every message with direction = "incoming".
+ * Sends structured data to Flutter via the shared FlutterEngine MethodChannel.
  */
 class KovaNotificationListener : NotificationListenerService() {
+
     companion object {
         private const val TAG = "KovaNotificationListener"
         private const val PREFS_NAME = "com.example.kova"
-        
-        // Monitored apps for notifications
+
+        // Apps whose notifications we capture
         private val MONITORED_APPS = setOf(
             "com.whatsapp",
             "com.whatsapp.w4b",
@@ -26,69 +30,119 @@ class KovaNotificationListener : NotificationListenerService() {
             "com.android.mms",
             "com.google.android.apps.messaging",
         )
+
+        // Noise phrases to ignore
+        private val NOISE_PHRASES = listOf(
+            "Checking for new messages",
+            "new messages",
+            "Searching for",
+            "Waiting for this message",
+            "End-to-end encrypted",
+            "Backup in progress",
+            "messages from",
+            "Missed voice call",
+            "Missed video call",
+        )
     }
 
     private var childId: String? = null
 
+    // ─────────────────────────────────────────────
+    // Lifecycle
+    // ─────────────────────────────────────────────
+
     override fun onListenerConnected() {
         super.onListenerConnected()
-        Log.d(TAG, "Notification Listener connected")
-        
-        // Read child ID
+        Log.d(TAG, "✅ NotificationListener connected")
+
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         childId = prefs.getString("child_id", null)
+        prefs.edit().putBoolean("notification_listener_enabled", true).apply()
     }
 
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        Log.d(TAG, "❌ NotificationListener disconnected")
+
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        prefs.edit().putBoolean("notification_listener_enabled", false).apply()
+    }
+
+    // ─────────────────────────────────────────────
+    // Notification handling
+    // ─────────────────────────────────────────────
+
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
-        if (sbn == null || childId == null) return
-        
-        val packageName = sbn.packageName
+        if (sbn == null) return
+
+        val packageName = sbn.packageName ?: return
         if (!MONITORED_APPS.contains(packageName)) return
-        
-        val notification = sbn.notification
-        val extras = notification.extras
-        
-        val title = extras.getString("android.title") ?: ""
-        val text = extras.getCharSequence("android.text")?.toString() ?: ""
-        
-        // Ignore "checking for new messages" and empty texts
-        if (text.isEmpty() || text.contains("Checking for new messages") || text.contains("new messages")) return
-        
-        Log.d(TAG, "Notification from $packageName: $title - $text")
-        
-        // Send to Flutter for analysis
-        sendMessageToFlutter(
-            childId = childId ?: "unknown",
-            app = packageName,
-            messageText = text,
-            senderName = title,
-            imagePaths = emptyList()
+
+        val notification = sbn.notification ?: return
+        val extras = notification.extras ?: return
+
+        // Extract title (sender or group name) and text (message content)
+        val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
+        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+
+        // Skip system / noise notifications
+        if (text.isEmpty()) return
+        if (NOISE_PHRASES.any { text.contains(it, ignoreCase = true) }) return
+
+        // Try to get WhatsApp message lines (group chat support)
+        val messageLines = extractMessageLines(extras)
+
+        // Build conversation-id from sender + app
+        val conversationId = "${packageName}_${title.hashCode()}"
+
+        Log.d(TAG, "📩 [$packageName] $title: $text")
+
+        // Send to Flutter via shared engine
+        val payload = mapOf(
+            "app"             to packageName,
+            "text"            to text,
+            "senderName"      to title,
+            "direction"       to "incoming",
+            "source"          to "notification",
+            "conversationId"  to conversationId,
+            "timestamp"       to System.currentTimeMillis(),
+            "childId"         to (childId ?: "unknown"),
+            "messageLines"    to messageLines,
         )
+
+        KovaChannelManager.send("notifications", payload)
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         // We only care about posted notifications
     }
 
-    private fun sendMessageToFlutter(
-        childId: String,
-        app: String,
-        messageText: String,
-        senderName: String?,
-        imagePaths: List<String>
-    ) {
+    // ─────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────
+
+    /**
+     * Extract individual lines from a WhatsApp MessagingStyle notification.
+     * Returns all visible message texts or an empty list.
+     */
+    private fun extractMessageLines(extras: Bundle): List<String> {
         try {
-            val intent = Intent("com.kova.notification.MESSAGE").apply {
-                putExtra("childId", childId)
-                putExtra("app", app)
-                putExtra("messageText", messageText)
-                putExtra("senderName", senderName)
-                putExtra("imagePaths", imagePaths.toTypedArray())
+            // EXTRA_TEXT_LINES contains the stacked preview lines
+            val lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)
+            if (lines != null && lines.isNotEmpty()) {
+                return lines.mapNotNull { it?.toString() }
             }
-            sendBroadcast(intent)
-            Log.d(TAG, "Notification sent to Flutter")
+
+            // MessagingStyle messages (API 24+)
+            val msgs = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
+            if (msgs != null && msgs.isNotEmpty()) {
+                return msgs.mapNotNull { bundle ->
+                    (bundle as? Bundle)?.getCharSequence("text")?.toString()
+                }
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Error sending notification to Flutter: ${e.message}")
+            Log.e(TAG, "Error extracting message lines: ${e.message}")
         }
+        return emptyList()
     }
 }

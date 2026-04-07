@@ -1,5 +1,4 @@
 // shared/services/notification_service.dart — Local push notifications
-import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationService {
@@ -42,7 +41,7 @@ class NotificationService {
       enableVibration: true,
     );
 
-    final linuxDetails = const LinuxNotificationDetails(
+    const linuxDetails = LinuxNotificationDetails(
       urgency: LinuxNotificationUrgency.normal,
     );
 
@@ -72,7 +71,7 @@ class NotificationService {
       enableVibration: true,
     );
 
-    final linuxDetails = const LinuxNotificationDetails(
+    const linuxDetails = LinuxNotificationDetails(
       urgency: LinuxNotificationUrgency.critical,
     );
 

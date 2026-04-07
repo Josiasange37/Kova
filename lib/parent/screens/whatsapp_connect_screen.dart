@@ -1,5 +1,3 @@
-// whatsapp_connect_screen.dart — KOVA Child Device Connection
-// Two modes: QR Code scan or Pairing Code — for pairing parent with child device
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -8,7 +6,9 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
-import 'dart:math';
+import 'package:kova/shared/services/network_sync_service.dart';
+import 'package:kova/shared/services/local_storage.dart';
+import 'package:uuid/uuid.dart';
 
 class WhatsappConnectScreen extends StatefulWidget {
   const WhatsappConnectScreen({super.key});
@@ -56,50 +56,26 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
     _entranceCtrl.forward();
   }
 
+  /// Assign a random code from the pre-registered pool and register with Vercel
   Future<void> _loadPairingCode() async {
-    // Get existing child's ID or create new child
     final children = await _childRepo.getAll();
+    String childId;
     if (children.isNotEmpty) {
-      final childId = children.first.id;
-      // Generate 8 deterministic codes based on child ID and pick one randomly
-      final codes = _childRepo.generatePairingCodes(childId);
-      _pairingCode = codes[Random().nextInt(codes.length)];
+      childId = children.first.id;
     } else {
-      // No child exists yet - create one first
-      final childId = await _childRepo.create('Child');
-      final codes = _childRepo.generatePairingCodes(childId);
-      _pairingCode = codes[Random().nextInt(codes.length)];
+      childId = await _childRepo.create('Child');
     }
-    setState(() {});
-  }
 
-  // Legacy methods - kept for reference but not used
-  String _generatePairingCode(String childId) {
-    // Generate consistent pairing code from child ID
-    final hash = childId.hashCode.abs();
-    final part1 = _toAlphaNumeric((hash >> 16) & 0xFFFF);
-    final part2 = _toAlphaNumeric((hash >> 8) & 0xFFFF);
-    final part3 = _toAlphaNumeric(hash & 0xFFFF);
-    return 'KOVA-$part1-$part2-$part3';
-  }
-
-  String _generateRandomPairingCode() {
-    final random = Random();
-    final part1 = _toAlphaNumeric(random.nextInt(65536));
-    final part2 = _toAlphaNumeric(random.nextInt(65536));
-    final part3 = _toAlphaNumeric(random.nextInt(65536));
-    return 'KOVA-$part1-$part2-$part3';
-  }
-
-  String _toAlphaNumeric(int value) {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    var result = '';
-    var v = value;
-    for (var i = 0; i < 4; i++) {
-      result = chars[v % 36] + result;
-      v ~/= 36;
+    // Ensure parent has a device ID
+    var deviceId = LocalStorage.getString('device_id');
+    if (deviceId.isEmpty) {
+      deviceId = const Uuid().v4();
+      await LocalStorage.setString('device_id', deviceId);
     }
-    return result.padLeft(4, '0');
+
+    // Pick a random unused code from the DB pool
+    final code = await _childRepo.assignPairingCode(childId);
+    setState(() => _pairingCode = code);
   }
 
   void _initAnimations() {
@@ -210,17 +186,51 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
 
   void _simulateConnection() async {
     setState(() => _isConnecting = true);
-    await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return;
-    setState(() {
-      _isConnecting = false;
-      _isConnected = true;
-    });
 
-    // Auto-navigate after success to success screen
-    await Future.delayed(const Duration(milliseconds: 1500));
-    if (!mounted) return;
-    context.go(AppRoutes.parentSuccess);
+    try {
+      final networkSync = NetworkSyncService();
+      final deviceId = LocalStorage.getString('device_id');
+
+      // Try to verify code via Vercel relay (if child registered online)
+      final pairToken = await networkSync.verifyPairingCode(_pairingCode);
+
+      if (pairToken != null) {
+        // Online verification succeeded — store token
+        await LocalStorage.setString('pair_token', pairToken);
+      } else {
+        // Offline — use local pair token for LAN discovery
+        final existing = LocalStorage.getString('pair_token');
+        if (existing.isEmpty) {
+          await LocalStorage.setString(
+            'pair_token',
+            'kova_pair_${_pairingCode}_$deviceId',
+          );
+        }
+      }
+
+      // Start network sync (LAN discovery + Vercel polling)
+      await networkSync.start(role: 'parent');
+
+      if (!mounted) return;
+      setState(() {
+        _isConnecting = false;
+        _isConnected = true;
+      });
+
+      // Auto-navigate after success
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (!mounted) return;
+      context.go(AppRoutes.parentSuccess);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isConnecting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Connection error: $e'),
+          backgroundColor: KovaColors.danger,
+        ),
+      );
+    }
   }
 
   @override

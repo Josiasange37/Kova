@@ -5,6 +5,8 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
+import android.view.inputmethod.InputMethodManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -12,13 +14,20 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
   private val SETUP_CHANNEL = "com.kova.child/setup"
   private val BLOCKER_CHANNEL = "com.kova.child/blocker"
-  private val ACCESSIBILITY_CHANNEL = "com.kova.child/accessibility"
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
     super.configureFlutterEngine(flutterEngine)
 
+    // ── Register the 3 monitoring channels ──
+    // KovaChannelManager is used by all native services
+    // to send data to Flutter across the 3 channels:
+    //   com.kova.child/notifications
+    //   com.kova.child/keyboard
+    //   com.kova.child/accessibility
+    KovaChannelManager.register(flutterEngine)
+
     // ── Setup Channel ──
-    // Handles child device setup (hide icon, activate device admin, etc.)
+    // Handles child device setup and service status checks
     MethodChannel(
       flutterEngine.dartExecutor.binaryMessenger,
       SETUP_CHANNEL
@@ -36,9 +45,32 @@ class MainActivity : FlutterActivity() {
           startForegroundService()
           result.success(true)
         }
+        // ── Status checks ──
         "isAccessibilityEnabled" -> {
-          val enabled = isAccessibilityServiceEnabled()
-          result.success(enabled)
+          result.success(isAccessibilityServiceEnabled())
+        }
+        "isNotificationListenerEnabled" -> {
+          result.success(isNotificationListenerEnabled())
+        }
+        "isKeyboardEnabled" -> {
+          result.success(isKovaKeyboardEnabled())
+        }
+        // ── Settings launchers ──
+        "openAccessibilitySettings" -> {
+          openAccessibilitySettings()
+          result.success(true)
+        }
+        "openNotificationListenerSettings" -> {
+          openNotificationListenerSettings()
+          result.success(true)
+        }
+        "openInputMethodSettings" -> {
+          openInputMethodSettings()
+          result.success(true)
+        }
+        "openInputMethodPicker" -> {
+          openInputMethodPicker()
+          result.success(true)
         }
         else -> result.notImplemented()
       }
@@ -67,32 +99,21 @@ class MainActivity : FlutterActivity() {
         else -> result.notImplemented()
       }
     }
-
-    // ── Accessibility Channel ──
-    // Checks accessibility service status
-    MethodChannel(
-      flutterEngine.dartExecutor.binaryMessenger,
-      ACCESSIBILITY_CHANNEL
-    ).setMethodCallHandler { call, result ->
-      when (call.method) {
-        "isEnabled" -> {
-          val enabled = isAccessibilityServiceEnabled()
-          result.success(enabled)
-        }
-        "openSettings" -> {
-          openAccessibilitySettings()
-          result.success(true)
-        }
-        else -> result.notImplemented()
-      }
-    }
   }
+
+  override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+    super.cleanUpFlutterEngine(flutterEngine)
+    KovaChannelManager.unregister()
+  }
+
+  // ═══════════════════════════════════════════════
+  // Setup actions
+  // ═══════════════════════════════════════════════
 
   /// Hide the app icon from launcher
   private fun hideAppIcon() {
     try {
-      val componentName =
-        ComponentName(this, MainActivity::class.java)
+      val componentName = ComponentName(this, MainActivity::class.java)
       packageManager.setComponentEnabledSetting(
         componentName,
         PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
@@ -135,25 +156,111 @@ class MainActivity : FlutterActivity() {
     }
   }
 
+  // ═══════════════════════════════════════════════
+  // Status checks
+  // ═══════════════════════════════════════════════
+
   /// Check if AccessibilityService is enabled
   private fun isAccessibilityServiceEnabled(): Boolean {
     return try {
-      val prefManager = getSharedPreferences("com.example.kova", 0)
-      prefManager.getBoolean("accessibility_enabled", false)
+      val service = "${packageName}/${KovaAccessibilityService::class.java.canonicalName}"
+      val enabledServices = Settings.Secure.getString(
+        contentResolver,
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+      ) ?: ""
+      enabledServices.contains(service)
     } catch (e: Exception) {
       false
     }
   }
 
+  /// Check if NotificationListener is enabled
+  private fun isNotificationListenerEnabled(): Boolean {
+    return try {
+      val enabledListeners = Settings.Secure.getString(
+        contentResolver,
+        "enabled_notification_listeners"
+      ) ?: ""
+      enabledListeners.contains(packageName)
+    } catch (e: Exception) {
+      false
+    }
+  }
+
+  /// Check if KOVA keyboard is the active IME
+  private fun isKovaKeyboardEnabled(): Boolean {
+    return try {
+      val imeId = "${packageName}/${KovaInputMethodService::class.java.canonicalName}"
+      // Check if enabled in system settings
+      val enabledImes = Settings.Secure.getString(
+        contentResolver,
+        Settings.Secure.ENABLED_INPUT_METHODS
+      ) ?: ""
+      val isEnabled = enabledImes.contains(imeId)
+
+      // Check if currently selected
+      val currentIme = Settings.Secure.getString(
+        contentResolver,
+        Settings.Secure.DEFAULT_INPUT_METHOD
+      ) ?: ""
+      val isSelected = currentIme.contains(imeId)
+
+      // Return true only if both enabled AND selected
+      isEnabled && isSelected
+    } catch (e: Exception) {
+      false
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  // Settings launchers
+  // ═══════════════════════════════════════════════
+
   /// Open accessibility settings
   private fun openAccessibilitySettings() {
     try {
-      val intent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+      startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
+
+  /// Open notification listener settings
+  private fun openNotificationListenerSettings() {
+    try {
+      val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+        Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+      } else {
+        Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+      }
       startActivity(intent)
     } catch (e: Exception) {
       e.printStackTrace()
     }
   }
+
+  /// Open input method settings (to enable KOVA keyboard)
+  private fun openInputMethodSettings() {
+    try {
+      startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
+
+  /// Show IME picker (to switch to KOVA keyboard)
+  private fun openInputMethodPicker() {
+    try {
+      val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+      imm.showInputMethodPicker()
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  // Blocker actions
+  // ═══════════════════════════════════════════════
 
   /// Show block overlay for an app
   private fun showBlockOverlay(pkg: String) {
@@ -175,71 +282,5 @@ class MainActivity : FlutterActivity() {
     } catch (e: Exception) {
       e.printStackTrace()
     }
-  }
-
-  // BroadcastReceiver to forward messages to Flutter
-  private val messageReceiver = object : android.content.BroadcastReceiver() {
-    override fun onReceive(context: android.content.Context, intent: Intent) {
-      if (intent.action == "com.kova.accessibility.MESSAGE" || intent.action == "com.kova.notification.MESSAGE") {
-        val childId = intent.getStringExtra("childId")
-        val app = intent.getStringExtra("app")
-        val messageText = intent.getStringExtra("messageText")
-        val senderName = intent.getStringExtra("senderName")
-        val imagePaths = intent.getStringArrayExtra("imagePaths")?.toList() ?: emptyList<String>()
-
-        val args = mapOf(
-          "childId" to childId,
-          "app" to app,
-          "messageText" to messageText,
-          "senderName" to senderName,
-          "imagePaths" to imagePaths
-        )
-
-        flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
-          MethodChannel(messenger, "com.kova.app/accessibility").invokeMethod("onMessage", args)
-        }
-      } else if (intent.action == "com.kova.accessibility.CONVERSATION") {
-        val childId = intent.getStringExtra("childId")
-        val app = intent.getStringExtra("app")
-        val senderName = intent.getStringExtra("senderName")
-        val messagesArray = intent.getStringArrayExtra("messages") ?: arrayOfNulls<String>(0)
-        
-        val messagesList = messagesArray.filterNotNull().map { text ->
-           mapOf("text" to text, "sender" to "unknown", "timestamp" to System.currentTimeMillis())
-        }
-
-        val args = mapOf(
-          "childId" to childId,
-          "app" to app,
-          "senderName" to senderName,
-          "messages" to messagesList
-        )
-
-        flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
-          MethodChannel(messenger, "com.kova.app/accessibility").invokeMethod("onConversation", args)
-        }
-      }
-    }
-  }
-
-  override fun onResume() {
-    super.onResume()
-    val filter = android.content.IntentFilter().apply {
-        addAction("com.kova.accessibility.MESSAGE")
-        addAction("com.kova.notification.MESSAGE")
-        addAction("com.kova.accessibility.CONVERSATION")
-    }
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        registerReceiver(messageReceiver, filter, android.content.Context.RECEIVER_NOT_EXPORTED)
-    } else {
-        registerReceiver(messageReceiver, filter)
-    }
-  }
-
-  override fun onPause() {
-    super.onPause()
-    try {
-        unregisterReceiver(messageReceiver)
-    } catch (e: Exception) {}
   }
 }

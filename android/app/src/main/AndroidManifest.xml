@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- ═══════════════════════════════════════════════ -->
     <!-- PERMISSIONS -->
-    <!-- ═════════════════════════════════════════════════ -->
+    <!-- ═══════════════════════════════════════════════ -->
     
     <!-- Device admin -->
     <uses-permission android:name="android.permission.ACCESS_DEVICE_STATE" />
@@ -29,6 +29,12 @@
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     
+    <!-- Network (LAN discovery + Vercel relay) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    
     <application
         android:label="kova"
         android:name="${applicationName}"
@@ -36,7 +42,7 @@
         
         <!-- ═══════════════════════════════════════════════ -->
         <!-- MAIN ACTIVITY -->
-        <!-- ═════════════════════════════════════════════════ -->
+        <!-- ═══════════════════════════════════════════════ -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -58,7 +64,7 @@
         
         <!-- ═══════════════════════════════════════════════ -->
         <!-- BLOCK OVERLAY ACTIVITY -->
-        <!-- ═════════════════════════════════════════════════ -->
+        <!-- ═══════════════════════════════════════════════ -->
         <activity
             android:name=".BlockOverlayActivity"
             android:exported="true"
@@ -68,8 +74,8 @@
             android:noHistory="true" />
         
         <!-- ═══════════════════════════════════════════════ -->
-        <!-- ACCESSIBILITY SERVICE -->
-        <!-- ═════════════════════════════════════════════════ -->
+        <!-- ACCESSIBILITY SERVICE (metadata only) -->
+        <!-- ═══════════════════════════════════════════════ -->
         <service
             android:name=".KovaAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
@@ -83,8 +89,8 @@
         </service>
         
         <!-- ═══════════════════════════════════════════════ -->
-        <!-- NOTIFICATION LISTENER SERVICE -->
-        <!-- ═════════════════════════════════════════════════ -->
+        <!-- NOTIFICATION LISTENER SERVICE (incoming msgs) -->
+        <!-- ═══════════════════════════════════════════════ -->
         <service
             android:name=".KovaNotificationListener"
             android:label="Kova Notification Monitor"
@@ -96,8 +102,23 @@
         </service>
         
         <!-- ═══════════════════════════════════════════════ -->
+        <!-- INPUT METHOD SERVICE (outgoing msg capture)    -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <service
+            android:name=".KovaInputMethodService"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/input_method" />
+        </service>
+        
+        <!-- ═══════════════════════════════════════════════ -->
         <!-- FOREGROUND PROTECTION SERVICE -->
-        <!-- ═════════════════════════════════════════════════ -->
+        <!-- ═══════════════════════════════════════════════ -->
         <service
             android:name=".KovaForegroundService"
             android:exported="true"
@@ -105,7 +126,7 @@
         
         <!-- ═══════════════════════════════════════════════ -->
         <!-- DEVICE ADMIN RECEIVER -->
-        <!-- ═════════════════════════════════════════════════ -->
+        <!-- ═══════════════════════════════════════════════ -->
         <receiver
             android:name=".KovaDeviceAdmin"
             android:permission="android.permission.BIND_DEVICE_ADMIN"
@@ -120,7 +141,7 @@
         
         <!-- ═══════════════════════════════════════════════ -->
         <!-- BOOT RECEIVER (survives reboot) -->
-        <!-- ═════════════════════════════════════════════════ -->
+        <!-- ═══════════════════════════════════════════════ -->
         <receiver
             android:name=".KovaBootReceiver"
             android:exported="true">
@@ -131,7 +152,7 @@
         
         <!-- ═══════════════════════════════════════════════ -->
         <!-- FLUTTER META DATA -->
-        <!-- ═════════════════════════════════════════════════ -->
+        <!-- ═══════════════════════════════════════════════ -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
@@ -139,7 +160,7 @@
     
     <!-- ═══════════════════════════════════════════════ -->
     <!-- PACKAGE QUERIES (for monitoring apps) -->
-    <!-- ═════════════════════════════════════════════════ -->
+    <!-- ═══════════════════════════════════════════════ -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
