@@ -3,10 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "postinstall": "npm install --prefix server && flutter pub get",
-    "build": "flutter build web",
-    "build:apk": "flutter build apk --release",
-    "build:ios": "flutter build ios --release --no-codesign",
+    "postinstall": "npm install --prefix server && (command -v flutter >/dev/null && flutter pub get || echo 'Flutter not found, skipping...')",
+    "build": "if command -v flutter >/dev/null; then flutter build web; else echo 'Vercel detected: Skipping Flutter build. API will be deployed.'; fi",
     "start": "npm start --prefix server",
     "dev": "npm run dev --prefix server"
   }
