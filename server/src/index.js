@@ -56,35 +56,46 @@ app.use('/api/alerts', alertsRoutes);
 app.use('/api/apps', appsRoutes);
 app.use('/api/settings', settingsRoutes);
 
-// ── Serve Frontend Apps ──
-const childAppPath = path.join(__dirname, '../../kovachild/build/web');
+// ── Serve Frontend (only if build exists locally) ──
+const fs = require('fs');
 const parentAppPath = path.join(__dirname, '../../build/web');
 
-// Serve Child App at /child
-app.use('/child', express.static(childAppPath));
-app.get('/child/*', (req, res) => {
-  res.sendFile(path.join(childAppPath, 'index.html'));
-});
-
-// Serve Parent App at /
-app.use(express.static(parentAppPath));
+if (fs.existsSync(parentAppPath)) {
+  app.use(express.static(parentAppPath));
+}
 
 // ── API 404 handler ──
 app.use('/api', (req, res) => {
   res.status(404).json({ error: `Route not found: ${req.method} ${req.path}` });
 });
 
-// ── Fallback for Parent App SPA routing ──
+// ── Root landing page ──
+app.get('/', (req, res) => {
+  res.json({
+    service: 'KOVA Backend API',
+    status: 'online',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      children: '/api/children',
+      pairing: '/api/pairing',
+      dashboard: '/api/dashboard',
+      alerts: '/api/alerts',
+      apps: '/api/apps',
+      settings: '/api/settings',
+    },
+    documentation: 'This is the KOVA child protection API. The Flutter app connects to these endpoints.',
+  });
+});
+
+// ── Catch-all for unknown routes ──
 app.get('*', (req, res) => {
-  const indexPath = path.join(parentAppPath, 'index.html');
-  if (require('fs').existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.status(404).json({ 
-      error: 'Frontend not found', 
-      message: 'The Parent App build folder is missing on this server instance.' 
-    });
-  }
+  res.status(404).json({
+    error: 'Not found',
+    message: `No route for ${req.method} ${req.path}. Use /api/* endpoints.`,
+  });
 });
 
 // ── Global error handler ──
