@@ -300,14 +300,32 @@ class KovaAccessibilityService : AccessibilityService() {
             return true
         }
 
-        // 3. Settings → App Info for our package
-        if (isSettingsPackage(packageName) && lowerClass.contains("appinfo")) {
+        // 3. Settings → App Info or Storage for our package
+        if (isSettingsPackage(packageName)) {
             val nodeText = extractNodeTexts(event.source)
             val mentionsKova = nodeText.any {
                 it.contains("kova", ignoreCase = true) ||
                 it.contains(myPackage, ignoreCase = true)
             }
-            if (mentionsKova) return true
+            
+            if (mentionsKova) {
+                // If it's explicitly the AppInfo activity
+                if (lowerClass.contains("appinfo") || lowerClass.contains("installedappdetails")) {
+                    return true
+                }
+                
+                // Or if the screen contains danger keywords (Clear Data, Storage, Uninstall, Force Stop)
+                val hasDangerKeywords = nodeText.any {
+                    val txt = it.lowercase()
+                    txt.contains("uninstall") || txt.contains("désinstaller") ||
+                    txt.contains("clear data") || txt.contains("vider les données") || txt.contains("effacer les données") ||
+                    txt.contains("storage") || txt.contains("stockage") ||
+                    txt.contains("clear cache") || txt.contains("vider le cache") ||
+                    txt.contains("force stop") || txt.contains("forcer l'arrêt")
+                }
+                
+                if (hasDangerKeywords) return true
+            }
         }
 
         return false

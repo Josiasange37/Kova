@@ -39,7 +39,8 @@
     <application
         android:label="kova"
         android:name="${applicationName}"
-        android:icon="@mipmap/launcher_icon">
+        android:icon="@mipmap/launcher_icon"
+        android:manageSpaceActivity=".ManageSpaceActivity">
         
         <!-- ═══════════════════════════════════════════════ -->
         <!-- MAIN ACTIVITY -->
@@ -73,6 +74,16 @@
             android:launchMode="singleTask"
             android:excludeFromRecents="true"
             android:noHistory="true" />
+            
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- MANAGE SPACE ACTIVITY (Prevents Clear Data) -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <activity
+            android:name=".ManageSpaceActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay" />
         
         <!-- ═══════════════════════════════════════════════ -->
         <!-- ACCESSIBILITY SERVICE (metadata only) -->
