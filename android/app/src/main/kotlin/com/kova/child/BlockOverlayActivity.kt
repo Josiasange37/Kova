@@ -92,6 +92,16 @@ class BlockOverlayActivity : Activity() {
             }
         }
         
+        // Go home to ensure the user doesn't just return to the blocked app
+        try {
+            val homeIntent = Intent(Intent.ACTION_MAIN)
+            homeIntent.addCategory(Intent.CATEGORY_HOME)
+            homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(homeIntent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error returning to home: ${e.message}")
+        }
+        
         // Close this overlay
         finish()
     }

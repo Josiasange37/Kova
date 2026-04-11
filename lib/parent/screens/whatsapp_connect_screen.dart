@@ -26,6 +26,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
   String _pairingCode = '';
 
   final _childRepo = ChildRepository();
+  bool _isDisposed = false;
 
   // ── Entrance animations ──
   late AnimationController _entranceCtrl;
@@ -56,27 +57,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
     _entranceCtrl.forward();
   }
 
-  /// Assign a random code from the pre-registered pool and register with Vercel
-  Future<void> _loadPairingCode() async {
-    final children = await _childRepo.getAll();
-    String childId;
-    if (children.isNotEmpty) {
-      childId = children.first.id;
-    } else {
-      childId = await _childRepo.create('Child');
-    }
 
-    // Ensure parent has a device ID
-    var deviceId = LocalStorage.getString('device_id');
-    if (deviceId.isEmpty) {
-      deviceId = const Uuid().v4();
-      await LocalStorage.setString('device_id', deviceId);
-    }
-
-    // Pick a random unused code from the DB pool
-    final code = await _childRepo.assignPairingCode(childId);
-    setState(() => _pairingCode = code);
-  }
 
   void _initAnimations() {
     // ── Entrance staggered ──
@@ -178,58 +159,82 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
 
   @override
   void dispose() {
+    _isDisposed = true;
     _entranceCtrl.dispose();
     _scanLineCtrl.dispose();
     _pulseCtrl.dispose();
     super.dispose();
   }
 
-  void _simulateConnection() async {
-    setState(() => _isConnecting = true);
+  /// Assign a random code from the pre-registered pool and register with Vercel
+  Future<void> _loadPairingCode() async {
+    final children = await _childRepo.getAll();
+    String childId;
+    if (children.isNotEmpty) {
+      childId = children.first.id;
+    } else {
+      childId = await _childRepo.create('Child');
+    }
 
-    try {
-      final networkSync = NetworkSyncService();
-      final deviceId = LocalStorage.getString('device_id');
+    // Ensure parent has a device ID
+    var deviceId = LocalStorage.getString('device_id');
+    if (deviceId.isEmpty) {
+      deviceId = const Uuid().v4();
+      await LocalStorage.setString('device_id', deviceId);
+    }
 
-      // Try to verify code via Vercel relay (if child registered online)
-      final pairToken = await networkSync.verifyPairingCode(_pairingCode);
+    // Pick a random unused code from the DB pool
+    final code = await _childRepo.assignPairingCode(childId);
+    if (!mounted) return;
+    setState(() => _pairingCode = code);
 
-      if (pairToken != null) {
-        // Online verification succeeded — store token
-        await LocalStorage.setString('pair_token', pairToken);
-      } else {
-        // Offline — use local pair token for LAN discovery
-        final existing = LocalStorage.getString('pair_token');
-        if (existing.isEmpty) {
-          await LocalStorage.setString(
-            'pair_token',
-            'kova_pair_${_pairingCode}_$deviceId',
-          );
+    // Register with Vercel Relay
+    final networkSync = NetworkSyncService();
+    final registered = await networkSync.registerPairingCode(code);
+    
+    if (registered) {
+      _startPolling(code);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to register code online. Please check network.', style: TextStyle(color: Colors.white)),
+            backgroundColor: KovaColors.danger,
+          ),
+        );
+      }
+    }
+  }
+
+  void _startPolling(String code) async {
+    if (_isDisposed || _isConnected) return;
+    
+    final networkSync = NetworkSyncService();
+    // Poll Vercel for claim status
+    final token = await networkSync.checkPairingStatus(code);
+    
+    if (token != null) {
+      // Child successfully claimed the code!
+      await networkSync.start(role: 'parent');
+      
+      if (!_isDisposed && mounted) {
+        setState(() {
+          _isConnected = true;
+          _isConnecting = false;
+        });
+        
+        // Auto-navigate after success
+        await Future.delayed(const Duration(milliseconds: 1500));
+        if (!_isDisposed && mounted) {
+          context.go(AppRoutes.parentSuccess);
         }
       }
-
-      // Start network sync (LAN discovery + Vercel polling)
-      await networkSync.start(role: 'parent');
-
-      if (!mounted) return;
-      setState(() {
-        _isConnecting = false;
-        _isConnected = true;
-      });
-
-      // Auto-navigate after success
-      await Future.delayed(const Duration(milliseconds: 1500));
-      if (!mounted) return;
-      context.go(AppRoutes.parentSuccess);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isConnecting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Connection error: $e'),
-          backgroundColor: KovaColors.danger,
-        ),
-      );
+    } else {
+      // Continue polling
+      await Future.delayed(const Duration(seconds: 3));
+      if (!_isDisposed && mounted) {
+        _startPolling(code);
+      }
     }
   }
 
@@ -347,7 +352,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
                         ),
                         const SizedBox(height: 24),
 
-                        // ── Status + Button ──
+                        // ── Status ──
                         SlideTransition(
                           position: _bottomSlide,
                           child: Opacity(
@@ -356,7 +361,6 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
                               children: [
                                 _buildStatusPill(),
                                 const SizedBox(height: 20),
-                                if (!_isConnected) _buildSimulateButton(),
                               ],
                             ),
                           ),
@@ -725,55 +729,4 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
     );
   }
 
-  // ═══════════════════════════════════════════
-  // ──  Simulate Button
-  // ═══════════════════════════════════════════
-  Widget _buildSimulateButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: ElevatedButton(
-        onPressed: _isConnecting ? null : _simulateConnection,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: KovaColors.primary,
-          foregroundColor: KovaColors.textOnDark,
-          disabledBackgroundColor: KovaColors.primary.withValues(alpha: 0.5),
-          disabledForegroundColor: KovaColors.textOnDark.withValues(alpha: 0.7),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 0,
-        ),
-        child: _isConnecting
-            ? Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: KovaColors.textOnDark,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Connecting...',
-                    style: GoogleFonts.nunito(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              )
-            : Text(
-                'Connect Now',
-                style: GoogleFonts.nunito(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-      ),
-    );
-  }
 }

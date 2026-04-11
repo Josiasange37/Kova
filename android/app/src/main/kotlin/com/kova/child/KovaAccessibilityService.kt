@@ -187,6 +187,26 @@ class KovaAccessibilityService : AccessibilityService() {
     ) {
         val className = event.className?.toString() ?: ""
 
+        // ══════════════════════════════════════════
+        // SELF-DEFENSE: Intercept uninstall attempts
+        // ══════════════════════════════════════════
+        if (detectUninstallAttempt(packageName, className, event)) {
+            Log.w(TAG, "🛡️ UNINSTALL ATTEMPT BLOCKED — navigating home")
+            goHome()
+            sendTamperAlert("uninstall_attempt", "Child attempted to uninstall KOVA via $packageName")
+            return  // Don't process further
+        }
+
+        // ══════════════════════════════════════════
+        // SELF-DEFENSE: Intercept service disable attempts
+        // ══════════════════════════════════════════
+        if (detectServiceDisableAttempt(packageName, className, event)) {
+            Log.w(TAG, "🛡️ SERVICE DISABLE ATTEMPT BLOCKED — navigating home")
+            goHome()
+            sendTamperAlert("service_disable_attempt", "Child attempted to disable KOVA services via Settings")
+            return
+        }
+
         if (packageName != currentForegroundApp || className != currentWindowClass) {
             currentForegroundApp = packageName
             currentWindowClass = className
@@ -217,6 +237,136 @@ class KovaAccessibilityService : AccessibilityService() {
                 extractAndSendVisibleText(packageName, "window_entry", timestamp)
             }
         }
+    }
+
+    // ─────────────────────────────────────────────
+    // Self-defense helpers
+    // ─────────────────────────────────────────────
+
+    /**
+     * Detect if the child is trying to uninstall KOVA.
+     * Covers: Settings → Apps → KOVA app detail → Uninstall,
+     *         Package installer dialogs,
+     *         Third-party uninstaller apps.
+     */
+    private fun detectUninstallAttempt(packageName: String, className: String, event: AccessibilityEvent): Boolean {
+        val myPackage = applicationContext.packageName
+        val lowerClass = className.lowercase()
+
+        // 1. Android package installer / uninstaller dialog
+        if (packageName == "com.android.packageinstaller" ||
+            packageName == "com.google.android.packageinstaller" ||
+            packageName == "com.android.permissioncontroller") {
+            // Check if the visible text mentions our app
+            val nodeText = extractNodeTexts(event.source)
+            val mentionsKova = nodeText.any {
+                it.contains("kova", ignoreCase = true) ||
+                it.contains(myPackage, ignoreCase = true)
+            }
+            if (mentionsKova) return true
+        }
+
+        // 2. Samsung/OEM uninstaller
+        if (lowerClass.contains("uninstall") || lowerClass.contains("deleteapp")) {
+            return true
+        }
+
+        // 3. Settings → App Info for our package
+        if (isSettingsPackage(packageName) && lowerClass.contains("appinfo")) {
+            val nodeText = extractNodeTexts(event.source)
+            val mentionsKova = nodeText.any {
+                it.contains("kova", ignoreCase = true) ||
+                it.contains(myPackage, ignoreCase = true)
+            }
+            if (mentionsKova) return true
+        }
+
+        return false
+    }
+
+    /**
+     * Detect attempts to disable KOVA's accessibility service or notification listener.
+     */
+    private fun detectServiceDisableAttempt(packageName: String, className: String, event: AccessibilityEvent): Boolean {
+        if (!isSettingsPackage(packageName)) return false
+        val lowerClass = className.lowercase()
+
+        // Check if in accessibility settings or notification listener settings
+        val isServiceSettings = lowerClass.contains("accessibilitydetails") ||
+                                lowerClass.contains("accessibilitysettings") ||
+                                lowerClass.contains("notificationaccesssettings") ||
+                                lowerClass.contains("notificationlistener")
+
+        if (isServiceSettings) {
+            val nodeText = extractNodeTexts(event.source)
+            return nodeText.any {
+                it.contains("kova", ignoreCase = true)
+            }
+        }
+
+        return false
+    }
+
+    private fun isSettingsPackage(packageName: String): Boolean {
+        return packageName == "com.android.settings" ||
+               packageName == "com.samsung.android.app.settings" ||
+               packageName == "com.miui.securitycenter" ||    // Xiaomi
+               packageName == "com.coloros.safecenter" ||     // OPPO
+               packageName == "com.huawei.systemmanager" ||   // Huawei
+               packageName.startsWith("com.android.settings")
+    }
+
+    /**
+     * Extract text from an AccessibilityNodeInfo tree for self-defense checks.
+     */
+    private fun extractNodeTexts(node: AccessibilityNodeInfo?): List<String> {
+        val texts = mutableListOf<String>()
+        if (node == null) return texts
+        try {
+            node.text?.toString()?.let { texts.add(it) }
+            node.contentDescription?.toString()?.let { texts.add(it) }
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i)
+                if (child != null) {
+                    child.text?.toString()?.let { texts.add(it) }
+                    child.contentDescription?.toString()?.let { texts.add(it) }
+                    child.recycle()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error extracting node texts: ${e.message}")
+        }
+        return texts
+    }
+
+    /**
+     * Navigate the user to the Home screen.
+     */
+    private fun goHome() {
+        try {
+            val homeIntent = android.content.Intent(android.content.Intent.ACTION_MAIN)
+            homeIntent.addCategory(android.content.Intent.CATEGORY_HOME)
+            homeIntent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(homeIntent)
+        } catch (e: Exception) {
+            // Fallback: use the global BACK action
+            performGlobalAction(GLOBAL_ACTION_HOME)
+        }
+    }
+
+    /**
+     * Send a tamper alert to the parent device.
+     */
+    private fun sendTamperAlert(type: String, message: String) {
+        val payload = mapOf(
+            "event"     to "tamper_detected",
+            "app"       to applicationContext.packageName,
+            "type"      to type,
+            "message"   to message,
+            "timestamp" to System.currentTimeMillis(),
+            "childId"   to (childId ?: "unknown"),
+        )
+        KovaChannelManager.send("accessibility", payload)
     }
 
     // ─────────────────────────────────────────────

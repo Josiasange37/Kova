@@ -92,35 +92,30 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen>
         await LocalStorage.setString('device_id', deviceId);
       }
 
-      // Step 1: Register code with Vercel relay (so parent can verify)
-      final registered = await networkSync.registerPairingCode(code);
+      // Claim code from Vercel relay (parent assigned it)
+      final pairToken = await networkSync.claimPairingCode(code);
 
-      // Step 2: Also verify locally against the pre-registered pool
-      final childId = await repo.verifyPairingCode(code);
+      if (pairToken != null) {
+        // Find or create child record locally
+        final children = await repo.getAll();
+        String childId;
+        if (children.isEmpty) {
+          childId = await repo.create('Connected Device');
+        } else {
+          childId = children.first.id;
+        }
 
-      if (childId != null) {
-        // Code is valid — mark linked and set child mode
+        // Code is valid online — mark linked and set child mode
         await repo.markLinked(childId);
         final success = await AppModeManager.setChildMode(childId);
 
         if (success) {
-          // If relay registration succeeded, pair token will come
-          // when parent verifies. For now, generate a local pair token
-          // that both devices will share.
-          final pairToken = LocalStorage.getString('pair_token');
-          if (pairToken.isEmpty) {
-            // Store code as temporary pair identifier until parent verifies
-            await LocalStorage.setString('pair_token', 'kova_pair_${code}_$deviceId');
-          }
-
           // Start network sync services
           await networkSync.start(role: 'child');
 
           if (mounted) {
             _showSnack(
-              registered
-                  ? 'Connected! Waiting for parent to verify online.'
-                  : 'Connected locally! Connect to internet for remote alerts.',
+              'Connected successfully!',
               isError: false,
             );
             context.go(AppRoutes.childAccessibility);
@@ -129,7 +124,7 @@ class _ParentConnectionScreenState extends State<ParentConnectionScreen>
           _showSnack('Failed to set device mode. Please try again.', isError: true);
         }
       } else if (mounted) {
-        _showSnack('Invalid or expired pairing code. Please try again.', isError: true);
+        _showSnack('Invalid pairing code or no internet connection. Please verify the code and try again.', isError: true);
       }
     } catch (e) {
       if (mounted) _showSnack('Error connecting: $e', isError: true);

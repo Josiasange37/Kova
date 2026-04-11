@@ -1,4 +1,4 @@
-// api/pair/register.js — Child device registers its pairing code
+// api/pair/register.js — Parent device registers a pairing code
 const { pairingCodes, cleanup } = require('../_store');
 
 module.exports = (req, res) => {
@@ -11,10 +11,10 @@ module.exports = (req, res) => {
 
   cleanup();
 
-  const { code, childDeviceId } = req.body || {};
+  const { code, parentDeviceId } = req.body || {};
 
-  if (!code || !childDeviceId) {
-    return res.status(400).json({ error: 'code and childDeviceId are required' });
+  if (!code || !parentDeviceId) {
+    return res.status(400).json({ error: 'code and parentDeviceId are required' });
   }
 
   if (!/^\d{6}$/.test(code)) {
@@ -23,19 +23,19 @@ module.exports = (req, res) => {
 
   // Register code (expires in 10 minutes)
   pairingCodes.set(code, {
-    childDeviceId,
-    parentDeviceId: null,
+    parentDeviceId,
+    childDeviceId: null,
     pairToken: null,
     expiresAt: Date.now() + 10 * 60 * 1000,
     registeredAt: Date.now(),
   });
 
-  console.log(`📱 Code ${code} registered by child device ${childDeviceId}`);
+  console.log(`📱 Code ${code} registered by parent device ${parentDeviceId}`);
 
   res.status(201).json({
     success: true,
     code,
     expiresIn: 600,
-    message: 'Pairing code registered. Waiting for parent to verify.',
+    message: 'Pairing code registered. Waiting for child to claim.',
   });
 };

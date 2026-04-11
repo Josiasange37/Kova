@@ -22,6 +22,13 @@ typedef MetadataCallback = void Function(
   Map<String, dynamic> data,
 );
 
+/// Callback for tamper/self-defense events
+typedef TamperCallback = void Function(
+  String type,
+  String message,
+  Map<String, dynamic> data,
+);
+
 /// Bridge that receives messages from three native Android services:
 ///
 /// Channel 1: 'com.kova.child/notifications'
@@ -56,6 +63,7 @@ class MonitoringBridge {
     String? senderName,
   )? onConversation;
   static MetadataCallback? onMetadata;
+  static TamperCallback? onTamper;
 
   static bool _initialized = false;
 
@@ -273,6 +281,16 @@ class MonitoringBridge {
           }
           break;
 
+        case 'tamper_detected':
+          // SELF-DEFENSE: child tried to uninstall, disable services, etc.
+          final type = args['type'] as String? ?? 'unknown';
+          final message = args['message'] as String? ?? '';
+          if (kDebugMode) {
+            debugPrint('🛡️ [TAMPER] $type → $message');
+          }
+          onTamper?.call(type, message, args);
+          break;
+
         default:
           // Original metadata events (window_changed, notification_posted)
           onMetadata?.call(event, app, args);
@@ -349,5 +367,6 @@ class MonitoringBridge {
     onContent = null;
     onConversation = null;
     onMetadata = null;
+    onTamper = null;
   }
 }

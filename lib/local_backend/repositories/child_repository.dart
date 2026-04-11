@@ -321,6 +321,62 @@ class ChildRepository {
     );
   }
 
+  /// Set an app as blocked or unblocked for a specific child.
+  /// This upserts the `block_enabled` flag in the `app_controls` table.
+  Future<void> setAppBlocked(String childId, String appKey, bool blocked) async {
+    final db = await _db.database;
+
+    // Check if a row already exists
+    final existing = await db.query(
+      'app_controls',
+      where: 'child_id = ? AND app_name = ?',
+      whereArgs: [childId, appKey],
+    );
+
+    if (existing.isEmpty) {
+      // Insert a new row
+      await db.insert('app_controls', {
+        'id': '${childId}_$appKey',
+        'child_id': childId,
+        'app_name': appKey,
+        'monitoring_enabled': 1,
+        'block_enabled': blocked ? 1 : 0,
+        'created_at': DateTime.now().millisecondsSinceEpoch,
+      });
+    } else {
+      // Update the existing row
+      await db.update(
+        'app_controls',
+        {'block_enabled': blocked ? 1 : 0},
+        where: 'child_id = ? AND app_name = ?',
+        whereArgs: [childId, appKey],
+      );
+    }
+  }
+
+  /// Get the set of app keys currently blocked for a child.
+  Future<Set<String>> getBlockedApps(String childId) async {
+    final db = await _db.database;
+    final rows = await db.query(
+      'app_controls',
+      columns: ['app_name'],
+      where: 'child_id = ? AND block_enabled = 1',
+      whereArgs: [childId],
+    );
+    return rows.map((r) => r['app_name'] as String).toSet();
+  }
+
+  /// Unblock all apps for a child (e.g. when parent resets)
+  Future<void> unblockAllApps(String childId) async {
+    final db = await _db.database;
+    await db.update(
+      'app_controls',
+      {'block_enabled': 0},
+      where: 'child_id = ?',
+      whereArgs: [childId],
+    );
+  }
+
   /// Update child's safety score (clamped 0-100)
   Future<int> updateScore(String id, int delta) async {
     final db = await _db.database;

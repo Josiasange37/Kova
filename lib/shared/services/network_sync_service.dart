@@ -12,6 +12,7 @@ import 'package:kova/shared/models/network_alert.dart';
 import 'package:kova/shared/services/lan_discovery_service.dart';
 import 'package:kova/shared/services/lan_data_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
+import 'package:kova/shared/services/crypto_service.dart';
 
 class NetworkSyncService {
   static final NetworkSyncService _instance = NetworkSyncService._();
@@ -32,6 +33,7 @@ class NetworkSyncService {
   String _role = 'child'; // 'parent' or 'child'
   String _pairToken = '';
   String _deviceId = '';
+  CryptoService? _cryptoService;
 
   // Streams for UI
   final _connectionStateController =
@@ -57,6 +59,9 @@ class NetworkSyncService {
     _role = role;
     _pairToken = LocalStorage.getString('pair_token');
     _deviceId = LocalStorage.getString('device_id');
+    if (_pairToken.isNotEmpty) {
+      _cryptoService = CryptoService(_pairToken);
+    }
 
     if (_pairToken.isEmpty) {
       print('⚠️ No pair token — network sync disabled');
@@ -112,7 +117,7 @@ class NetworkSyncService {
   // Pairing (Vercel-based)
   // ─────────────────────────────────────────────
 
-  /// Register a pairing code with the Vercel relay (child side)
+  /// Register a pairing code with the Vercel relay (parent side)
   Future<bool> registerPairingCode(String code) async {
     try {
       final response = await http.post(
@@ -120,12 +125,12 @@ class NetworkSyncService {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'code': code,
-          'childDeviceId': _deviceId,
+          'parentDeviceId': _deviceId,
         }),
       );
 
       if (response.statusCode == 201) {
-        print('📱 Code $code registered with relay');
+        print('📱 Code $code registered with relay by parent');
         return true;
       } else {
         print('❌ Register failed: ${response.body}');
@@ -137,15 +142,15 @@ class NetworkSyncService {
     }
   }
 
-  /// Verify a pairing code and get pair token (parent side)
-  Future<String?> verifyPairingCode(String code) async {
+  /// Claim a pairing code and get pair token (child side)
+  Future<String?> claimPairingCode(String code) async {
     try {
       final response = await http.post(
-        Uri.parse('$_relayBaseUrl/api/pair/verify'),
+        Uri.parse('$_relayBaseUrl/api/pair/claim'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'code': code,
-          'parentDeviceId': _deviceId,
+          'childDeviceId': _deviceId,
         }),
       );
 
@@ -154,17 +159,43 @@ class NetworkSyncService {
         final token = data['pairToken'] as String;
 
         // Store the pair token
-        await LocalStorage.setString('pair_token', token);
+        await LocalStorage.setPairToken(token);
         _pairToken = token;
+        _cryptoService = CryptoService(token);
 
-        print('🔗 Pairing verified via relay');
+        print('🔗 Pairing claimed via relay');
         return token;
       } else {
-        print('❌ Verify failed: ${response.body}');
+        print('❌ Claim failed: ${response.body}');
         return null;
       }
     } catch (e) {
-      print('❌ Verify error: $e');
+      print('❌ Claim error: $e');
+      return null;
+    }
+  }
+
+  /// Check pairing status manually (parent side polling)
+  Future<String?> checkPairingStatus(String code) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_relayBaseUrl/api/pair/status?code=$code'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        if (data['paired'] == true) {
+          final token = data['pairToken'] as String;
+          await LocalStorage.setPairToken(token);
+          _pairToken = token;
+          _cryptoService = CryptoService(token);
+          print('🔗 Child connected, pairing complete');
+          return token;
+        }
+      }
+      return null;
+    } catch (e) {
+      print('❌ Status check error: $e');
       return null;
     }
   }
@@ -189,15 +220,32 @@ class NetworkSyncService {
   /// Push alert summary to Vercel relay
   Future<void> _pushAlertToRelay(NetworkAlertSummary alert) async {
     if (_pairToken.isEmpty) return;
+    _cryptoService ??= CryptoService(_pairToken);
 
     try {
+      // Explicitly construct a Summary object so that we don't accidentally serialize
+      // a NetworkAlertFull object due to Dart's dynamic method dispatch on overridden toJson()
+      final summary = NetworkAlertSummary(
+        severity: alert.severity,
+        app: alert.app,
+        alertType: alert.alertType,
+        childName: alert.childName,
+        timestamp: alert.timestamp,
+      );
+      
+      final jsonStr = jsonEncode(summary.toJson());
+      final encrypted = _cryptoService!.encryptPayload(jsonStr);
+
       final response = await http.post(
         Uri.parse('$_relayBaseUrl/api/alert/push'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_pairToken',
         },
-        body: jsonEncode(alert.toJson()),
+        body: jsonEncode({
+          'encryptedData': encrypted['data'],
+          'iv': encrypted['iv']
+        }),
       );
 
       if (response.statusCode == 201) {
@@ -239,11 +287,23 @@ class NetworkSyncService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final alerts = data['alerts'] as List<dynamic>? ?? [];
 
+        _cryptoService ??= CryptoService(_pairToken);
+
         for (final alertJson in alerts) {
-          final alert = NetworkAlertSummary.fromJson(
-            alertJson as Map<String, dynamic>,
-          );
-          _alertReceivedController.add(alert);
+          final map = alertJson as Map<String, dynamic>;
+          final encryptedData = map['encryptedData'] as String? ?? '';
+          final iv = map['iv'] as String? ?? '';
+
+          final decryptedStr = _cryptoService!.decryptPayload(encryptedData, iv);
+          if (decryptedStr.isNotEmpty) {
+            try {
+              final summaryJson = jsonDecode(decryptedStr) as Map<String, dynamic>;
+              final alert = NetworkAlertSummary.fromJson(summaryJson);
+              _alertReceivedController.add(alert);
+            } catch (e) {
+              print('❌ Failed to parse decrypted Vercel alert: $e');
+            }
+          }
         }
 
         if (alerts.isNotEmpty) {
@@ -259,10 +319,14 @@ class NetworkSyncService {
   // Connection Management
   // ─────────────────────────────────────────────
 
-  void _handleConnectivityChange(ConnectivityResult result) {
-    final hasWifi = result == ConnectivityResult.wifi;
-    final hasMobile = result == ConnectivityResult.mobile;
-    final hasEthernet = result == ConnectivityResult.ethernet;
+  void _handleConnectivityChange(List<ConnectivityResult> results) {
+    if (results.isEmpty) {
+      _updateState(NetworkConnectionState.none);
+      return;
+    }
+    final hasWifi = results.contains(ConnectivityResult.wifi);
+    final hasMobile = results.contains(ConnectivityResult.mobile);
+    final hasEthernet = results.contains(ConnectivityResult.ethernet);
     final hasInternet = hasWifi || hasMobile || hasEthernet;
 
     if (hasWifi && _lanDiscovery.pairedPeer != null) {

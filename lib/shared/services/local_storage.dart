@@ -28,6 +28,21 @@ class LocalStorage {
 
   static String? getChildId() => _prefs.getString('child_id');
 
+  static Future<void> setPairToken(String token) =>
+      _prefs.setString('pair_token', token);
+
+  static String getPairToken() => _prefs.getString('pair_token') ?? '';
+
+  static Future<void> setParentDeviceId(String id) =>
+      _prefs.setString('parent_device_id', id);
+
+  static String getParentDeviceId() => _prefs.getString('parent_device_id') ?? '';
+
+  static Future<void> setChildDeviceId(String id) =>
+      _prefs.setString('child_device_id', id);
+
+  static String getChildDeviceId() => _prefs.getString('child_device_id') ?? '';
+
   /// --- Parent Settings ---
 
   static Future<void> setNotificationsEnabled(bool enabled) =>

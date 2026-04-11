@@ -1,4 +1,4 @@
-// api/pair/verify.js — Parent device verifies a pairing code
+// api/pair/claim.js — Child device claims a pairing code
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const { pairingCodes, activePairs, pendingAlerts, cleanup } = require('../_store');
@@ -15,10 +15,10 @@ module.exports = (req, res) => {
 
   cleanup();
 
-  const { code, parentDeviceId } = req.body || {};
+  const { code, childDeviceId } = req.body || {};
 
-  if (!code || !parentDeviceId) {
-    return res.status(400).json({ error: 'code and parentDeviceId are required' });
+  if (!code || !childDeviceId) {
+    return res.status(400).json({ error: 'code and childDeviceId are required' });
   }
 
   // Look up the code
@@ -38,8 +38,8 @@ module.exports = (req, res) => {
   const pairToken = jwt.sign(
     {
       pairId,
-      childDeviceId: entry.childDeviceId,
-      parentDeviceId,
+      parentDeviceId: entry.parentDeviceId,
+      childDeviceId,
       paired: true,
     },
     JWT_SECRET,
@@ -49,26 +49,25 @@ module.exports = (req, res) => {
   // Store the active pair
   activePairs.set(pairToken, {
     pairId,
-    childDeviceId: entry.childDeviceId,
-    parentDeviceId,
+    parentDeviceId: entry.parentDeviceId,
+    childDeviceId,
     pairedAt: Date.now(),
   });
 
   // Initialize alert queue for this pair
   pendingAlerts.set(pairToken, []);
 
-  // Mark code as used
-  entry.parentDeviceId = parentDeviceId;
+  // Update pairing codes entry so parent polling can see it
+  entry.childDeviceId = childDeviceId;
   entry.pairToken = pairToken;
-  pairingCodes.delete(code);
 
-  console.log(`🔗 Pair verified: ${entry.childDeviceId} ↔ ${parentDeviceId}`);
+  console.log(`🔗 Pair claimed: ${entry.parentDeviceId} ↔ ${childDeviceId}`);
 
   res.json({
     success: true,
     pairToken,
-    childDeviceId: entry.childDeviceId,
-    parentDeviceId,
+    parentDeviceId: entry.parentDeviceId,
+    childDeviceId,
     message: 'Devices paired successfully',
   });
 };

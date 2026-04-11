@@ -30,6 +30,9 @@ class DetectionOrchestrator {
   bool _active = false;
   String? _childId;
 
+  /// In-memory cache of blocked app keys — avoids DB reads on every window_changed
+  final Set<String> _blockedApps = {};
+
   /// Start detection services
   Future<void> start() async {
     if (_active) return;
@@ -43,20 +46,33 @@ class DetectionOrchestrator {
 
     _active = true;
 
-    // Set up bridge callbacks for all 3 channels
+    // Populate the blocked-app cache from the database
+    try {
+      final persisted = await _childRepo.getBlockedApps(_childId!);
+      _blockedApps.addAll(persisted);
+      if (kDebugMode && persisted.isNotEmpty) {
+        debugPrint('🔒 Loaded ${persisted.length} blocked apps from DB: $persisted');
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ Failed to load blocked apps cache: $e');
+    }
+
+    // Set up bridge callbacks for all 3 channels + tamper
     MonitoringBridge.onContent = _processContent;
     MonitoringBridge.onConversation = _processConversation;
     MonitoringBridge.onMetadata = _processMetadata;
+    MonitoringBridge.onTamper = _processTamper;
     
     // Initialize bridge (registers handlers on 3 channels)
     MonitoringBridge.init();
 
-    if (kDebugMode) debugPrint('🛡️ KOVA Detection Orchestrator: ACTIVE');
+    if (kDebugMode) debugPrint('🛡️ KOVA Detection Orchestrator: ACTIVE (${_blockedApps.length} apps blocked)');
   }
 
   /// Stop detection services
   void stop() {
     _active = false;
+    _blockedApps.clear();
     MonitoringBridge.reset();
     if (kDebugMode) debugPrint('🛑 KOVA Detection Orchestrator: STOPPED');
   }
@@ -241,7 +257,7 @@ class DetectionOrchestrator {
   }
 
   /// Process metadata from accessibility service
-  /// Tracks which apps the child navigates to
+  /// Tracks which apps the child navigates to AND enforces active blocks
   void _processMetadata(
     String event,
     String app,
@@ -249,13 +265,93 @@ class DetectionOrchestrator {
   ) {
     if (!_active) return;
 
-    // Track app navigation for context correlation
-    if (event == 'window_changed' && data['isMonitored'] == true) {
+    if (event == 'window_changed') {
+      final appKey = _normalizeAppName(app);
       final windowType = data['windowType'] as String? ?? 'other';
+
       if (kDebugMode) {
-        debugPrint('🪟 Child navigated to $app ($windowType)');
+        debugPrint('🪟 Child navigated to $appKey ($windowType)');
+      }
+
+      // ── LOCKING LOOP: If this app is in the blocked cache, re-block immediately ──
+      if (_blockedApps.contains(appKey)) {
+        if (kDebugMode) {
+          debugPrint('🔒 BLOCKED APP DETECTED: $appKey — re-triggering block overlay');
+        }
+        // Fire-and-forget: don't await to keep the metadata handler fast
+        _blockApp(appKey);
+        return;
+      }
+
+      // Also check against the raw package name for apps not yet normalized
+      final rawPkg = app.toLowerCase();
+      for (final blocked in _blockedApps) {
+        final pkg = _appKeyToPackage(blocked);
+        if (pkg != null && rawPkg == pkg) {
+          if (kDebugMode) {
+            debugPrint('🔒 BLOCKED PKG DETECTED: $rawPkg — re-triggering block overlay');
+          }
+          _blockApp(blocked);
+          return;
+        }
       }
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // Tamper detection — self-defense alerts
+  // ─────────────────────────────────────────────
+
+  /// Handle tamper events from the native watchdog / accessibility service.
+  /// These are ALWAYS critical severity — immediately alert the parent.
+  Future<void> _processTamper(
+    String type,
+    String message,
+    Map<String, dynamic> data,
+  ) async {
+    if (!_active || _childId == null) return;
+
+    if (kDebugMode) {
+      debugPrint('🛡️ TAMPER DETECTED: $type → $message');
+    }
+
+    // Map tamper type to human-readable description
+    final descriptions = {
+      'uninstall_attempt': 'Attempted to uninstall KOVA',
+      'service_disable_attempt': 'Attempted to disable KOVA services',
+      'accessibility_disabled': 'Accessibility service was disabled',
+      'notification_listener_disabled': 'Notification listener was disabled',
+      'keyboard_disabled': 'KOVA keyboard was disabled or switched',
+      'device_admin_disabled': 'Device admin was deactivated',
+    };
+
+    final description = descriptions[type] ?? message;
+
+    // 1. Store critical alert locally
+    await _alertRepo.create(
+      childId: _childId!,
+      app: 'kova_self_defense',
+      type: 'tamper_$type',
+      severity: 'critical',
+      scoreText: 1.0,
+      scoreImage: 0.0,
+      scoreGrooming: 0.0,
+    );
+
+    // 2. Push to parent immediately
+    await _pushAlertToNetwork(
+      severity: 'critical',
+      app: 'kova_self_defense',
+      alertType: 'tamper_$type',
+      aiConfidence: 1.0,
+      contentPreview: description,
+    );
+
+    // 3. Send local notification
+    NotificationService.showCriticalAlert(
+      '🛡️ Tamper Alert',
+      description,
+    );
   }
 
   /// Push alert to parent device via network (LAN or Internet)
@@ -293,52 +389,87 @@ class DetectionOrchestrator {
     }
   }
 
-  /// Block an app using native blocker
+  // ─────────────────────────────────────────────
+  // Package name mapping (shared by _blockApp & _appKeyToPackage)
+  // ─────────────────────────────────────────────
+  static const Map<String, String> _pkgMap = {
+    // Messaging
+    'whatsapp': 'com.whatsapp',
+    'whatsapp_business': 'com.whatsapp.w4b',
+    'facebook': 'com.facebook.katana',
+    'messenger': 'com.facebook.orca',
+    'messenger_lite': 'com.facebook.mlite',
+    'tiktok': 'com.zhiliaoapp.musically',
+    'instagram': 'com.instagram.android',
+    'telegram': 'org.telegram.messenger',
+    'signal': 'org.thoughtcrime.securesms',
+    'twitter': 'com.twitter.android',
+    'discord': 'com.discord',
+    'snapchat': 'com.snapchat.android',
+    'skype': 'com.skype.raider',
+    'viber': 'com.viber.voip',
+    'sms': 'com.google.android.apps.messaging',
+    'samsung_messages': 'com.samsung.android.messaging',
+    // Browsers
+    'chrome': 'com.android.chrome',
+    'firefox': 'org.mozilla.firefox',
+    'brave': 'com.brave.browser',
+    'opera': 'com.opera.browser',
+    'edge': 'com.microsoft.emmx',
+    'duckduckgo': 'com.duckduckgo.mobile.android',
+    'samsung_browser': 'com.sec.android.app.sbrowser',
+    'kiwi': 'com.kiwibrowser.browser',
+    // Search & Video
+    'youtube': 'com.google.android.youtube',
+    'google': 'com.google.android.googlequicksearchbox',
+  };
+
+  /// Resolve an app key to its Android package name
+  String? _appKeyToPackage(String appKey) => _pkgMap[appKey];
+
+  /// Block an app using native blocker, persist to DB + in-memory cache
   Future<void> _blockApp(String app) async {
     const channel = MethodChannel('com.kova.child/blocker');
-    
-    final pkgMap = {
-      // Messaging
-      'whatsapp': 'com.whatsapp',
-      'whatsapp_business': 'com.whatsapp.w4b',
-      'facebook': 'com.facebook.katana',
-      'messenger': 'com.facebook.orca',
-      'messenger_lite': 'com.facebook.mlite',
-      'tiktok': 'com.zhiliaoapp.musically',
-      'instagram': 'com.instagram.android',
-      'telegram': 'org.telegram.messenger',
-      'signal': 'org.thoughtcrime.securesms',
-      'twitter': 'com.twitter.android',
-      'discord': 'com.discord',
-      'snapchat': 'com.snapchat.android',
-      'skype': 'com.skype.raider',
-      'viber': 'com.viber.voip',
-      'sms': 'com.google.android.apps.messaging',
-      'samsung_messages': 'com.samsung.android.messaging',
-      // Browsers
-      'chrome': 'com.android.chrome',
-      'firefox': 'org.mozilla.firefox',
-      'brave': 'com.brave.browser',
-      'opera': 'com.opera.browser',
-      'edge': 'com.microsoft.emmx',
-      'duckduckgo': 'com.duckduckgo.mobile.android',
-      'samsung_browser': 'com.sec.android.app.sbrowser',
-      'kiwi': 'com.kiwibrowser.browser',
-      // Search & Video
-      'youtube': 'com.google.android.youtube',
-      'google': 'com.google.android.googlequicksearchbox',
-    };
 
-    final pkg = pkgMap[app];
+    final pkg = _pkgMap[app];
     if (pkg == null) return;
 
+    // ── 1. Add to in-memory cache immediately (instant enforcement) ──
+    _blockedApps.add(app);
+
+    // ── 2. Persist to database (survives restart) ──
+    if (_childId != null) {
+      try {
+        await _childRepo.setAppBlocked(_childId!, app, true);
+      } catch (e) {
+        if (kDebugMode) debugPrint('⚠️ Failed to persist block for $app: $e');
+      }
+    }
+
+    // ── 3. Trigger native overlay ──
     try {
       await channel.invokeMethod('blockApp', {'pkg': pkg});
-      if (kDebugMode) debugPrint('🚫 App blocked: $app');
+      if (kDebugMode) debugPrint('🚫 App blocked: $app ($pkg)');
     } catch (e) {
-      if (kDebugMode) debugPrint('❌ Failed to block app: $e');
+      if (kDebugMode) debugPrint('❌ Failed to trigger native block for $app: $e');
     }
   }
+
+  /// Unblock an app (called from parent dashboard via network sync)
+  Future<void> unblockApp(String app) async {
+    _blockedApps.remove(app);
+    if (_childId != null) {
+      try {
+        await _childRepo.setAppBlocked(_childId!, app, false);
+        if (kDebugMode) debugPrint('✅ App unblocked: $app');
+      } catch (e) {
+        if (kDebugMode) debugPrint('⚠️ Failed to persist unblock for $app: $e');
+      }
+    }
+  }
+
+  /// Check if an app is currently blocked
+  bool isAppBlocked(String app) => _blockedApps.contains(_normalizeAppName(app));
 
   /// Show alert notification to parent
   Future<void> _showAlertNotification(

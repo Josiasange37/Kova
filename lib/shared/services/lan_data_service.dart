@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:kova/shared/models/network_alert.dart';
+import 'package:kova/shared/services/crypto_service.dart';
 
 /// TCP-based direct data transfer between paired devices on LAN.
 /// Child runs the server, parent connects as client.
@@ -18,6 +19,7 @@ class LanDataService {
   Socket? _clientSocket;
   Socket? _activeConnection;
   String _pairToken = '';
+  CryptoService? _cryptoService;
 
   bool _isServerRunning = false;
   bool _isClientConnected = false;
@@ -38,6 +40,7 @@ class LanDataService {
   Future<void> startServer(String pairToken) async {
     if (_isServerRunning) return;
     _pairToken = pairToken;
+    _cryptoService = CryptoService(pairToken);
 
     try {
       _server = await ServerSocket.bind(InternetAddress.anyIPv4, _port);
@@ -109,9 +112,25 @@ class LanDataService {
           break;
 
         case 'alert':
-          // Received alert from child (parent side)
+          // Legacy unencrypted alert format (for backwards compatibility if needed, but we shouldn't really use this now)
           final alert = NetworkAlertFull.fromJson(json['data'] as Map<String, dynamic>);
           _alertReceivedController.add(alert);
+          break;
+
+        case 'encrypted_alert':
+          if (_cryptoService != null) {
+            final iv = json['iv'] as String? ?? '';
+            final encryptedData = json['data'] as String? ?? '';
+            final decryptedStr = _cryptoService!.decryptPayload(encryptedData, iv);
+            
+            if (decryptedStr.isNotEmpty) {
+              final alertJson = jsonDecode(decryptedStr) as Map<String, dynamic>;
+              final alert = NetworkAlertFull.fromJson(alertJson);
+              _alertReceivedController.add(alert);
+            } else {
+              print('❌ Failed to decrypt LAN alert');
+            }
+          }
           break;
 
         case 'ack':
@@ -133,6 +152,7 @@ class LanDataService {
   /// Connect to child device's TCP server
   Future<bool> connectToDevice(LanDeviceInfo device, String pairToken) async {
     _pairToken = pairToken;
+    _cryptoService = CryptoService(pairToken);
 
     try {
       _clientSocket = await Socket.connect(
@@ -197,11 +217,15 @@ class LanDataService {
   /// Send a full alert over LAN (child → parent)
   void sendAlert(NetworkAlertFull alert) {
     final target = _activeConnection ?? _clientSocket;
-    if (target == null) return;
+    if (target == null || _cryptoService == null) return;
+
+    final alertJsonStr = jsonEncode(alert.toJson());
+    final encrypted = _cryptoService!.encryptPayload(alertJsonStr);
 
     _sendToSocket(target, {
-      'type': 'alert',
-      'data': alert.toJson(),
+      'type': 'encrypted_alert',
+      'iv': encrypted['iv'],
+      'data': encrypted['data'],
     });
   }
 

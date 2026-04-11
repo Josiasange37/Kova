@@ -30,20 +30,17 @@ module.exports = (req, res) => {
     return res.status(403).json({ error: 'Token is not a valid pair token' });
   }
 
-  const { severity, app, alertType, timestamp, childName } = req.body || {};
+  const { encryptedData, iv } = req.body || {};
 
-  if (!severity || !app || !alertType) {
-    return res.status(400).json({ error: 'severity, app, and alertType are required' });
+  if (!encryptedData || !iv) {
+    return res.status(400).json({ error: 'encryptedData and iv are required' });
   }
 
-  // Build alert summary (NO content preview for privacy over internet)
+  // Build blind alert summary (Vercel has zero knowledge)
   const alert = {
     id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-    severity,
-    app,
-    alertType,
-    childName: childName || 'Child',
-    timestamp: timestamp || new Date().toISOString(),
+    encryptedData,
+    iv,
     receivedAt: new Date().toISOString(),
   };
 
@@ -59,7 +56,7 @@ module.exports = (req, res) => {
     queue.splice(0, queue.length - 100);
   }
 
-  console.log(`🚨 Alert pushed: ${severity} ${alertType} on ${app}`);
+  console.log(`🚨 Encrypted Alert pushed (zero knowledge)`);
 
   res.status(201).json({
     success: true,

