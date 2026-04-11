@@ -162,4 +162,23 @@ class AccessibilityService {
       debugPrint('Error hiding app icon: $e');
     }
   }
+  /// Open AutoStart settings (e.g. on MIUI, ColorOS, EMUI) to ensure persistence
+  static Future<bool> openAutoStartSettings() async {
+    try {
+      final success = await _setup.invokeMethod<bool>('openAutoStartSettings');
+      return success ?? false;
+    } catch (e) {
+      debugPrint('Error opening autostart settings: $e');
+      return false;
+    }
+  }
+
+  /// Open Battery Optimization settings to exempt the app from aggressive killing
+  static Future<void> openBatteryOptimizationSettings() async {
+    try {
+      await _setup.invokeMethod<void>('openBatteryOptimizationSettings');
+    } catch (e) {
+      debugPrint('Error opening battery optimization settings: $e');
+    }
+  }
 }

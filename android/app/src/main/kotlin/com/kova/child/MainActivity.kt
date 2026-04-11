@@ -81,6 +81,17 @@ class MainActivity : FlutterActivity() {
           openInputMethodPicker()
           result.success(true)
         }
+        "requestIgnoreBatteryOptimizations" -> {
+          requestIgnoreBatteryOptimizations()
+          result.success(true)
+        }
+        "openAutoStartSettings" -> {
+          val success = openAutoStartSettings()
+          result.success(success)
+        }
+        "getDeviceManufacturer" -> {
+          result.success(Build.MANUFACTURER ?: "unknown")
+        }
         else -> result.notImplemented()
       }
     }
@@ -268,8 +279,50 @@ class MainActivity : FlutterActivity() {
   }
 
   // ═══════════════════════════════════════════════
+  // Battery & AutoStart (OEMs)
+  // ═══════════════════════════════════════════════
+
+  private fun requestIgnoreBatteryOptimizations() {
+    try {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+        intent.data = android.net.Uri.parse("package:$packageName")
+        startActivity(intent)
+    } catch (e: Exception) {
+        // Fallback to general settings if the specific intent is restricted
+        try {
+            val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+            startActivity(fallback)
+        } catch (e2: Exception) {
+            e2.printStackTrace()
+        }
+    }
+  }
+
+  private fun openAutoStartSettings(): Boolean {
+    try {
+        val manufacturer = Build.MANUFACTURER?.lowercase() ?: return false
+        val intent = Intent()
+        when {
+            manufacturer.contains("xiaomi") -> intent.component = ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")
+            manufacturer.contains("oppo") -> intent.component = ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity")
+            manufacturer.contains("vivo") -> intent.component = ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")
+            manufacturer.contains("letv") -> intent.component = ComponentName("com.letv.android.letvsafe", "com.letv.android.letvsafe.AutobootManageActivity")
+            manufacturer.contains("honor") || manufacturer.contains("huawei") -> intent.component = ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity")
+            else -> return false // No specific autostart for this OEM
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
+        return true
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return false
+    }
+  }
+
+  // ═══════════════════════════════════════════════
   // Blocker actions
   // ═══════════════════════════════════════════════
+
 
   /// Show block overlay for an app
   private fun showBlockOverlay(pkg: String) {

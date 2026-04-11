@@ -50,6 +50,7 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
   bool _askedKeyboardSelect = false;
   bool _askedDeviceAdmin = false;
   bool _askedBatteryOptimization = false;
+  bool _askedAutoStart = false;
   bool _protectionStarted = false;
 
   Future<void> _checkPermissionStatus() async {
@@ -116,7 +117,17 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
       return; // Wait for user to allow battery optimization exception
     }
 
-    // ── Step 6: Start protection + hide icon (silent, no UI needed) ──
+    // ── Step 6: OEM AutoStart Settings ──
+    if (!_askedAutoStart && mounted) {
+      _askedAutoStart = true;
+      // We wait for it to finish because `startActivity` returns true if it opened something
+      final success = await AccessibilityService.openAutoStartSettings();
+      if (success) {
+        return; // The user has been sent to settings. They will return and resume.
+      }
+    }
+
+    // ── Step 7: Start protection + hide icon (silent, no UI needed) ──
     if (!_protectionStarted && mounted) {
       _protectionStarted = true;
       await AccessibilityService.startProtectionService();
