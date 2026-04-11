@@ -108,9 +108,46 @@ class AccessibilityService {
     }
   }
 
+  /// Default dynamic rules for known hard-to-parse UI updates
+  static String get _defaultDynamicRulesJson {
+    // Example rules for target apps that may require specific heuristics.
+    // If empty or no match, the native service uses the robust generic fallback.
+    return '''
+    [
+      {
+        "packageName": "com.whatsapp",
+        "messageContainerId": "message_text",
+        "messageTextClass": "TextView",
+        "excludeRegex": "^(Typing|Online|[0-9]{1,2}:[0-9]{2})"
+      },
+      {
+        "packageName": "com.zhiliaoapp.musically",
+        "messageContainerId": "msg_text",
+        "messageTextClass": "TextView",
+        "excludeRegex": ""
+      }
+    ]
+    ''';
+  }
+
+  /// Sync dynamic parsing rules to the native Android service
+  static Future<void> syncDynamicRules([String? rulesJson]) async {
+    try {
+      final jsonToSync = rulesJson ?? _defaultDynamicRulesJson;
+      await _setup.invokeMethod<void>('syncDynamicRules', {
+        'rulesJson': jsonToSync,
+      });
+      debugPrint('Successfully synced dynamic parsing rules');
+    } catch (e) {
+      debugPrint('Error syncing dynamic rules: $e');
+    }
+  }
+
   /// Start foreground protection service (watchdog + persistence)
   static Future<void> startProtectionService() async {
     try {
+      // Sync rules right before starting protection
+      await syncDynamicRules();
       await _setup.invokeMethod<void>('startProtection');
     } catch (e) {
       debugPrint('Error starting protection service: $e');

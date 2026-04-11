@@ -7,6 +7,9 @@ const pairingCodes = new Map();
 // Pending alerts: { pairToken: [{ severity, app, alertType, timestamp }] }
 const pendingAlerts = new Map();
 
+// Pending history: { pairToken: [{ id, url, title, timestamp }] }
+const pendingHistory = new Map();
+
 // Active pairs: { pairToken: { childDeviceId, parentDeviceId, pairedAt } }
 const activePairs = new Map();
 
@@ -20,4 +23,4 @@ function cleanup() {
   }
 }
 
-module.exports = { pairingCodes, pendingAlerts, activePairs, cleanup };
+module.exports = { pairingCodes, pendingAlerts, pendingHistory, activePairs, cleanup };

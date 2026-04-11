@@ -2,8 +2,9 @@
 // Reads from DashboardDataService. Two states: Protected (green) and Action required (red).
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:kova/shared/ui/theme.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'web_history_screen.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
@@ -260,6 +261,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                     hasAlerts: hasAlerts,
                     alertCount: alertCount,
                   ),
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // ── Extra actions ──
+              SlideTransition(
+                position: _activitySlide,
+                child: Opacity(
+                  opacity: _activityFade.value,
+                  child: _buildWebHistoryButton(),
                 ),
               ),
               const SizedBox(height: 32),

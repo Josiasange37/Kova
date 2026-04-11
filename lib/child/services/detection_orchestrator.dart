@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:kova/core/app_mode.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
+import 'package:kova/local_backend/repositories/browser_history_repository.dart';
 import 'package:kova/shared/models/network_alert.dart';
+import 'package:kova/shared/models/web_history.dart';
 import 'package:kova/shared/services/network_sync_service.dart';
 import 'package:kova/shared/services/notification_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
@@ -24,11 +26,14 @@ class DetectionOrchestrator {
 
   final ChildRepository _childRepo = ChildRepository();
   final AlertRepository _alertRepo = AlertRepository();
+  final BrowserHistoryRepository _browserRepo = BrowserHistoryRepository();
   final NetworkSyncService _networkSync = NetworkSyncService();
   final ContextDetector _contextDetector = ContextDetector();
   
   bool _active = false;
   String? _childId;
+  String? _lastUrl;
+  DateTime? _lastUrlTimestamp;
 
   /// In-memory cache of blocked app keys — avoids DB reads on every window_changed
   final Set<String> _blockedApps = {};
@@ -62,6 +67,7 @@ class DetectionOrchestrator {
     MonitoringBridge.onConversation = _processConversation;
     MonitoringBridge.onMetadata = _processMetadata;
     MonitoringBridge.onTamper = _processTamper;
+    MonitoringBridge.onBrowserContent = _processBrowserContent;
     
     // Initialize bridge (registers handlers on 3 channels)
     MonitoringBridge.init();
@@ -296,6 +302,37 @@ class DetectionOrchestrator {
         }
       }
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // Web History Logging
+  // ─────────────────────────────────────────────
+
+  Future<void> _processBrowserContent(String app, String url, String title) async {
+    if (!_active || _childId == null) return;
+    
+    // Debounce: don't log the exact same URL within 10 seconds
+    final now = DateTime.now();
+    if (_lastUrl == url && _lastUrlTimestamp != null) {
+      if (now.difference(_lastUrlTimestamp!).inSeconds < 10) {
+        return;
+      }
+    }
+    
+    _lastUrl = url;
+    _lastUrlTimestamp = now;
+
+    if (kDebugMode) {
+      debugPrint('📚 Saving to Web History: $url ($title)');
+    }
+
+    final history = WebHistory(url: url, title: title, createdAt: now);
+
+    // Save locally
+    await _browserRepo.insert(history);
+
+    // Push to relay (will be fetched by parent dashboard)
+    await _networkSync.pushHistory(history);
   }
 
   // ─────────────────────────────────────────────

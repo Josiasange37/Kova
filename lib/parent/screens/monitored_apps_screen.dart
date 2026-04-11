@@ -64,6 +64,15 @@ class _MonitoredAppsScreenState extends State<MonitoredAppsScreen>
       badgeColor: Color(0xFF7C4DFF),
       badgeIcon: Icons.auto_awesome_rounded,
     ),
+    _AppData(
+      name: 'Web Browsers',
+      subtitle: 'Incognito supported',
+      iconData: Icons.language_rounded,
+      iconColor: Color(0xFF03A9F4),
+      badgeText: 'Automatic',
+      badgeColor: Color(0xFF7C4DFF),
+      badgeIcon: Icons.auto_awesome_rounded,
+    ),
   ];
 
   @override

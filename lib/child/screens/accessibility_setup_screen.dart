@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/router.dart';
 import '../theme/kova_theme.dart';
 import '../services/accessibility_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class AccessibilitySetupScreen extends StatefulWidget {
   const AccessibilitySetupScreen({super.key});
@@ -48,24 +49,28 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
   bool _askedKeyboardEnable = false;
   bool _askedKeyboardSelect = false;
   bool _askedDeviceAdmin = false;
+  bool _askedBatteryOptimization = false;
   bool _protectionStarted = false;
 
   Future<void> _checkPermissionStatus() async {
     // ── Step 1: Accessibility Service ──
-    final isAccGranted = await AccessibilityService.isAccessibilityPermissionGranted();
-    
+    final isAccGranted =
+        await AccessibilityService.isAccessibilityPermissionGranted();
+
     if (!isAccGranted) {
       return; // Keep waiting for accessibility
     }
 
     // ── Step 2: Notification Listener ──
-    final isNotifGranted = await AccessibilityService.isNotificationListenerEnabled();
-    
+    final isNotifGranted =
+        await AccessibilityService.isNotificationListenerEnabled();
+
     if (!isNotifGranted) {
       if (!_askedNotification && mounted) {
         _askedNotification = true;
         Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) AccessibilityService.requestNotificationListenerPermission();
+          if (mounted)
+            AccessibilityService.requestNotificationListenerPermission();
         });
       }
       return; // Keep waiting for notification access
@@ -98,7 +103,20 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
       return; // Wait for user to confirm device admin prompt
     }
 
-    // ── Step 5: Start protection + hide icon (silent, no UI needed) ──
+    // ── Step 5: Battery Optimization (Doze Mode) ──
+    final isBatteryOptimizationIgnored =
+        await Permission.ignoreBatteryOptimizations.isGranted;
+    if (!isBatteryOptimizationIgnored) {
+      if (!_askedBatteryOptimization && mounted) {
+        _askedBatteryOptimization = true;
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) Permission.ignoreBatteryOptimizations.request();
+        });
+      }
+      return; // Wait for user to allow battery optimization exception
+    }
+
+    // ── Step 6: Start protection + hide icon (silent, no UI needed) ──
     if (!_protectionStarted && mounted) {
       _protectionStarted = true;
       await AccessibilityService.startProtectionService();
@@ -115,8 +133,8 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
     setState(() => _isChecking = true);
     await AccessibilityService.requestAccessibilityPermission();
     setState(() => _isChecking = false);
-    
-    // In debug mode, if you need to bypass because the native service 
+
+    // In debug mode, if you need to bypass because the native service
     // is not fully compiled in the emulator, uncomment the following:
     // await Future.delayed(const Duration(seconds: 1));
     // if (mounted) context.go(AppRoutes.childMonitoredApps);

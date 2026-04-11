@@ -28,6 +28,13 @@ import android.view.accessibility.AccessibilityNodeInfo
  * Sends data to Flutter via KovaChannelManager on the
  * 'accessibility' channel with different event types.
  */
+data class AppParsingRule(
+    val packageName: String,
+    val messageContainerId: String,
+    val messageTextClass: String,
+    val excludeRegex: String
+)
+
 class KovaAccessibilityService : AccessibilityService() {
 
     companion object {
@@ -91,6 +98,28 @@ class KovaAccessibilityService : AccessibilityService() {
         private const val DEBOUNCE_MS = 400L
         private const val TEXT_DEBOUNCE_MS = 1500L  // Longer debounce for text extraction
         private const val MAX_TEXT_LENGTH = 2000     // Limit extracted text size
+
+        private var dynamicRules: List<AppParsingRule> = emptyList()
+
+        fun updateRules(jsonString: String) {
+            try {
+                val array = org.json.JSONArray(jsonString)
+                val newRules = mutableListOf<AppParsingRule>()
+                for (i in 0 until array.length()) {
+                    val obj = array.getJSONObject(i)
+                    newRules.add(AppParsingRule(
+                        packageName = obj.optString("packageName", ""),
+                        messageContainerId = obj.optString("messageContainerId", ""),
+                        messageTextClass = obj.optString("messageTextClass", "TextView"),
+                        excludeRegex = obj.optString("excludeRegex", "")
+                    ))
+                }
+                dynamicRules = newRules
+                Log.d(TAG, "Applied ${newRules.size} dynamic rules")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse dynamic rules: ${e.message}")
+            }
+        }
     }
 
     private var childId: String? = null
@@ -525,7 +554,7 @@ class KovaAccessibilityService : AccessibilityService() {
         trigger: String,
         timestamp: Long
     ) {
-        val chatMessages = collectChatMessages(rootNode)
+        val chatMessages = collectChatMessages(rootNode, packageName)
         val visibleText = collectVisibleText(rootNode, maxDepth = 10, maxChars = MAX_TEXT_LENGTH)
 
         // Skip if same content
@@ -631,7 +660,7 @@ class KovaAccessibilityService : AccessibilityService() {
      * Extract individual chat messages from a messaging app.
      * Looks for list-like structures with text views.
      */
-    private fun collectChatMessages(node: AccessibilityNodeInfo, depth: Int = 0): List<Map<String, String>> {
+    private fun collectChatMessages(node: AccessibilityNodeInfo, packageName: String, depth: Int = 0): List<Map<String, String>> {
         if (depth > 12) return emptyList()
 
         val messages = mutableListOf<Map<String, String>>()
@@ -640,14 +669,32 @@ class KovaAccessibilityService : AccessibilityService() {
         val className = node.className?.toString() ?: ""
         val viewId = node.viewIdResourceName ?: ""
 
-        // Detect message-like text views
-        val isMessageView = className.contains("TextView") &&
-            text.length > 3 &&
-            !text.startsWith("WhatsApp") &&
-            !text.startsWith("Chat") &&
-            !text.contains("online") &&
-            !text.contains("typing") &&
-            !text.matches(Regex("^\\d{1,2}:\\d{2}.*"))  // Skip timestamps
+        val rule = dynamicRules.find { it.packageName == packageName }
+
+        var isMessageView = false
+        if (rule != null && (rule.messageContainerId.isNotBlank() || rule.excludeRegex.isNotBlank() || rule.messageTextClass.isNotBlank())) {
+            // Apply dynamic rule
+            val matchesClass = rule.messageTextClass.isBlank() || className.contains(rule.messageTextClass, ignoreCase = true)
+            val matchesId = rule.messageContainerId.isBlank() || viewId.contains(rule.messageContainerId, ignoreCase = true)
+            var isExcluded = false
+            if (rule.excludeRegex.isNotBlank()) {
+                try {
+                    isExcluded = Regex(rule.excludeRegex, RegexOption.IGNORE_CASE).containsMatchIn(text)
+                } catch (e: Exception) {
+                   // Invalid regex, fail safe
+                }
+            }
+            isMessageView = matchesClass && matchesId && !isExcluded && text.length > 1
+        } else {
+            // Fallback to strict generic heuristics
+            isMessageView = className.contains("TextView") &&
+                text.length > 3 &&
+                !text.startsWith("WhatsApp") &&
+                !text.startsWith("Chat") &&
+                !text.contains("online") &&
+                !text.contains("typing") &&
+                !text.matches(Regex("^\\d{1,2}:\\d{2}.*"))  // Skip timestamps
+        }
 
         if (isMessageView) {
             messages.add(mapOf(
@@ -660,7 +707,7 @@ class KovaAccessibilityService : AccessibilityService() {
         for (i in 0 until node.childCount) {
             try {
                 val child = node.getChild(i) ?: continue
-                messages.addAll(collectChatMessages(child, depth + 1))
+                messages.addAll(collectChatMessages(child, packageName, depth + 1))
                 child.recycle()
             } catch (e: Exception) {
                 // Skip

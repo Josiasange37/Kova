@@ -23,6 +23,7 @@ class _MonitoredAppsScreenState extends State<MonitoredAppsScreen> {
     'instagram': const _AppMeta('Instagram', 'com.instagram.android'),
     'sms': const _AppMeta('SMS', 'com.google.android.apps.messaging'),
     'snapchat': const _AppMeta('Snapchat', 'com.snapchat.android'),
+    'web_browsers': const _AppMeta('Web Browsers', 'com.android.chrome'),
   };
 
   @override
@@ -214,6 +215,8 @@ class _MonitoredAppsScreenState extends State<MonitoredAppsScreen> {
         return const Icon(Icons.message_outlined, color: Color(0xFF4B5563));
       case 'snapchat':
         return const Icon(Icons.chat, color: Color(0xFFFFFC00));
+      case 'web browsers':
+        return const Icon(Icons.language_outlined, color: Color(0xFF03A9F4));
       default:
         return const Icon(Icons.apps);
     }

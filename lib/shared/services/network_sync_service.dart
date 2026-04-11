@@ -9,6 +9,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:kova/shared/models/network_alert.dart';
+import 'package:kova/shared/models/web_history.dart';
 import 'package:kova/shared/services/lan_discovery_service.dart';
 import 'package:kova/shared/services/lan_data_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
@@ -40,11 +41,15 @@ class NetworkSyncService {
       StreamController<NetworkConnectionState>.broadcast();
   final _alertReceivedController =
       StreamController<NetworkAlertSummary>.broadcast();
+  final _historyReceivedController =
+      StreamController<WebHistory>.broadcast();
 
   Stream<NetworkConnectionState> get onConnectionStateChanged =>
       _connectionStateController.stream;
   Stream<NetworkAlertSummary> get onAlertReceived =>
       _alertReceivedController.stream;
+  Stream<WebHistory> get onHistoryReceived =>
+      _historyReceivedController.stream;
 
   NetworkConnectionState get connectionState => _connectionState;
   bool get isConnected => _connectionState != NetworkConnectionState.none;
@@ -254,7 +259,85 @@ class NetworkSyncService {
         print('❌ Alert push failed: ${response.body}');
       }
     } catch (e) {
-      print('❌ Alert push error: $e');
+      print('❌ Alert poll error: $e');
+    }
+  }
+
+  Future<void> _pollHistory() async {
+    if (_pairToken.isEmpty) return;
+    if (_connectionState == NetworkConnectionState.lan) return; // Wait, we might want LAN later
+
+    try {
+      final response = await http.get(
+        Uri.parse('$_relayBaseUrl/api/history/poll'),
+        headers: {
+          'Authorization': 'Bearer $_pairToken',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final historyList = data['history'] as List<dynamic>? ?? [];
+
+        _cryptoService ??= CryptoService(_pairToken);
+
+        for (final item in historyList) {
+          final map = item as Map<String, dynamic>;
+          final encryptedData = map['encryptedData'] as String? ?? '';
+          final iv = map['iv'] as String? ?? '';
+
+          final decryptedStr = _cryptoService!.decryptPayload(encryptedData, iv);
+          if (decryptedStr.isNotEmpty) {
+            try {
+              final historyJson = jsonDecode(decryptedStr) as Map<String, dynamic>;
+              final webHistory = WebHistory.fromJson(historyJson);
+              _historyReceivedController.add(webHistory);
+              print('📥 Received web history via relay: ${webHistory.url}');
+            } catch (e) {
+              print('❌ Failed to parse decrypted history: $e');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('❌ History poll error: $e');
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Web History Pushing (child side)
+  // ─────────────────────────────────────────────
+
+  Future<void> pushHistory(WebHistory history) async {
+    // We only push history to Vercel Relay for MVP, 
+    // unless LAN data allows it. LAN is skipped for history right now, 
+    // but could be added later.
+    if (_pairToken.isEmpty) return;
+    _cryptoService ??= CryptoService(_pairToken);
+
+    try {
+      final jsonStr = jsonEncode(history.toJson());
+      final encrypted = _cryptoService!.encryptPayload(jsonStr);
+
+      final response = await http.post(
+        Uri.parse('$_relayBaseUrl/api/history/push'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_pairToken',
+        },
+        body: jsonEncode({
+          'encryptedData': encrypted['data'],
+          'iv': encrypted['iv']
+        }),
+      );
+
+      if (response.statusCode == 201) {
+        print('📤 History pushed to relay');
+      } else {
+        print('❌ History push failed: ${response.body}');
+      }
+    } catch (e) {
+      print('❌ History push error: $e');
     }
   }
 
@@ -264,9 +347,13 @@ class NetworkSyncService {
 
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) => _pollAlerts());
+    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _pollAlerts();
+      _pollHistory();
+    });
     // Immediate first poll
     _pollAlerts();
+    _pollHistory();
   }
 
   Future<void> _pollAlerts() async {

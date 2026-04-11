@@ -57,7 +57,8 @@ class MonitoringBridge {
 
   // ── Callbacks ──
   static ContentCallback? onContent;
-  static Function(
+  static void Function(String app, String url, String title)? onBrowserContent;
+  static void Function(
     String app,
     List<Map<String, dynamic>> messages,
     String? senderName,
@@ -252,6 +253,9 @@ class MonitoringBridge {
             final mode = isIncognito ? 'INCOGNITO' : 'NORMAL';
             if (kDebugMode) {
               debugPrint('🌐 [BROWSER_$mode] $app → $url');
+            }
+            if (url.isNotEmpty) {
+              onBrowserContent?.call(app, url, pageTitle);
             }
             onContent?.call(app, combinedText, 'accessibility_tree', 'browsing', conversationId, null);
           }

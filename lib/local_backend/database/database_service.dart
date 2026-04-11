@@ -28,8 +28,20 @@ class DatabaseService {
     final path = join(dbPath, 'kova_local.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createTables,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS web_history (
+              id              TEXT PRIMARY KEY,
+              url             TEXT NOT NULL,
+              title           TEXT NOT NULL,
+              created_at      INTEGER DEFAULT (strftime('%s','now'))
+            )
+          ''');
+        }
+      },
     );
   }
 
@@ -95,6 +107,17 @@ class DatabaseService {
         score_after     INTEGER NOT NULL,
         created_at      INTEGER DEFAULT (strftime('%s','now')),
         FOREIGN KEY(child_id) REFERENCES children(id)
+      )
+    ''');
+
+    // ── Web History Table ──
+    // Logs browser navigation
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS web_history (
+        id              TEXT PRIMARY KEY,
+        url             TEXT NOT NULL,
+        title           TEXT NOT NULL,
+        created_at      INTEGER DEFAULT (strftime('%s','now'))
       )
     ''');
 

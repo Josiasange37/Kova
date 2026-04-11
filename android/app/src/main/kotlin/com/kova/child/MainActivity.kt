@@ -45,6 +45,15 @@ class MainActivity : FlutterActivity() {
           startForegroundService()
           result.success(true)
         }
+        "syncDynamicRules" -> {
+          val rulesJson = call.argument<String>("rulesJson")
+          if (rulesJson != null) {
+            KovaAccessibilityService.updateRules(rulesJson)
+            result.success(true)
+          } else {
+            result.error("INVALID_ARGS", "rulesJson is null", null)
+          }
+        }
         // ── Status checks ──
         "isAccessibilityEnabled" -> {
           result.success(isAccessibilityServiceEnabled())
