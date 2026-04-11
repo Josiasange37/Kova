@@ -30,7 +30,7 @@ module.exports = (req, res) => {
     return res.status(403).json({ error: 'Token is not a valid pair token' });
   }
 
-  const { encryptedData, iv } = req.body || {};
+  const { encryptedData, iv, id } = req.body || {};
 
   if (!encryptedData || !iv) {
     return res.status(400).json({ error: 'encryptedData and iv are required' });
@@ -38,7 +38,7 @@ module.exports = (req, res) => {
 
   // Build blind alert summary (Vercel has zero knowledge)
   const alert = {
-    id: `alert_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+    id: id || `alert_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
     encryptedData,
     iv,
     receivedAt: new Date().toISOString(),

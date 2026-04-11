@@ -9,9 +9,11 @@ import 'package:kova/local_backend/repositories/alert_repository.dart';
 import 'package:kova/local_backend/repositories/browser_history_repository.dart';
 import 'package:kova/shared/models/network_alert.dart';
 import 'package:kova/shared/models/web_history.dart';
-import 'package:kova/shared/services/network_sync_service.dart';
+import 'dart:convert';
 import 'package:kova/shared/services/notification_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
+import 'package:kova/local_backend/repositories/pending_sync_repository.dart';
+import 'package:kova/shared/models/pending_sync.dart';
 
 import 'text_analyzer.dart';
 import 'context_detector.dart';
@@ -28,6 +30,7 @@ class DetectionOrchestrator {
   final AlertRepository _alertRepo = AlertRepository();
   final BrowserHistoryRepository _browserRepo = BrowserHistoryRepository();
   final NetworkSyncService _networkSync = NetworkSyncService();
+  final PendingSyncRepository _pendingSyncRepo = PendingSyncRepository();
   final ContextDetector _contextDetector = ContextDetector();
   
   bool _active = false;
@@ -331,8 +334,13 @@ class DetectionOrchestrator {
     // Save locally
     await _browserRepo.insert(history);
 
-    // Push to relay (will be fetched by parent dashboard)
-    await _networkSync.pushHistory(history);
+    // Queue for sync instead of pushing directly
+    final pendingItem = PendingSync(
+      id: 'hist_${now.millisecondsSinceEpoch}',
+      type: 'history',
+      payload: jsonEncode(history.toJson()),
+    );
+    await _pendingSyncRepo.insert(pendingItem);
   }
 
   // ─────────────────────────────────────────────
@@ -418,9 +426,22 @@ class DetectionOrchestrator {
         scoreDelta: scoreDelta,
       );
 
-      await _networkSync.pushAlert(alert);
+      // We explicitly construct Summary here just in case, but really
+      // NetworkSyncService used to do this. We'll just serialize it as NetworkAlertSummary
+      // to the queue so it takes less space and is ready for Vercel.
+      // Wait, LAN might want full data. 
+      // If we put full data in the queue, NetworkSyncService can downcast it when sending to Vercel.
+      final pendingItem = PendingSync(
+        id: 'alert_${DateTime.now().millisecondsSinceEpoch}',
+        type: 'alert',
+        payload: jsonEncode(alert.toJson()),
+      );
+      await _pendingSyncRepo.insert(pendingItem);
 
-      if (kDebugMode) debugPrint('📤 Alert pushed to parent network');
+      // Trigger sync manually (optional, or let periodic loop handle)
+      _networkSync.triggerSyncLoop();
+
+      if (kDebugMode) debugPrint('📤 Alert queued for network push');
     } catch (e) {
       if (kDebugMode) debugPrint('⚠️ Network push failed (local alert saved): $e');
     }

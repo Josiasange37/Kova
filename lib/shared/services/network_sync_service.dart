@@ -14,6 +14,8 @@ import 'package:kova/shared/services/lan_discovery_service.dart';
 import 'package:kova/shared/services/lan_data_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/shared/services/crypto_service.dart';
+import 'package:kova/local_backend/repositories/pending_sync_repository.dart';
+import 'package:kova/shared/models/pending_sync.dart';
 
 class NetworkSyncService {
   static final NetworkSyncService _instance = NetworkSyncService._();
@@ -25,8 +27,10 @@ class NetworkSyncService {
 
   final _lanDiscovery = LanDiscoveryService();
   final _lanData = LanDataService();
+  final _pendingSyncRepo = PendingSyncRepository();
 
   Timer? _pollTimer;
+  Timer? _syncTimer;
   StreamSubscription? _connectivitySub;
   StreamSubscription? _deviceFoundSub;
 
@@ -35,6 +39,7 @@ class NetworkSyncService {
   String _pairToken = '';
   String _deviceId = '';
   CryptoService? _cryptoService;
+  bool _isSyncing = false;
 
   // Streams for UI
   final _connectionStateController =
@@ -92,6 +97,8 @@ class NetworkSyncService {
     // If parent, start polling Vercel relay
     if (role == 'parent') {
       _startPolling();
+    } else {
+      _startSyncLoop();
     }
 
     // Listen for LAN alerts (both roles)
@@ -109,6 +116,7 @@ class NetworkSyncService {
   /// Stop the network sync service
   void stop() {
     _pollTimer?.cancel();
+    _syncTimer?.cancel();
     _connectivitySub?.cancel();
     _deviceFoundSub?.cancel();
     _lanDiscovery.stop();
@@ -210,20 +218,23 @@ class NetworkSyncService {
   // ─────────────────────────────────────────────
 
   /// Push an alert — uses LAN if available, falls back to Vercel relay
-  Future<void> pushAlert(NetworkAlertFull alert) async {
+  Future<void> pushAlert(NetworkAlertFull alert, [String? itemId]) async {
     // Try LAN first (full data)
     if (_lanData.isConnected) {
       _lanData.sendAlert(alert);
       print('📤 Alert sent via LAN (full data)');
+      if (itemId != null) {
+        await _pendingSyncRepo.deleteList([itemId]);
+      }
       return;
     }
 
     // Fallback to Vercel relay (summary only)
-    await _pushAlertToRelay(alert);
+    await _pushAlertToRelay(alert, itemId);
   }
 
   /// Push alert summary to Vercel relay
-  Future<void> _pushAlertToRelay(NetworkAlertSummary alert) async {
+  Future<void> _pushAlertToRelay(NetworkAlertSummary alert, [String? itemId]) async {
     if (_pairToken.isEmpty) return;
     _cryptoService ??= CryptoService(_pairToken);
 
@@ -249,7 +260,8 @@ class NetworkSyncService {
         },
         body: jsonEncode({
           'encryptedData': encrypted['data'],
-          'iv': encrypted['iv']
+          'iv': encrypted['iv'],
+          'id': itemId
         }),
       );
 
@@ -293,6 +305,10 @@ class NetworkSyncService {
               final webHistory = WebHistory.fromJson(historyJson);
               _historyReceivedController.add(webHistory);
               print('📥 Received web history via relay: ${webHistory.url}');
+              
+              if (map['id'] != null) {
+                _pushAcks([map['id'] as String]);
+              }
             } catch (e) {
               print('❌ Failed to parse decrypted history: $e');
             }
@@ -308,7 +324,7 @@ class NetworkSyncService {
   // Web History Pushing (child side)
   // ─────────────────────────────────────────────
 
-  Future<void> pushHistory(WebHistory history) async {
+  Future<void> pushHistory(WebHistory history, [String? itemId]) async {
     // We only push history to Vercel Relay for MVP, 
     // unless LAN data allows it. LAN is skipped for history right now, 
     // but could be added later.
@@ -327,7 +343,8 @@ class NetworkSyncService {
         },
         body: jsonEncode({
           'encryptedData': encrypted['data'],
-          'iv': encrypted['iv']
+          'iv': encrypted['iv'],
+          'id': itemId
         }),
       );
 
@@ -354,6 +371,91 @@ class NetworkSyncService {
     // Immediate first poll
     _pollAlerts();
     _pollHistory();
+  }
+
+  void _startSyncLoop() {
+    _syncTimer?.cancel();
+    _syncTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      _syncLoop();
+      _pollAcks();
+    });
+    _syncLoop();
+    _pollAcks();
+  }
+
+  void triggerSyncLoop() {
+    if (_role == 'child') {
+      _syncLoop();
+    }
+  }
+
+  Future<void> _syncLoop() async {
+    if (_role != 'child' || _pairToken.isEmpty) return;
+    if (_isSyncing) return;
+    _isSyncing = true;
+
+    try {
+      final items = await _pendingSyncRepo.getAll();
+      if (items.isEmpty) return;
+
+      for (var item in items) {
+        if (item.type == 'alert') {
+          final alert = NetworkAlertFull.fromJson(jsonDecode(item.payload));
+          await pushAlert(alert, item.id);
+        } else if (item.type == 'history') {
+          final history = WebHistory.fromJson(jsonDecode(item.payload));
+          await pushHistory(history, item.id);
+        }
+      }
+    } catch (e) {
+      print('❌ Sync loop error: $e');
+    } finally {
+      _isSyncing = false;
+    }
+  }
+
+  Future<void> _pollAcks() async {
+    if (_role != 'child' || _pairToken.isEmpty) return;
+
+    try {
+      final response = await http.get(
+        Uri.parse('$_relayBaseUrl/api/ack/poll'),
+        headers: {
+          'Authorization': 'Bearer $_pairToken',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final acks = List<String>.from(data['acks'] ?? []);
+        
+        if (acks.isNotEmpty) {
+          print('✅ Polled ACKs for ${acks.length} items. Deleting from queue.');
+          await _pendingSyncRepo.deleteList(acks);
+        }
+      }
+    } catch (e) {
+      // Ignored
+    }
+  }
+
+  Future<void> _pushAcks(List<String> ids) async {
+    if (_role != 'parent' || _pairToken.isEmpty || ids.isEmpty) return;
+
+    try {
+      await http.post(
+        Uri.parse('$_relayBaseUrl/api/ack/push'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_pairToken',
+        },
+        body: jsonEncode({
+          'ids': ids,
+        }),
+      );
+    } catch (e) {
+      // Ignored
+    }
   }
 
   Future<void> _pollAlerts() async {
@@ -387,6 +489,10 @@ class NetworkSyncService {
               final summaryJson = jsonDecode(decryptedStr) as Map<String, dynamic>;
               final alert = NetworkAlertSummary.fromJson(summaryJson);
               _alertReceivedController.add(alert);
+              
+              if (map['id'] != null) {
+                _pushAcks([map['id'] as String]);
+              }
             } catch (e) {
               print('❌ Failed to parse decrypted Vercel alert: $e');
             }
