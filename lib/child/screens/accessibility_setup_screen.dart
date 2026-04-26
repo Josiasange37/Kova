@@ -70,8 +70,9 @@ class _AccessibilitySetupScreenState extends State<AccessibilitySetupScreen>
       if (!_askedNotification && mounted) {
         _askedNotification = true;
         Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted)
+          if (mounted) {
             AccessibilityService.requestNotificationListenerPermission();
+          }
         });
       }
       return; // Keep waiting for notification access

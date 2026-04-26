@@ -14,6 +14,7 @@ import 'package:kova/shared/services/notification_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/local_backend/repositories/pending_sync_repository.dart';
 import 'package:kova/shared/models/pending_sync.dart';
+import 'package:kova/shared/services/network_sync_service.dart';
 
 import 'text_analyzer.dart';
 import 'context_detector.dart';

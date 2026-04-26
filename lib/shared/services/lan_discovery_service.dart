@@ -30,6 +30,11 @@ class LanDiscoveryService {
   String _role = 'child'; // 'parent' or 'child'
   String _deviceId = '';
   String _pairToken = '';
+  String? _activePairCode;
+
+  void setActivePairCode(String code) {
+    _activePairCode = code;
+  }
 
   Stream<LanDeviceInfo> get onDeviceFound => _deviceFoundController.stream;
   Stream<String> get onDeviceLost => _deviceLostController.stream;
@@ -42,6 +47,26 @@ class LanDiscoveryService {
     final expectedRole = _role == 'parent' ? 'child' : 'parent';
     for (final device in _discoveredDevices.values) {
       if (device.role == expectedRole && device.pairToken == _pairToken) {
+        return device;
+      }
+    }
+    return null;
+  }
+
+  /// Get a peer device by its pairing code (used by child during initial pairing)
+  LanDeviceInfo? findPeerByCode(String code) {
+    for (final device in _discoveredDevices.values) {
+      if (device.role == 'parent' && device.pairCode == code) {
+        return device;
+      }
+    }
+    return null;
+  }
+
+  /// Get a child device by the pairing code it claimed (used by parent during initial pairing)
+  LanDeviceInfo? findChildByCode(String code) {
+    for (final device in _discoveredDevices.values) {
+      if (device.role == 'child' && device.pairCode == code) {
         return device;
       }
     }
@@ -125,6 +150,7 @@ class LanDiscoveryService {
       'role': _role,
       'port': _dataPort,
       'pairToken': _pairToken,
+      'pairCode': _activePairCode,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     });
 
@@ -154,7 +180,9 @@ class LanDiscoveryService {
       final device = LanDeviceInfo.fromJson(json, datagram.address.address);
 
       // Only accept paired devices (same pairToken)
-      if (device.pairToken != _pairToken) return;
+      // EXCEPT when we are unconfigured (empty pairToken), then we accept parents
+      // broadcasting their pairCode so we can discover them during pairing!
+      if (_pairToken.isNotEmpty && device.pairToken != _pairToken) return;
 
       // Only accept the opposite role
       final expectedRole = _role == 'parent' ? 'child' : 'parent';

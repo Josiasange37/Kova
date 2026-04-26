@@ -7,6 +7,7 @@ import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 
 import 'package:kova/shared/models/network_alert.dart';
 import 'package:kova/shared/models/web_history.dart';
@@ -15,7 +16,6 @@ import 'package:kova/shared/services/lan_data_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/shared/services/crypto_service.dart';
 import 'package:kova/local_backend/repositories/pending_sync_repository.dart';
-import 'package:kova/shared/models/pending_sync.dart';
 
 class NetworkSyncService {
   static final NetworkSyncService _instance = NetworkSyncService._();
@@ -23,7 +23,8 @@ class NetworkSyncService {
   NetworkSyncService._();
 
   // Vercel relay base URL — update after deployment
-  static const String _relayBaseUrl = 'https://kova-relay.vercel.app';
+  // static const String _relayBaseUrl = 'https://kova-relay.vercel.app';
+  static const String _relayBaseUrl = 'http://192.168.1.196:3000';
 
   final _lanDiscovery = LanDiscoveryService();
   final _lanData = LanDataService();
@@ -132,6 +133,7 @@ class NetworkSyncService {
 
   /// Register a pairing code with the Vercel relay (parent side)
   Future<bool> registerPairingCode(String code) async {
+    _lanDiscovery.setActivePairCode(code); // For offline LAN discovery
     try {
       final response = await http.post(
         Uri.parse('$_relayBaseUrl/api/pair/register'),
@@ -147,16 +149,51 @@ class NetworkSyncService {
         return true;
       } else {
         print('❌ Register failed: ${response.body}');
-        return false;
+        return true; // Allow offline pairing fallback
       }
     } catch (e) {
       print('❌ Register error: $e');
-      return false;
+      return true; // Allow offline pairing fallback
     }
   }
 
   /// Claim a pairing code and get pair token (child side)
   Future<String?> claimPairingCode(String code) async {
+    // 1. Try local LAN discovery first
+    if (!_lanDiscovery.isRunning) {
+      if (_deviceId.isEmpty) {
+        _deviceId = LocalStorage.getString('device_id');
+        if (_deviceId.isEmpty) {
+          _deviceId = const Uuid().v4();
+          await LocalStorage.setString('device_id', _deviceId);
+        }
+      }
+      await _lanDiscovery.start(role: 'child');
+      await Future.delayed(const Duration(seconds: 2)); // Give it a moment to catch broadcasts
+    }
+
+    final localPeer = _lanDiscovery.findPeerByCode(code);
+    if (localPeer != null) {
+      // Offline fallback: Generate our own pair token and act as the server
+      _pairToken = const Uuid().v4();
+      await LocalStorage.setPairToken(_pairToken);
+      _cryptoService = CryptoService(_pairToken);
+      
+      // Re-init discovery to broadcast our new pairToken and the code we claimed
+      _lanDiscovery.stop();
+      _lanData.stopServer();
+      
+      _lanDiscovery.setActivePairCode(code);
+      await _lanDiscovery.start(role: 'child');
+      
+      // Child starts the TCP server
+      await _lanData.startServer(_pairToken);
+      _updateState(NetworkConnectionState.lan);
+      
+      print('🔗 Pairing claimed via LAN!');
+      return _pairToken;
+    }
+
     try {
       final response = await http.post(
         Uri.parse('$_relayBaseUrl/api/pair/claim'),
@@ -190,6 +227,25 @@ class NetworkSyncService {
 
   /// Check pairing status manually (parent side polling)
   Future<String?> checkPairingStatus(String code) async {
+    // Check if child has claimed the code via LAN!
+    if (_connectionState == NetworkConnectionState.lan || _lanDiscovery.pairedPeer != null) {
+      return _pairToken;
+    }
+
+    final childPeer = _lanDiscovery.findChildByCode(code);
+    if (childPeer != null && childPeer.pairToken.isNotEmpty) {
+      // The child generated a pairToken for us!
+      _pairToken = childPeer.pairToken;
+      await LocalStorage.setPairToken(_pairToken);
+      _cryptoService = CryptoService(_pairToken);
+      
+      // Parent connects to the child's TCP server
+      await _lanData.connectToDevice(childPeer, _pairToken);
+      _updateState(NetworkConnectionState.lan);
+      print('🔗 Child connected via LAN, pairing complete');
+      return _pairToken;
+    }
+
     try {
       final response = await http.get(
         Uri.parse('$_relayBaseUrl/api/pair/status?code=$code'),

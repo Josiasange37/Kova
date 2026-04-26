@@ -22,7 +22,6 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
   // 0 = QR Code tab, 1 = Pairing Code tab
   int _activeTab = 0;
   bool _isConnected = false;
-  bool _isConnecting = false;
   String _pairingCode = '';
 
   final _childRepo = ChildRepository();
@@ -190,6 +189,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
 
     // Register with Vercel Relay
     final networkSync = NetworkSyncService();
+    await networkSync.start(role: 'parent'); // Start offline discovery
     final registered = await networkSync.registerPairingCode(code);
     
     if (registered) {
@@ -215,12 +215,11 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
     
     if (token != null) {
       // Child successfully claimed the code!
-      await networkSync.start(role: 'parent');
+      // (networkSync already started)
       
       if (!_isDisposed && mounted) {
         setState(() {
           _isConnected = true;
-          _isConnecting = false;
         });
         
         // Auto-navigate after success

@@ -45,7 +45,7 @@ class NotificationService {
       urgency: LinuxNotificationUrgency.normal,
     );
 
-    final details = NotificationDetails(
+    const details = NotificationDetails(
       android: androidDetails,
       linux: linuxDetails,
     );
@@ -75,7 +75,7 @@ class NotificationService {
       urgency: LinuxNotificationUrgency.critical,
     );
 
-    final details = NotificationDetails(
+    const details = NotificationDetails(
       android: androidDetails,
       linux: linuxDetails,
     );

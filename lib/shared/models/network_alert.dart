@@ -105,6 +105,7 @@ class LanDeviceInfo {
   final String ipAddress;
   final int port;
   final String pairToken;
+  final String? pairCode;
   final DateTime discoveredAt;
 
   LanDeviceInfo({
@@ -113,6 +114,7 @@ class LanDeviceInfo {
     required this.ipAddress,
     required this.port,
     required this.pairToken,
+    this.pairCode,
     DateTime? discoveredAt,
   }) : discoveredAt = discoveredAt ?? DateTime.now();
 
@@ -122,6 +124,7 @@ class LanDeviceInfo {
     'ip': ipAddress,
     'port': port,
     'pairToken': pairToken,
+    'pairCode': pairCode,
   };
 
   factory LanDeviceInfo.fromJson(Map<String, dynamic> json, String ip) {
@@ -131,6 +134,7 @@ class LanDeviceInfo {
       ipAddress: ip,
       port: json['port'] as int? ?? 18757,
       pairToken: json['pairToken'] as String? ?? '',
+      pairCode: json['pairCode'] as String?,
     );
   }
 }

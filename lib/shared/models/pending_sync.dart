@@ -1,4 +1,3 @@
-import 'dart:convert';
 
 class PendingSync {
   final String id;

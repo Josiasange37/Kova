@@ -178,7 +178,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final newAge = int.tryParse(ageController.text) ?? currentAge;
               if (newName.isNotEmpty) {
                 await _updateChildProfile(newName, newAge);
-                if (mounted) Navigator.pop(context);
+                if (!context.mounted) return;
+                Navigator.pop(context);
               }
             },
             child: const Text('Save'),
@@ -210,7 +211,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final newPhone = phoneController.text.trim();
               await LocalStorage.setString('parent_phone', newPhone);
               setState(() {});
-              if (mounted) Navigator.pop(context);
+              if (!context.mounted) return;
+              Navigator.pop(context);
             },
             child: const Text('Save'),
           ),
@@ -252,6 +254,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (confirmed == true) {
+      if (!mounted) return;
       try {
         final dashboard = context.read<DashboardDataService>();
         await dashboard.deleteChild(child.id);
