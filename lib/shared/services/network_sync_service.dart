@@ -23,8 +23,7 @@ class NetworkSyncService {
   NetworkSyncService._();
 
   // Vercel relay base URL — update after deployment
-  // static const String _relayBaseUrl = 'https://kova-relay.vercel.app';
-  static const String _relayBaseUrl = 'http://192.168.1.196:3000';
+  static const String _relayBaseUrl = 'https://kova-relay.vercel.app';
 
   final _lanDiscovery = LanDiscoveryService();
   final _lanData = LanDataService();
@@ -74,8 +73,12 @@ class NetworkSyncService {
       _cryptoService = CryptoService(_pairToken);
     }
 
+    // Allow starting without a pair token during initial pairing.
+    // LAN discovery will run in pairingMode, and relay calls are skipped.
     if (_pairToken.isEmpty) {
-      print('⚠️ No pair token — network sync disabled');
+      print('⚠️ No pair token — running in pairing-only mode (LAN discovery active)');
+      // Start LAN discovery in pairing mode so devices can find each other
+      await _lanDiscovery.start(role: role, pairingMode: true);
       return;
     }
 
@@ -84,8 +87,10 @@ class NetworkSyncService {
         .onConnectivityChanged
         .listen(_handleConnectivityChange);
 
-    // Start LAN discovery
-    await _lanDiscovery.start(role: role);
+    // Start LAN discovery if not already running
+    if (!_lanDiscovery.isRunning) {
+      await _lanDiscovery.start(role: role);
+    }
 
     // Listen for LAN device discovery
     _deviceFoundSub = _lanDiscovery.onDeviceFound.listen(_handleDeviceFound);
@@ -134,6 +139,19 @@ class NetworkSyncService {
   /// Register a pairing code with the Vercel relay (parent side)
   Future<bool> registerPairingCode(String code) async {
     _lanDiscovery.setActivePairCode(code); // For offline LAN discovery
+
+    // Ensure LAN discovery is running in pairing mode
+    if (!_lanDiscovery.isRunning) {
+      if (_deviceId.isEmpty) {
+        _deviceId = LocalStorage.getString('device_id');
+        if (_deviceId.isEmpty) {
+          _deviceId = const Uuid().v4();
+          await LocalStorage.setString('device_id', _deviceId);
+        }
+      }
+      await _lanDiscovery.start(role: 'parent', pairingMode: true);
+    }
+
     try {
       final response = await http.post(
         Uri.parse('$_relayBaseUrl/api/pair/register'),
@@ -142,7 +160,7 @@ class NetworkSyncService {
           'code': code,
           'parentDeviceId': _deviceId,
         }),
-      );
+      ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 201) {
         print('📱 Code $code registered with relay by parent');
@@ -152,34 +170,44 @@ class NetworkSyncService {
         return true; // Allow offline pairing fallback
       }
     } catch (e) {
-      print('❌ Register error: $e');
+      print('❌ Register error (relay unavailable, LAN pairing active): $e');
       return true; // Allow offline pairing fallback
     }
   }
 
   /// Claim a pairing code and get pair token (child side)
   Future<String?> claimPairingCode(String code) async {
-    // 1. Try local LAN discovery first
-    if (!_lanDiscovery.isRunning) {
+    // 1. Ensure we have a device ID
+    if (_deviceId.isEmpty) {
+      _deviceId = LocalStorage.getString('device_id');
       if (_deviceId.isEmpty) {
-        _deviceId = LocalStorage.getString('device_id');
-        if (_deviceId.isEmpty) {
-          _deviceId = const Uuid().v4();
-          await LocalStorage.setString('device_id', _deviceId);
-        }
+        _deviceId = const Uuid().v4();
+        await LocalStorage.setString('device_id', _deviceId);
       }
-      await _lanDiscovery.start(role: 'child');
-      await Future.delayed(const Duration(seconds: 2)); // Give it a moment to catch broadcasts
     }
 
-    final localPeer = _lanDiscovery.findPeerByCode(code);
+    // 2. Try local LAN discovery first
+    if (!_lanDiscovery.isRunning) {
+      // Start in pairing mode — no pair token required
+      await _lanDiscovery.start(role: 'child', pairingMode: true);
+    }
+    
+    // Wait for UDP broadcasts to be received (3 broadcast cycles at 5s interval)
+    // We check every 500ms for up to 4 seconds
+    LanDeviceInfo? localPeer;
+    for (int i = 0; i < 8; i++) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      localPeer = _lanDiscovery.findPeerByCode(code);
+      if (localPeer != null) break;
+    }
+
     if (localPeer != null) {
-      // Offline fallback: Generate our own pair token and act as the server
+      // Offline fallback: Generate our own pair token
       _pairToken = const Uuid().v4();
       await LocalStorage.setPairToken(_pairToken);
       _cryptoService = CryptoService(_pairToken);
       
-      // Re-init discovery to broadcast our new pairToken and the code we claimed
+      // Re-init discovery with the new pairToken (no longer in pairing mode)
       _lanDiscovery.stop();
       _lanData.stopServer();
       
@@ -194,6 +222,7 @@ class NetworkSyncService {
       return _pairToken;
     }
 
+    // 3. Fallback to Vercel relay
     try {
       final response = await http.post(
         Uri.parse('$_relayBaseUrl/api/pair/claim'),
@@ -202,7 +231,7 @@ class NetworkSyncService {
           'code': code,
           'childDeviceId': _deviceId,
         }),
-      );
+      ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -220,7 +249,7 @@ class NetworkSyncService {
         return null;
       }
     } catch (e) {
-      print('❌ Claim error: $e');
+      print('❌ Claim error (relay unavailable): $e');
       return null;
     }
   }
@@ -249,7 +278,7 @@ class NetworkSyncService {
     try {
       final response = await http.get(
         Uri.parse('$_relayBaseUrl/api/pair/status?code=$code'),
-      );
+      ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;

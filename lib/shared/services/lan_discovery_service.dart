@@ -27,6 +27,7 @@ class LanDiscoveryService {
   final _deviceLostController = StreamController<String>.broadcast();
 
   bool _isRunning = false;
+  bool _pairingMode = false; // True during initial pairing (no token yet)
   String _role = 'child'; // 'parent' or 'child'
   String _deviceId = '';
   String _pairToken = '';
@@ -34,6 +35,9 @@ class LanDiscoveryService {
 
   void setActivePairCode(String code) {
     _activePairCode = code;
+    if (_isRunning) {
+      _broadcast();
+    }
   }
 
   Stream<LanDeviceInfo> get onDeviceFound => _deviceFoundController.stream;
@@ -74,15 +78,22 @@ class LanDiscoveryService {
   }
 
   /// Start discovery — broadcasts presence and listens for peers
-  Future<void> start({required String role}) async {
+  /// Set [pairingMode] to true during initial pairing when no pair token exists yet.
+  Future<void> start({required String role, bool pairingMode = false}) async {
     if (_isRunning) return;
 
     _role = role;
+    _pairingMode = pairingMode;
     _deviceId = LocalStorage.getString('device_id');
     _pairToken = LocalStorage.getString('pair_token');
 
-    if (_deviceId.isEmpty || _pairToken.isEmpty) {
-      return; // Can't discover without device ID and pair token
+    if (_deviceId.isEmpty) {
+      return; // Can't discover without device ID
+    }
+
+    // In normal mode, we need a pair token. In pairing mode, we don't.
+    if (!_pairingMode && _pairToken.isEmpty) {
+      return;
     }
 
     try {
@@ -179,14 +190,18 @@ class LanDiscoveryService {
 
       final device = LanDeviceInfo.fromJson(json, datagram.address.address);
 
-      // Only accept paired devices (same pairToken)
-      // EXCEPT when we are unconfigured (empty pairToken), then we accept parents
-      // broadcasting their pairCode so we can discover them during pairing!
-      if (_pairToken.isNotEmpty && device.pairToken != _pairToken) return;
-
-      // Only accept the opposite role
-      final expectedRole = _role == 'parent' ? 'child' : 'parent';
-      if (device.role != expectedRole) return;
+      // In pairing mode, accept any device of the opposite role that has a pairCode.
+      // In normal mode, only accept devices with matching pairToken.
+      if (_pairingMode) {
+        // During pairing, we just need the opposite role with a pairCode
+        final expectedRole = _role == 'parent' ? 'child' : 'parent';
+        if (device.role != expectedRole) return;
+      } else {
+        // Normal mode: require matching pairToken
+        if (_pairToken.isNotEmpty && device.pairToken != _pairToken) return;
+        final expectedRole = _role == 'parent' ? 'child' : 'parent';
+        if (device.role != expectedRole) return;
+      }
 
       final isNew = !_discoveredDevices.containsKey(device.deviceId);
       _discoveredDevices[device.deviceId] = device;

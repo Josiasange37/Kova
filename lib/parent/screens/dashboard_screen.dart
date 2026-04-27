@@ -187,7 +187,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                             // Child selector dropdown
                             if (children.length > 1) ...[
                               const SizedBox(height: 8),
-                              _buildChildSelector(children, activeChild, service),
+                              _buildChildSelector(
+                                  children, activeChild, service),
                             ],
                           ],
                         ),
@@ -220,10 +221,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                 // Show summary cards for all children
                 ...children.map((child) {
                   // Calculate per-child stats
-                  final childAlerts = service.alerts?.where((a) => a.childId == child.id).toList() ?? [];
-                  final childAlertCount = childAlerts.where((a) => !a.read).length;
+                  final childAlerts = service.alerts
+                          ?.where((a) => a.childId == child.id)
+                          .toList() ??
+                      [];
+                  final childAlertCount =
+                      childAlerts.where((a) => !a.read).length;
                   final childHasAlerts = childAlertCount > 0;
-                  
+
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: SlideTransition(
@@ -273,7 +278,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   // ═══════════════════════════════════════════
   // ──  Child Selector Dropdown
   // ═══════════════════════════════════════════
-  Widget _buildChildSelector(List<ChildModel> children, ChildModel? activeChild, DashboardDataService service) {
+  Widget _buildChildSelector(List<ChildModel> children, ChildModel? activeChild,
+      DashboardDataService service) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -284,7 +290,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         child: DropdownButton<ChildModel>(
           value: activeChild,
           isDense: true,
-          icon: const Icon(Icons.arrow_drop_down, color: KovaColors.primary, size: 20),
+          icon: const Icon(Icons.arrow_drop_down,
+              color: KovaColors.primary, size: 20),
           style: GoogleFonts.nunito(
             fontSize: 14,
             fontWeight: FontWeight.w700,
@@ -595,7 +602,6 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         ),
         const SizedBox(height: 14),
-
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 350),
           child: hasAlerts
@@ -672,7 +678,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         children: [
           Row(
             children: [
-              const Icon(Icons.warning_rounded, color: KovaColors.danger, size: 20),
+              const Icon(Icons.warning_rounded,
+                  color: KovaColors.danger, size: 20),
               const SizedBox(width: 8),
               Text(
                 '$alertCount threats detected',
