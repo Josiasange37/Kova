@@ -160,7 +160,7 @@ class NetworkSyncService {
           'code': code,
           'parentDeviceId': _deviceId,
         }),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 201) {
         print('📱 Code $code registered with relay by parent');
@@ -231,7 +231,7 @@ class NetworkSyncService {
           'code': code,
           'childDeviceId': _deviceId,
         }),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -278,7 +278,7 @@ class NetworkSyncService {
     try {
       final response = await http.get(
         Uri.parse('$_relayBaseUrl/api/pair/status?code=$code'),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
