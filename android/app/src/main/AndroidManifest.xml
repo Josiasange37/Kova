@@ -30,6 +30,9 @@
     <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     
+    <!-- Scheduling for service restart -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    
     <!-- Network (LAN discovery + Vercel relay) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -71,9 +74,11 @@
             android:name=".BlockOverlayActivity"
             android:exported="true"
             android:theme="@style/LaunchTheme"
-            android:launchMode="singleTask"
+            android:launchMode="singleTop"
             android:excludeFromRecents="true"
-            android:noHistory="true" />
+            android:noHistory="true"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true" />
             
         <!-- ═══════════════════════════════════════════════ -->
         <!-- MANAGE SPACE ACTIVITY (Prevents Clear Data) -->
@@ -134,7 +139,12 @@
         <service
             android:name=".KovaForegroundService"
             android:exported="true"
-            android:foregroundServiceType="specialUse" />
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="child_safety_monitoring" />
+        </service>
         
         <!-- ═══════════════════════════════════════════════ -->
         <!-- DEVICE ADMIN RECEIVER -->
@@ -157,8 +167,10 @@
         <receiver
             android:name=".KovaBootReceiver"
             android:exported="true">
-            <intent-filter>
+            <intent-filter android:priority="999">
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
         

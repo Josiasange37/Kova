@@ -1,14 +1,21 @@
 package com.kova.child
 
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.MotionEvent
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import android.view.WindowManager
 import android.widget.Button
-import android.widget.FrameLayout
 import android.widget.TextView
-import androidx.core.content.ContextCompat
+import android.window.OnBackInvokedDispatcher
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 
 /**
  * BlockOverlayActivity — Blocks and displays message for restricted apps
@@ -32,20 +39,91 @@ class BlockOverlayActivity : Activity() {
     private var blockedPackage: String? = null
     private var blockReason: String? = null
 
+    // ─── Unlock Broadcast Receiver ───────────────────────────────────────────
+    // Listens for the "com.kova.HIDE_OVERLAY" broadcast sent by KovaForegroundService
+    // when the parent remotely unlocks. This replaces the broken SharedPreference polling.
+    private val hideReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val targetPackage = intent.getStringExtra("package")
+            // If no package specified, dismiss any overlay. Otherwise check it matches.
+            if (targetPackage == null || targetPackage == blockedPackage) {
+                finishBlock(sendHome = false) // Parent unlocked — don't force home
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         // Get block parameters
         blockedPackage = intent.getStringExtra("blocked_package")
         blockReason = intent.getStringExtra("reason") ?: "App is blocked for your safety"
-        
+
         Log.d(TAG, "Block overlay shown for: $blockedPackage")
-        
-        // Set up UI
+
+        // Keep screen on and show over lock screen
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+        )
+
+        setupFullscreen()
+        setupBackIntercept()
         setupUI()
-        
-        // Log block event
         logBlockEvent()
+    }
+
+    // ─── Android 13+ Back Gesture Fix ────────────────────────────────────────
+    // onBackPressed() is deprecated in API 33. This covers both old and new APIs.
+    private fun setupBackIntercept() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(
+                OnBackInvokedDispatcher.PRIORITY_OVERLAY
+            ) {
+                // Do nothing — back gesture is completely blocked
+            }
+        }
+        // For API < 33, onBackPressed() override below handles it
+    }
+
+    @Suppress("DEPRECATION")
+    @Deprecated("Deprecated in API 33 — handled by OnBackInvokedCallback above for 33+")
+    override fun onBackPressed() {
+        // Intentionally blocked — do not call super
+    }
+
+    // ─── Lifecycle: Register / Unregister Receiver ───────────────────────────
+    override fun onResume() {
+        super.onResume()
+        LocalBroadcastManager.getInstance(this).registerReceiver(
+            hideReceiver,
+            IntentFilter("com.kova.HIDE_OVERLAY")
+        )
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Always unregister to prevent leaks
+        LocalBroadcastManager.getInstance(this).unregisterReceiver(hideReceiver)
+    }
+
+    // ─── Fullscreen ──────────────────────────────────────────────────────────
+    private fun setupFullscreen() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.insetsController?.let {
+                it.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+                it.systemBarsBehavior =
+                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = (
+                android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
+                android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            )
+        }
     }
 
     /**
@@ -75,34 +153,20 @@ class BlockOverlayActivity : Activity() {
         }
     }
 
-    /**
-     * Finish block and return to parent app
-     */
-    private fun finishBlock() {
-        Log.d(TAG, "Block dismissed")
-        
-        // Kill the blocked app
-        if (blockedPackage != null) {
-            try {
-                val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
-                am.killBackgroundProcesses(blockedPackage)
-                Log.d(TAG, "Blocked app killed: $blockedPackage")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error killing app: ${e.message}")
+    // ─── Dismiss Block ───────────────────────────────────────────────────────
+    // sendHome = true  → goes home (child tapped OK)
+    // sendHome = false → just dismisses overlay (parent unlocked remotely)
+    private fun finishBlock(sendHome: Boolean = true) {
+        if (sendHome) {
+            // Go home — AccessibilityService will re-trigger overlay if child reopens the app
+            // Note: killBackgroundProcesses() is intentionally NOT used here — it's restricted
+            // on Android 8+ for third-party apps and only kills your own process.
+            val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_HOME)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
-        }
-        
-        // Go home to ensure the user doesn't just return to the blocked app
-        try {
-            val homeIntent = Intent(Intent.ACTION_MAIN)
-            homeIntent.addCategory(Intent.CATEGORY_HOME)
-            homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             startActivity(homeIntent)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error returning to home: ${e.message}")
         }
-        
-        // Close this overlay
         finish()
     }
 
@@ -123,7 +187,7 @@ class BlockOverlayActivity : Activity() {
         showToast("Report sent to parent")
         
         // Close overlay
-        finishBlock()
+        finishBlock(sendHome = true)
     }
 
     /**
@@ -162,32 +226,9 @@ class BlockOverlayActivity : Activity() {
     }
 
     /**
-     * Prevent back button from dismissing
-     */
-    override fun onBackPressed() {
-        Log.d(TAG, "Back button pressed - blocked")
-        // Do nothing - block stays
-    }
-
-    /**
      * Prevent touch outside from dismissing
      */
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         return true // Consume touch event
-    }
-
-    /**
-     * Disable swiping away from recent apps
-     */
-    override fun onPause() {
-        super.onPause()
-        // Prevent app from being minimized
-        if (intent.getBooleanExtra("force_on_screen", true)) {
-            val intent = Intent(this, BlockOverlayActivity::class.java)
-            intent.putExtra("blocked_package", blockedPackage)
-            intent.putExtra("reason", blockReason)
-            intent.putExtra("force_on_screen", false)
-            startActivity(intent)
-        }
     }
 }

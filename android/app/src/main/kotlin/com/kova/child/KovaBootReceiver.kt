@@ -21,11 +21,14 @@ class KovaBootReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) {
+        val action = intent.action
+        if (action != Intent.ACTION_BOOT_COMPLETED &&
+            action != Intent.ACTION_LOCKED_BOOT_COMPLETED &&
+            action != Intent.ACTION_MY_PACKAGE_REPLACED) {
             return
         }
         
-        Log.d(TAG, "Device boot completed")
+        Log.d(TAG, "Boot event received: $action")
         
         // Check if KOVA is enabled for this device
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

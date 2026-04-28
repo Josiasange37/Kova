@@ -113,7 +113,18 @@ class MainActivity : FlutterActivity() {
           }
         }
         "unblockApp" -> {
-          hideBlockOverlay()
+          // ─── FIX: Delegate to ForegroundService, NOT SharedPreferences ─────
+          // The old approach wrote a SharedPreference and hoped BlockOverlayActivity
+          // would notice. That never worked — BlockOverlayActivity had no listener.
+          //
+          // The new approach broadcasts via KovaForegroundService which uses
+          // LocalBroadcastManager. BlockOverlayActivity has a registered receiver
+          // and dismisses instantly.
+          //
+          // IMPORTANT: This also works when Flutter engine is dead (backgrounded)
+          // because KovaForegroundService handles FCM-triggered unlocks directly.
+          val pkg = call.argument<String>("pkg")
+          delegateUnlockToService(pkg)
           result.success(true)
         }
         else -> result.notImplemented()
@@ -336,13 +347,31 @@ class MainActivity : FlutterActivity() {
     }
   }
 
-  /// Hide block overlay
-  private fun hideBlockOverlay() {
-    try {
-      val prefManager = getSharedPreferences("com.example.kova", 0)
-      prefManager.edit().putBoolean("hide_overlay", true).apply()
-    } catch (e: Exception) {
-      e.printStackTrace()
+  // ─── Delegate Unlock to Service Layer ────────────────────────────────────
+  // Sending the unlock through the ForegroundService ensures it works even when
+  // this Activity is not in the foreground or Flutter engine has been killed.
+  private fun delegateUnlockToService(packageName: String?) {
+    val serviceIntent = Intent(this, KovaForegroundService::class.java).apply {
+      action = KovaForegroundService.ACTION_REMOTE_UNLOCK
+      if (packageName != null) {
+        putExtra(KovaForegroundService.EXTRA_UNLOCK_PACKAGE, packageName)
+      }
+    }
+    startService(serviceIntent)
+  }
+
+  // ─── Ensure ForegroundService is Running ─────────────────────────────────
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    ensureProtectionServiceRunning()
+  }
+
+  private fun ensureProtectionServiceRunning() {
+    val intent = Intent(this, KovaForegroundService::class.java)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      startForegroundService(intent)
+    } else {
+      startService(intent)
     }
   }
 }

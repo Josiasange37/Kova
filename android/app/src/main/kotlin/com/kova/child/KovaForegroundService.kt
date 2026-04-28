@@ -3,18 +3,23 @@ package com.kova.child
 import android.app.Service
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.admin.DevicePolicyManager
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.localbroadcastmanager.content.LocalBroadcastManager
 
 /**
  * KovaForegroundService — Persistent background protection
@@ -29,20 +34,39 @@ import androidx.core.app.NotificationCompat
 class KovaForegroundService : Service() {
     companion object {
         private const val TAG = "KovaForegroundService"
-        private const val CHANNEL_ID = "kova_protection"
-        private const val NOTIFICATION_ID = 1
-        private const val WATCHDOG_INTERVAL_MS = 30_000L  // Check every 30 seconds
+        const val CHANNEL_ID = "kova_protection_channel"
+        const val NOTIFICATION_ID = 1001
+        const val ACTION_REMOTE_UNLOCK = "com.kova.ACTION_REMOTE_UNLOCK"
+        const val EXTRA_UNLOCK_PACKAGE = "unlock_package"
+
+        // ─── Watchdog reduced to 10 seconds ──────────────────────────────────
+        // 30s was too wide — child had 30s of unmonitored activity after disabling services.
+        // 10s battery impact is negligible since checkServiceHealth() does no network I/O.
+        private const val WATCHDOG_INTERVAL_MS = 10_000L
         private const val PREFS_NAME = "com.example.kova"
+    }
+
+    // ─── Remote Unlock Receiver ───────────────────────────────────────────────
+    // Handles unlock commands sent via FCM/WebSocket even when Flutter engine is dead.
+    // This is the correct layer for unlock — not MainActivity MethodChannel which
+    // requires an active Flutter engine and fails on backgrounded/low-RAM devices.
+    private val remoteUnlockReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == ACTION_REMOTE_UNLOCK) {
+                val pkg = intent.getStringExtra(EXTRA_UNLOCK_PACKAGE)
+                handleRemoteUnlock(pkg)
+            }
+        }
     }
 
     private var isRunning = false
     private val handler = Handler(Looper.getMainLooper())
 
     // ── Track previous states to only alert on transitions ──
-    private var prevAccessibility = true
-    private var prevNotifListener = true
-    private var prevKeyboard = true
-    private var prevDeviceAdmin = true
+    private var prevAccessibility = false
+    private var prevNotifListener = false
+    private var prevKeyboard = false
+    private var prevDeviceAdmin = false
 
     // ─────────────────────────────────────────────
     // Watchdog runnable — checks all services every 30s
@@ -67,19 +91,32 @@ class KovaForegroundService : Service() {
         super.onCreate()
         Log.d(TAG, "✅ Foreground service created")
         createNotificationChannel()
+        startForeground(NOTIFICATION_ID, buildForegroundNotification())
+
+        // Register remote unlock receiver
+        registerReceiver(
+            remoteUnlockReceiver,
+            IntentFilter(ACTION_REMOTE_UNLOCK),
+            // Android 13+ requires RECEIVER_NOT_EXPORTED for internal broadcasts
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                RECEIVER_NOT_EXPORTED else 0
+        )
+
+        checkSafeMode()
+        handler.post(watchdogRunnable)
     }
 
+    // ─── Android 13+ Background Survival ─────────────────────────────────────
+    // START_STICKY ensures the OS restarts the service after killing it.
+    // On Android 13+ the OS is more aggressive about killing background services.
+    // The foreground notification + BOOT_COMPLETED receiver together keep KOVA alive.
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "✅ Foreground service started")
 
-        if (!isRunning) {
-            isRunning = true
-            startForegroundNotification()
-            // Start watchdog
-            handler.postDelayed(watchdogRunnable, WATCHDOG_INTERVAL_MS)
-        }
-
-        return START_STICKY // Restart if killed by system
+        // Re-post watchdog in case the service was restarted mid-cycle
+        handler.removeCallbacks(watchdogRunnable)
+        handler.post(watchdogRunnable)
+        return START_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -87,56 +124,56 @@ class KovaForegroundService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         Log.w(TAG, "⚠️ Foreground service destroyed — scheduling restart")
-        isRunning = false
         handler.removeCallbacks(watchdogRunnable)
+        unregisterReceiver(remoteUnlockReceiver)
 
-        // Self-restart: schedule via broadcast
-        scheduleRestart()
+        // Immediately reschedule restart
+        val restartIntent = Intent(applicationContext, KovaForegroundService::class.java)
+        startService(restartIntent)
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        // Reschedule restart when app is swiped from recents
+        val restartIntent = Intent(applicationContext, KovaForegroundService::class.java)
+        restartIntent.setPackage(packageName)
+        val pendingIntent = PendingIntent.getService(
+            this, 1, restartIntent,
+            PendingIntent.FLAG_ONE_SHOT or
+            PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        alarmManager.set(
+            android.app.AlarmManager.ELAPSED_REALTIME,
+            SystemClock.elapsedRealtime() + 1000,
+            pendingIntent
+        )
         super.onTaskRemoved(rootIntent)
-        Log.w(TAG, "⚠️ Task removed — scheduling restart")
-        scheduleRestart()
     }
 
-    // ─────────────────────────────────────────────
-    // Foreground notification
-    // ─────────────────────────────────────────────
-
-    private fun startForegroundNotification() {
-        try {
-            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("Protection Active")
-                .setContentText("Your device is being monitored for safety")
-                .setSmallIcon(android.R.drawable.ic_lock_lock)
-                .setPriority(NotificationCompat.PRIORITY_MIN)
-                .setOngoing(true)
-                .setSilent(true)
-                .build()
-
-            startForeground(NOTIFICATION_ID, notification)
-            Log.d(TAG, "Foreground notification started")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error starting foreground notification: ${e.message}")
-        }
-    }
-
+    // ─── Notification Channel (required Android 8+) ───────────────────────────
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "KOVA Protection",
-                NotificationManager.IMPORTANCE_MIN
+                "KOVA Child Protection",
+                NotificationManager.IMPORTANCE_LOW // Low = no sound, but persistent
             ).apply {
-                description = "Child safety monitoring"
+                description = "Keeps KOVA protection active"
                 setShowBadge(false)
-                setSound(null, null)
             }
-
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
+    }
+
+    private fun buildForegroundNotification(): android.app.Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("KOVA Protection Active")
+            .setContentText("Your device is being monitored for safety")
+            .setSmallIcon(R.drawable.ic_kova_notification)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true) // Cannot be swiped away
+            .setSilent(true)
+            .build()
     }
 
     // ─────────────────────────────────────────────
@@ -172,13 +209,62 @@ class KovaForegroundService : Service() {
             sendTamperAlert("device_admin_disabled", "Device admin was deactivated")
         }
 
+        // ─── ADB / USB Debugging Detection ───────────────────────────────────
+        // ADB uninstall bypasses all AccessibilityService-based anti-uninstall logic.
+        // Alert parent immediately if USB debugging is turned on.
+        val adbEnabled = Settings.Global.getInt(
+            contentResolver, Settings.Global.ADB_ENABLED, 0
+        ) == 1
+        if (adbEnabled) {
+            sendTamperAlert("adb_enabled", "USB debugging (ADB) is active on child device")
+        }
+
         // Update previous states
         prevAccessibility = accOk
         prevNotifListener = notifOk
         prevKeyboard = kbOk
         prevDeviceAdmin = adminOk
 
-        Log.d(TAG, "🩺 Watchdog: acc=$accOk notif=$notifOk kb=$kbOk admin=$adminOk")
+        Log.d(TAG, "🩺 Watchdog: acc=$accOk notif=$notifOk kb=$kbOk admin=$adminOk adb=$adbEnabled")
+    }
+
+    // ─── Safe Mode Detection ──────────────────────────────────────────────────
+    // Safe Mode disables all third-party services including AccessibilityService,
+    // making KOVA completely blind. Detect and alert parent immediately on boot.
+    private fun checkSafeMode() {
+        // Safe mode flag is set in system properties on boot
+        val safeMode = packageManager.isSafeMode
+
+        if (safeMode) {
+            sendTamperAlert(
+                "safe_mode_boot",
+                "Device was booted in Safe Mode — all KOVA protections are disabled"
+            )
+            // Schedule a persistent notification so it's visible on screen
+            showSafeModeWarningNotification()
+        }
+    }
+
+    private fun showSafeModeWarningNotification() {
+        val nm = getSystemService(NotificationManager::class.java)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("⚠️ KOVA Protection Disabled")
+            .setContentText("Device is in Safe Mode. Child protections are inactive.")
+            .setSmallIcon(R.drawable.ic_kova_notification)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setOngoing(true)
+            .build()
+        nm.notify(1002, notification)
+    }
+
+    // ─── Remote Unlock Handler ─────────────────────────────────────────────────
+    // Public method called by MainActivity or broadcast receiver to handle unlock
+    fun handleRemoteUnlock(packageName: String?) {
+        // Broadcast to BlockOverlayActivity (if it's open) via LocalBroadcast
+        val unlockIntent = Intent("com.kova.HIDE_OVERLAY").apply {
+            if (packageName != null) putExtra("package", packageName)
+        }
+        LocalBroadcastManager.getInstance(this).sendBroadcast(unlockIntent)
     }
 
     // ── Individual service checks ──
@@ -240,20 +326,4 @@ class KovaForegroundService : Service() {
         KovaChannelManager.send("accessibility", payload)
     }
 
-    // ─────────────────────────────────────────────
-    // Self-restart on kill
-    // ─────────────────────────────────────────────
-
-    private fun scheduleRestart() {
-        try {
-            val restartIntent = Intent(this, KovaForegroundService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(restartIntent)
-            } else {
-                startService(restartIntent)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to schedule restart: ${e.message}")
-        }
-    }
 }
