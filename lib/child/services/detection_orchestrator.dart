@@ -10,6 +10,7 @@ import 'package:kova/local_backend/repositories/browser_history_repository.dart'
 import 'package:kova/shared/models/network_alert.dart';
 import 'package:kova/shared/models/web_history.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'package:kova/shared/services/notification_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/local_backend/repositories/pending_sync_repository.dart';
@@ -33,6 +34,9 @@ class DetectionOrchestrator {
   final NetworkSyncService _networkSync = NetworkSyncService();
   final PendingSyncRepository _pendingSyncRepo = PendingSyncRepository();
   final ContextDetector _contextDetector = ContextDetector();
+  
+  final _alertStreamController = StreamController<AlertModel>.broadcast();
+  Stream<AlertModel> get onNewAlert => _alertStreamController.stream;
   
   bool _active = false;
   String? _childId;
@@ -84,6 +88,7 @@ class DetectionOrchestrator {
     _active = false;
     _blockedApps.clear();
     MonitoringBridge.reset();
+    _alertStreamController.close();
     if (kDebugMode) debugPrint('🛑 KOVA Detection Orchestrator: STOPPED');
   }
 
@@ -158,6 +163,20 @@ class DetectionOrchestrator {
       scoreImage: 0.0,
       scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
     );
+
+    _alertStreamController.add(AlertModel(
+      id: alertId,
+      childId: _childId!,
+      app: appKey,
+      type: alertType,
+      severity: severity,
+      scoreText: textScores['unsafe'] ?? 0.0,
+      scoreImage: 0.0,
+      scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+      read: false,
+      resolved: false,
+      createdAt: DateTime.now(),
+    ));
 
     // Show notification
     await _showAlertNotification(appKey, severity, alertId, text);
@@ -248,6 +267,20 @@ class DetectionOrchestrator {
       scoreImage: 0.0,
       scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
     );
+
+    _alertStreamController.add(AlertModel(
+      id: alertId,
+      childId: _childId!,
+      app: appKey,
+      type: alertType,
+      severity: severity,
+      scoreText: batchResult['unsafe'] ?? 0.0,
+      scoreImage: 0.0,
+      scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+      read: false,
+      resolved: false,
+      createdAt: DateTime.now(),
+    ));
 
     await _showAlertNotification(appKey, severity, alertId, 'Conversation batch');
 
@@ -374,7 +407,7 @@ class DetectionOrchestrator {
     final description = descriptions[type] ?? message;
 
     // 1. Store critical alert locally
-    await _alertRepo.create(
+    final alertId = await _alertRepo.create(
       childId: _childId!,
       app: 'kova_self_defense',
       type: 'tamper_$type',
@@ -383,6 +416,20 @@ class DetectionOrchestrator {
       scoreImage: 0.0,
       scoreGrooming: 0.0,
     );
+
+    _alertStreamController.add(AlertModel(
+      id: alertId,
+      childId: _childId!,
+      app: 'kova_self_defense',
+      type: 'tamper_$type',
+      severity: 'critical',
+      scoreText: 1.0,
+      scoreImage: 0.0,
+      scoreGrooming: 0.0,
+      read: false,
+      resolved: false,
+      createdAt: DateTime.now(),
+    ));
 
     // 2. Push to parent immediately
     await _pushAlertToNetwork(

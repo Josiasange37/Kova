@@ -15,6 +15,10 @@ import 'package:kova/shared/services/notification_service.dart';
 export 'package:kova/local_backend/repositories/child_repository.dart' show ChildModel;
 
 class DashboardDataService extends ChangeNotifier {
+  static final DashboardDataService instance = DashboardDataService._internal();
+  factory DashboardDataService() => instance;
+  DashboardDataService._internal();
+
   final _childRepo = ChildRepository();
   final _alertRepo = AlertRepository();
   final _networkSync = NetworkSyncService();

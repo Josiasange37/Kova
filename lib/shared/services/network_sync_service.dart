@@ -19,6 +19,7 @@ import 'package:kova/local_backend/repositories/pending_sync_repository.dart';
 
 class NetworkSyncService {
   static final NetworkSyncService _instance = NetworkSyncService._();
+  static NetworkSyncService get instance => _instance;
   factory NetworkSyncService() => _instance;
   NetworkSyncService._();
 
@@ -40,6 +41,7 @@ class NetworkSyncService {
   String _deviceId = '';
   CryptoService? _cryptoService;
   bool _isSyncing = false;
+  int _consecutiveFailures = 0;
 
   // Streams for UI
   final _connectionStateController =
@@ -103,6 +105,19 @@ class NetworkSyncService {
     // If parent, start polling Vercel relay
     if (role == 'parent') {
       _startPolling();
+      // Try to reconnect to last known child on LAN
+      if (_pairToken.isNotEmpty) {
+        final lastChildInfo = LocalStorage.getLastChildPeer();
+        if (lastChildInfo != null) {
+          try {
+            final device = LanDeviceInfo.fromJson(lastChildInfo, lastChildInfo['ip'] ?? '');
+            await _lanData.connectToDevice(device, _pairToken);
+            print('🔁 LAN reconnected after reboot');
+          } catch (e) {
+            print('⚠️ LAN reconnect failed, will use Vercel: $e');
+          }
+        }
+      }
     } else {
       _startSyncLoop();
     }
@@ -218,6 +233,8 @@ class NetworkSyncService {
       await _lanData.startServer(_pairToken);
       _updateState(NetworkConnectionState.lan);
       
+      _startSyncLoop();
+      
       print('🔗 Pairing claimed via LAN!');
       return _pairToken;
     }
@@ -242,6 +259,8 @@ class NetworkSyncService {
         _pairToken = token;
         _cryptoService = CryptoService(token);
 
+        _startSyncLoop();
+
         print('🔗 Pairing claimed via relay');
         return token;
       } else {
@@ -262,15 +281,22 @@ class NetworkSyncService {
     }
 
     final childPeer = _lanDiscovery.findChildByCode(code);
-    if (childPeer != null && childPeer.pairToken.isNotEmpty) {
+    if (childPeer != null && childPeer.encryptedPairToken.isNotEmpty) {
       // The child generated a pairToken for us!
-      _pairToken = childPeer.pairToken;
+      _pairToken = CryptoService(code).decryptPayload(childPeer.encryptedPairToken, childPeer.encryptedTokenIv);
       await LocalStorage.setPairToken(_pairToken);
       _cryptoService = CryptoService(_pairToken);
       
+      await LocalStorage.setLastChildPeer(childPeer.toJson());
+
       // Parent connects to the child's TCP server
       await _lanData.connectToDevice(childPeer, _pairToken);
       _updateState(NetworkConnectionState.lan);
+      if (_role == 'parent') {
+        _startPolling();
+      } else {
+        _startSyncLoop();
+      }
       print('🔗 Child connected via LAN, pairing complete');
       return _pairToken;
     }
@@ -287,6 +313,13 @@ class NetworkSyncService {
           await LocalStorage.setPairToken(token);
           _pairToken = token;
           _cryptoService = CryptoService(token);
+          
+          if (_role == 'parent') {
+            _startPolling();
+          } else {
+            _startSyncLoop();
+          }
+          
           print('🔗 Child connected, pairing complete');
           return token;
         }
@@ -587,9 +620,17 @@ class NetworkSyncService {
         if (alerts.isNotEmpty) {
           print('📥 Received ${alerts.length} alerts from relay');
         }
+        
+        _consecutiveFailures = 0;
       }
     } catch (e) {
-      // Network error — will retry on next poll
+      _consecutiveFailures++;
+      print('⚠️ Poll failed ($_consecutiveFailures): $e');
+
+      if (_consecutiveFailures >= 5) {
+        _updateState(NetworkConnectionState.error);
+        print('❌ Relay unreachable — switching to error state');
+      }
     }
   }
 
@@ -643,5 +684,6 @@ class NetworkSyncService {
     stop();
     _connectionStateController.close();
     _alertReceivedController.close();
+    _historyReceivedController.close();
   }
 }

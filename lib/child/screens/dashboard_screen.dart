@@ -7,6 +7,8 @@ import 'package:kova/local_backend/repositories/alert_repository.dart';
 import 'package:kova/local_backend/database/database_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
+import 'package:kova/child/services/detection_orchestrator.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -22,11 +24,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   ChildModel? _child;
   List<AlertModel> _recentAlerts = [];
   bool _isLoading = true;
+  StreamSubscription<AlertModel>? _alertSub;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _alertSub = DetectionOrchestrator.instance.onNewAlert.listen((alert) {
+      if (mounted) {
+        setState(() {
+          _recentAlerts.insert(0, alert);
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _alertSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadData() async {

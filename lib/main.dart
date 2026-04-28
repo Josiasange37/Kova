@@ -13,6 +13,7 @@ import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/shared/services/notification_service.dart';
+import 'package:kova/shared/services/network_sync_service.dart';
 import 'package:kova/local_backend/database/database_service.dart';
 import 'package:kova/child/services/detection_orchestrator.dart';
 
@@ -74,11 +75,17 @@ Future<void> main() async {
     final appMode = await AppModeManager.getMode();
     debugPrint('App mode: $appMode');
 
-    // Start detection services ONLY if in child mode
+    // Start network sync and background services based on mode
     if (appMode == AppMode.child) {
-      debugPrint('Starting detection services...');
+      debugPrint('Starting child services...');
       await DetectionOrchestrator.instance.start();
-      debugPrint('Detection services started');
+      await NetworkSyncService.instance.start(role: 'child');
+      debugPrint('Child services started');
+    } else if (appMode == AppMode.parent) {
+      debugPrint('Starting parent services...');
+      await NetworkSyncService.instance.start(role: 'parent');
+      DashboardDataService.instance.startListening();
+      debugPrint('Parent services started');
     }
 
     debugPrint('Running app...');

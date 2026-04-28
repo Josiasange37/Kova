@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:kova/shared/models/network_alert.dart';
 import 'package:kova/shared/services/local_storage.dart';
+import 'package:kova/shared/services/crypto_service.dart';
 
 /// UDP-based LAN discovery for finding paired devices on same WiFi network.
 /// Broadcasts presence on port 18756, listens for paired device announcements.
@@ -50,7 +51,7 @@ class LanDiscoveryService {
   LanDeviceInfo? get pairedPeer {
     final expectedRole = _role == 'parent' ? 'child' : 'parent';
     for (final device in _discoveredDevices.values) {
-      if (device.role == expectedRole && device.pairToken == _pairToken) {
+      if (device.role == expectedRole) {
         return device;
       }
     }
@@ -154,13 +155,18 @@ class LanDiscoveryService {
   void _broadcast() {
     if (_socket == null) return;
 
+    final Map<String, String>? encryptedTokenMap = _activePairCode != null && _activePairCode!.isNotEmpty && _pairToken.isNotEmpty
+        ? CryptoService(_activePairCode!).encryptPayload(_pairToken)
+        : null;
+
     final packet = jsonEncode({
       'type': 'kova_discovery',
       'version': 1,
       'deviceId': _deviceId,
       'role': _role,
       'port': _dataPort,
-      'pairToken': _pairToken,
+      'encryptedPairToken': encryptedTokenMap?['data'] ?? '',
+      'encryptedTokenIv': encryptedTokenMap?['iv'] ?? '',
       'pairCode': _activePairCode,
       'timestamp': DateTime.now().millisecondsSinceEpoch,
     });
@@ -191,17 +197,9 @@ class LanDiscoveryService {
       final device = LanDeviceInfo.fromJson(json, datagram.address.address);
 
       // In pairing mode, accept any device of the opposite role that has a pairCode.
-      // In normal mode, only accept devices with matching pairToken.
-      if (_pairingMode) {
-        // During pairing, we just need the opposite role with a pairCode
-        final expectedRole = _role == 'parent' ? 'child' : 'parent';
-        if (device.role != expectedRole) return;
-      } else {
-        // Normal mode: require matching pairToken
-        if (_pairToken.isNotEmpty && device.pairToken != _pairToken) return;
-        final expectedRole = _role == 'parent' ? 'child' : 'parent';
-        if (device.role != expectedRole) return;
-      }
+      // In normal mode, also just check the role since TCP connection will do token handshake.
+      final expectedRole = _role == 'parent' ? 'child' : 'parent';
+      if (device.role != expectedRole) return;
 
       final isNew = !_discoveredDevices.containsKey(device.deviceId);
       _discoveredDevices[device.deviceId] = device;

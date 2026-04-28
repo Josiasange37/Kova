@@ -104,7 +104,8 @@ class LanDeviceInfo {
   final String role; // 'parent' or 'child'
   final String ipAddress;
   final int port;
-  final String pairToken;
+  final String encryptedPairToken;
+  final String encryptedTokenIv;
   final String? pairCode;
   final DateTime discoveredAt;
 
@@ -113,7 +114,8 @@ class LanDeviceInfo {
     required this.role,
     required this.ipAddress,
     required this.port,
-    required this.pairToken,
+    required this.encryptedPairToken,
+    required this.encryptedTokenIv,
     this.pairCode,
     DateTime? discoveredAt,
   }) : discoveredAt = discoveredAt ?? DateTime.now();
@@ -123,7 +125,8 @@ class LanDeviceInfo {
     'role': role,
     'ip': ipAddress,
     'port': port,
-    'pairToken': pairToken,
+    'encryptedPairToken': encryptedPairToken,
+    'encryptedTokenIv': encryptedTokenIv,
     'pairCode': pairCode,
   };
 
@@ -133,7 +136,8 @@ class LanDeviceInfo {
       role: json['role'] as String? ?? 'unknown',
       ipAddress: ip,
       port: json['port'] as int? ?? 18757,
-      pairToken: json['pairToken'] as String? ?? '',
+      encryptedPairToken: json['encryptedPairToken'] ?? json['pairToken'] as String? ?? '',
+      encryptedTokenIv: json['encryptedTokenIv'] as String? ?? '',
       pairCode: json['pairCode'] as String?,
     );
   }
@@ -145,6 +149,8 @@ enum NetworkConnectionState {
   lan,
   /// Connected via internet relay — summary only
   internet,
+  /// Connection error / unreachable
+  error,
   /// No connection available
   none,
 }

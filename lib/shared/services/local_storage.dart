@@ -1,5 +1,6 @@
 // shared/services/local_storage.dart — SharedPreferences wrapper
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 /// Wrapper around SharedPreferences for consistent key management
 /// Handles all app-level preferences (mode, child IDs, settings)
@@ -42,6 +43,17 @@ class LocalStorage {
       _prefs.setString('child_device_id', id);
 
   static String getChildDeviceId() => _prefs.getString('child_device_id') ?? '';
+
+  static Future<void> setLastChildPeer(Map<String, dynamic> data) =>
+      _prefs.setString('last_child_peer', jsonEncode(data));
+
+  static Map<String, dynamic>? getLastChildPeer() {
+    final str = _prefs.getString('last_child_peer');
+    if (str != null && str.isNotEmpty) {
+      return jsonDecode(str) as Map<String, dynamic>;
+    }
+    return null;
+  }
 
   /// --- Parent Settings ---
 
