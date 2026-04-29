@@ -147,6 +147,14 @@
         </service>
         
         <!-- ═══════════════════════════════════════════════ -->
+        <!-- LAN DISCOVERY SERVICE (WiFi multicast UDP) -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <service
+            android:name=".LanDiscoveryService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+        
+        <!-- ═══════════════════════════════════════════════ -->
         <!-- DEVICE ADMIN RECEIVER -->
         <!-- ═══════════════════════════════════════════════ -->
         <receiver
