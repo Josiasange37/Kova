@@ -39,6 +39,29 @@ jobs:
           echo "✅ local.properties written:"
           cat android/local.properties
 
+      # ═══════════════════════════════════════════════════════════════════════
+      # DIRECTIVE 2 — Release keystore signing configuration
+      # ═══════════════════════════════════════════════════════════════════════
+      - name: Setup Release Keystore
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "🔐 Setting up release keystore from GitHub Secrets..."
+            # Decode keystore from base64 secret
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/kova-release.keystore
+            # Create key.properties file
+            cat > android/key.properties << EOF
+          storeFile=kova-release.keystore
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          EOF
+            echo "✅ Release keystore configured"
+            ls -lh android/app/kova-release.keystore
+          else
+            echo "⚠️ No KEYSTORE_BASE64 secret found — APK will be signed with debug keys"
+            echo "⚠️ This will trigger Play Protect on Xiaomi devices!"
+          fi
+
       - name: Cache Gradle packages
         uses: actions/cache@v5
         with:

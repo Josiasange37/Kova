@@ -1,0 +1,25 @@
+KOVA Parental Control - Privacy Policy
+
+KOVA is a parental control and child safety application designed to help parents monitor and protect their children's digital activities. This privacy policy explains what data KOVA collects and how it is used.
+
+What KOVA Monitors:
+- Text messages and conversations in messaging apps (for safety analysis)
+- URLs visited in web browsers (for content filtering)
+- App usage and screen time
+- Device location (when enabled by parent)
+
+How Data is Used:
+- All monitoring data is analyzed locally on the device using on-device AI
+- Only safety alerts (e.g., potential grooming, cyberbullying, inappropriate content) are sent to the parent's device
+- No conversation content is transmitted to external servers except encrypted safety summaries
+- Data is encrypted and transmitted securely between parent and child devices
+
+Data Storage:
+- Monitoring data is stored locally on the child's device
+- Parents receive only safety score summaries and alerts
+- No data is shared with third parties or used for advertising
+
+Permissions Required:
+KOVA requires accessibility service, device admin, notification access, and overlay permissions to function as a parental control tool. These permissions are used solely for child safety monitoring and cannot be used for any other purpose.
+
+Contact: For questions about this privacy policy, contact support.

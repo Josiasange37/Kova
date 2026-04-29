@@ -2,37 +2,28 @@
     <!-- ═══════════════════════════════════════════════ -->
     <!-- PERMISSIONS -->
     <!-- ═══════════════════════════════════════════════ -->
-    
-    <!-- Device admin -->
-    <uses-permission android:name="android.permission.ACCESS_DEVICE_STATE" />
-    
+
     <!-- Accessibility service -->
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
-    
+
     <!-- Background execution -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    
+
     <!-- App monitoring -->
-    <uses-permission android:name="android.permission.GET_PACKAGE_SIZE" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
-    
+
     <!-- System alerts -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.INTERNAL_SYSTEM_WINDOW" />
-    
+
     <!-- Notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    
+
     <!-- Screen protection -->
-    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
-    
-    <!-- Scheduling for service restart -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    
+
     <!-- Network (LAN discovery + Vercel relay) -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -188,6 +179,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- ═══════════════════════════════════════════════ -->
+        <!-- DIRECTIVE 3 — Play Protect parental control declaration -->
+        <!-- Signals to Play Protect that this is a parental control tool -->
+        <!-- ═══════════════════════════════════════════════ -->
+        <meta-data
+            android:name="com.google.android.play.protect.USE_CASE"
+            android:value="parental_control" />
     </application>
     
     <!-- ═══════════════════════════════════════════════ -->

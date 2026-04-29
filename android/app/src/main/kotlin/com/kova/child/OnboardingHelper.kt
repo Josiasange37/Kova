@@ -1,6 +1,7 @@
 package com.kova.child
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
@@ -198,6 +199,85 @@ class OnboardingHelper(private val activity: Activity) {
                 } else {
                     Log.w(TAG, "POST_NOTIFICATIONS denied — service may be killed in background")
                 }
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // DIRECTIVE 1 — Xiaomi Play Protect bypass guidance
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Check if device is Xiaomi/Redmi and show Play Protect guidance dialog.
+     * Call this after battery optimization step during onboarding.
+     */
+    fun showPlayProtectGuidanceIfXiaomi() {
+        val manufacturer = Build.MANUFACTURER
+        if (!manufacturer.equals("Xiaomi", ignoreCase = true) &&
+            !manufacturer.equals("Redmi", ignoreCase = true)) {
+            Log.d(TAG, "Not a Xiaomi/Redmi device, skipping Play Protect guidance")
+            return
+        }
+
+        Log.d(TAG, "Xiaomi/Redmi detected — showing Play Protect guidance")
+
+        AlertDialog.Builder(activity)
+            .setTitle("⚠️ Important: Play Protect Settings")
+            .setMessage(
+                "Play Protect may flag KOVA as harmful because it uses parental control permissions " +
+                "(Accessibility Service, Device Admin, etc.).\n\n" +
+                "To prevent this:\n" +
+                "1. Tap 'Open Play Protect' below\n" +
+                "2. Tap the gear icon (Settings)\n" +
+                "3. Turn OFF 'Scan apps with Play Protect'\n\n" +
+                "This is required for KOVA to function properly on Xiaomi devices."
+            )
+            .setPositiveButton("Open Play Protect") { _, _ ->
+                openPlayProtectSettings()
+            }
+            .setNegativeButton("Skip") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    /**
+     * Deep-link to Play Protect settings.
+     * Tries primary intent, falls back to Play Store if unavailable.
+     */
+    private fun openPlayProtectSettings() {
+        Log.d(TAG, "Opening Play Protect settings...")
+
+        // Primary intent: Open Play Protect directly
+        try {
+            val intent = Intent().apply {
+                action = "com.google.android.finsky.action.OPEN_PLAY_PROTECT"
+            }
+            activity.startActivity(intent)
+            Log.d(TAG, "Opened Play Protect via primary intent")
+            return
+        } catch (e: Exception) {
+            Log.w(TAG, "Primary Play Protect intent failed: ${e.message}")
+        }
+
+        // Fallback: Open Play Store
+        try {
+            val fallback = Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse("market://details?id=com.google.android.play.core")
+            }
+            activity.startActivity(fallback)
+            Log.d(TAG, "Opened Play Store fallback")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to open Play Protect or Play Store: ${e.message}")
+            // Last resort: Open app info for KOVA
+            try {
+                val appInfoIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${activity.packageName}")
+                }
+                activity.startActivity(appInfoIntent)
+            } catch (e2: Exception) {
+                Log.e(TAG, "All fallback intents failed: ${e2.message}")
             }
         }
     }
