@@ -27,6 +27,11 @@ class LanDiscoveryService {
   final _deviceFoundController = StreamController<LanDeviceInfo>.broadcast();
   final _deviceLostController = StreamController<String>.broadcast();
 
+  // ─── Reactive Pairing Callback ─────────────────────────────────────────
+  // When in pairing mode and a peer with matching pairCode is discovered,
+  // this callback fires immediately instead of requiring polling.
+  void Function(LanDeviceInfo)? _onPeerFoundCallback;
+
   bool _isRunning = false;
   bool _pairingMode = false; // True during initial pairing (no token yet)
   String _role = 'child'; // 'parent' or 'child'
@@ -66,6 +71,41 @@ class LanDiscoveryService {
       }
     }
     return null;
+  }
+
+  /// Register a one-shot callback for when a specific peer is found.
+  /// Used by claimPairingCode() for reactive discovery (replaces polling loop).
+  void setOnPeerFoundCallback(void Function(LanDeviceInfo)? callback) {
+    _onPeerFoundCallback = callback;
+  }
+
+  /// Wait for a peer with specific pair code using Completer (reactive, non-blocking).
+  /// Returns the peer device or null if timeout occurs.
+  Future<LanDeviceInfo?> waitForPeerWithCode(String code, Duration timeout) async {
+    // Check if already discovered
+    final existing = findPeerByCode(code);
+    if (existing != null) return existing;
+
+    // Set up reactive callback
+    final completer = Completer<LanDeviceInfo?>();
+    Timer? timeoutTimer;
+
+    _onPeerFoundCallback = (device) {
+      if (device.pairCode == code && !completer.isCompleted) {
+        timeoutTimer?.cancel();
+        completer.complete(device);
+      }
+    };
+
+    // Set timeout
+    timeoutTimer = Timer(timeout, () {
+      if (!completer.isCompleted) {
+        _onPeerFoundCallback = null; // Clean up
+        completer.complete(null);
+      }
+    });
+
+    return completer.future;
   }
 
   /// Get a child device by the pairing code it claimed (used by parent during initial pairing)
@@ -207,6 +247,14 @@ class LanDiscoveryService {
       if (isNew) {
         print('🔍 Discovered ${device.role} device at ${device.ipAddress}');
         _deviceFoundController.add(device);
+
+        // ─── Reactive pairing: fire callback immediately if pairCode matches
+        if (_pairingMode && _onPeerFoundCallback != null) {
+          if (device.role == expectedRole && device.pairCode != null) {
+            _onPeerFoundCallback!(device);
+            _onPeerFoundCallback = null; // One-shot callback
+          }
+        }
       }
     } catch (e) {
       // Ignore malformed packets
