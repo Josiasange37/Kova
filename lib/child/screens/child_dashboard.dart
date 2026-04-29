@@ -142,7 +142,7 @@ class _ChildDashboardState extends State<ChildDashboard> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E2A5D).withOpacity(0.1),
+                    color: const Color(0xFF1E2A5D).withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -167,7 +167,7 @@ class _ChildDashboardState extends State<ChildDashboard> {
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                     fontSize: 14,
-                    color: const Color(0xFF1E2A5D).withOpacity(0.7),
+                    color: const Color(0xFF1E2A5D).withValues(alpha: 0.7),
                   ),
                 ),
                 const SizedBox(height: 32),

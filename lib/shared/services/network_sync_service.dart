@@ -11,11 +11,13 @@ import 'package:uuid/uuid.dart';
 
 import 'package:kova/shared/models/network_alert.dart';
 import 'package:kova/shared/models/web_history.dart';
+import 'package:kova/shared/models/pending_sync.dart';
 import 'package:kova/shared/services/lan_discovery_service.dart';
 import 'package:kova/shared/services/lan_data_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/shared/services/crypto_service.dart';
 import 'package:kova/local_backend/repositories/pending_sync_repository.dart';
+import 'package:kova/local_backend/repositories/child_repository.dart';
 
 class NetworkSyncService {
   static final NetworkSyncService _instance = NetworkSyncService._();
@@ -842,20 +844,24 @@ class NetworkSyncService {
       } else {
         print('❌ Child profile push failed: ${response.statusCode} ${response.body}');
         // Add to pending sync for retry
-        await _pendingSyncRepo.add(
-          type: 'child_profile',
-          payload: profileData,
-          priority: 10, // High priority
+        await _pendingSyncRepo.insert(
+          PendingSync(
+            id: const Uuid().v4(),
+            type: 'child_profile',
+            payload: jsonEncode(profileData),
+          ),
         );
         return false;
       }
     } catch (e) {
       print('❌ Child profile push error: $e');
       // Add to pending sync for retry
-      await _pendingSyncRepo.add(
-        type: 'child_profile',
-        payload: profileData,
-        priority: 10,
+      await _pendingSyncRepo.insert(
+        PendingSync(
+          id: const Uuid().v4(),
+          type: 'child_profile',
+          payload: jsonEncode(profileData),
+        ),
       );
       return false;
     }
