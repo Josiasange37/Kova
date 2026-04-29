@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'dart:async' as async;
 import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
 import 'package:kova/shared/models/network_alert.dart';
@@ -25,6 +26,18 @@ class DashboardDataService extends ChangeNotifier {
 
   StreamSubscription? _alertSub;
   StreamSubscription? _connectionSub;
+
+  // ─── Child List Changed Stream (DIRECTIVE 3) ─────────────────────────────
+  // Fires when a new child is added so dashboard refreshes immediately
+  final _childListChangedController = async.StreamController<void>.broadcast();
+  async.Stream<void> get onChildListChanged => _childListChangedController.stream;
+
+  /// Notify listeners that child list has changed
+  void notifyChildListChanged() {
+    _childListChangedController.add(null);
+    // Also reload data immediately
+    loadDashboardData();
+  }
 
   List<ChildModel>? _children;
   List<AlertModel>? _alerts;
@@ -199,6 +212,7 @@ class DashboardDataService extends ChangeNotifier {
   void dispose() {
     _alertSub?.cancel();
     _connectionSub?.cancel();
+    _childListChangedController.close();
     super.dispose();
   }
 }

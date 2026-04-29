@@ -182,6 +182,7 @@ class DetectionOrchestrator {
     await _showAlertNotification(appKey, severity, alertId, text);
 
     // Push alert to parent via network (LAN full data or Vercel summary)
+    print('📤 [ALERT PIPELINE] Step 1: Calling _pushAlertToNetwork for alert $alertId');
     await _pushAlertToNetwork(
       severity: severity,
       app: appKey,
@@ -193,6 +194,7 @@ class DetectionOrchestrator {
       scoreDelta: delta,
     );
 
+    print('✅ [ALERT PIPELINE] Step 5: Alert pipeline complete for $alertId');
     if (kDebugMode) debugPrint('🚨 Alert created: $alertId');
   }
 
@@ -458,6 +460,7 @@ class DetectionOrchestrator {
     double scoreGrooming = 0.0,
     int scoreDelta = 0,
   }) async {
+    print('📤 [ALERT PIPELINE] Step 2: _pushAlertToNetwork started - app=$app, severity=$severity');
     try {
       final childName = LocalStorage.getString('child_name', 'Child');
 
@@ -487,10 +490,13 @@ class DetectionOrchestrator {
       await _pendingSyncRepo.insert(pendingItem);
 
       // Trigger sync manually (optional, or let periodic loop handle)
+      print('📤 [ALERT PIPELINE] Step 3: Triggering network sync loop...');
       _networkSync.triggerSyncLoop();
 
+      print('✅ [ALERT PIPELINE] Step 4: Alert queued and sync triggered');
       if (kDebugMode) debugPrint('📤 Alert queued for network push');
     } catch (e) {
+      print('❌ [ALERT PIPELINE] ERROR in _pushAlertToNetwork: $e');
       if (kDebugMode) debugPrint('⚠️ Network push failed (local alert saved): $e');
     }
   }

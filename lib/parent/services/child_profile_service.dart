@@ -3,6 +3,8 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
+import 'package:kova/shared/services/network_sync_service.dart';
+import 'package:kova/parent/services/dashboard_data_service.dart';
 
 class ChildProfileService extends ChangeNotifier {
   final _childRepo = ChildRepository();
@@ -70,10 +72,11 @@ class ChildProfileService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Create child in repository (generates pairing code automatically)
+      // 1. Create child in repository (generates pairing code automatically)
       _childId = await _childRepo.create(_childName, age: _age, avatarPath: _avatarPath);
+      print('✅ Child saved to SQLite: $_childId');
 
-      // Get the created child to retrieve the pairing code
+      // 2. Get the created child to retrieve the pairing code
       final child = await _childRepo.getById(_childId!);
       if (child != null) {
         _pairCode = child.pairCode;
@@ -81,6 +84,24 @@ class ChildProfileService extends ChangeNotifier {
             ? DateTime.fromMillisecondsSinceEpoch(child.pairCodeExp!)
             : null;
       }
+
+      // 3. Push child profile to relay (DIRECTIVE 1)
+      print('🔄 Pushing child profile to relay...');
+      final networkSync = NetworkSyncService.instance;
+      final pushed = await networkSync.pushChildProfile(
+        childId: _childId!,
+        name: _childName,
+        age: _age,
+        avatarPath: _avatarPath,
+      );
+      if (pushed) {
+        print('✅ Child profile pushed to relay successfully');
+      } else {
+        print('⚠️ Child profile push failed - will retry on next sync');
+      }
+
+      // 4. Notify dashboard to refresh (DIRECTIVE 3)
+      DashboardDataService.instance.notifyChildListChanged();
 
       _error = null;
       return true;

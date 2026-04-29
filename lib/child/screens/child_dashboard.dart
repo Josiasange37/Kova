@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/kova_theme.dart';
@@ -5,6 +6,7 @@ import 'block_screen.dart';
 import 'package:kova/core/app_mode.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
+import 'package:kova/shared/services/network_sync_service.dart';
 
 class ChildDashboard extends StatefulWidget {
   const ChildDashboard({super.key});
@@ -19,11 +21,33 @@ class _ChildDashboardState extends State<ChildDashboard> {
 
   ChildModel? _child;
   List<AlertModel> _recentAlerts = [];
+  Timer? _profileRetryTimer;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _startProfileRetryTimer();
+  }
+
+  @override
+  void dispose() {
+    _profileRetryTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Retry fetching profile every 10 seconds if not loaded (DIRECTIVE 4)
+  void _startProfileRetryTimer() {
+    _profileRetryTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
+      if (_child == null && mounted) {
+        print('⏳ Retrying child profile sync...');
+        final synced = await NetworkSyncService.instance.syncChildProfile();
+        if (synced) {
+          print('✅ Child profile synced on retry');
+          await _loadData();
+        }
+      }
+    });
   }
 
   Future<void> _loadData() async {
@@ -40,6 +64,7 @@ class _ChildDashboardState extends State<ChildDashboard> {
       final childRepo = ChildRepository();
       final alertRepo = AlertRepository();
 
+      // Try to get my own profile (DIRECTIVE 4)
       final child = await childRepo.getById(childId);
       final alerts = await alertRepo.getRecent(childId, 24);
 
@@ -48,6 +73,11 @@ class _ChildDashboardState extends State<ChildDashboard> {
         _recentAlerts = alerts;
         _isLoading = false;
       });
+
+      // If profile is still null, show waiting state but keep retry timer running
+      if (child == null) {
+        print('⏳ Child profile not available yet - waiting for parent setup...');
+      }
     } catch (e) {
       setState(() {
         _error = 'Failed to load data: $e';
@@ -91,6 +121,63 @@ class _ChildDashboardState extends State<ChildDashboard> {
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1E2A5D)),
                   child: const Text('Retry', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Waiting for parent setup state (DIRECTIVE 4)
+    if (_child == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF5F7FF),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E2A5D).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.person_outline,
+                    size: 64,
+                    color: Color(0xFF1E2A5D),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Waiting for parent setup...',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF1E2A5D),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Your parent needs to finish setting up your profile. Retrying automatically...',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: const Color(0xFF1E2A5D).withOpacity(0.7),
+                  ),
+                ),
+                const SizedBox(height: 32),
+                const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF1E2A5D),
+                    strokeWidth: 2,
+                  ),
                 ),
               ],
             ),

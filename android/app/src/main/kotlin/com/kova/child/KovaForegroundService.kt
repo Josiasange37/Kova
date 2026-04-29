@@ -195,6 +195,8 @@ class KovaForegroundService : Service() {
         if (prevAccessibility && !accOk) {
             Log.w(TAG, "🛡️ TAMPER: Accessibility service was disabled!")
             sendTamperAlert("accessibility_disabled", "Accessibility service was disabled")
+            // Show high-priority local notification to child device to re-enable (DIRECTIVE 3)
+            showReEnableAccessibilityNotification()
         }
         if (prevNotifListener && !notifOk) {
             Log.w(TAG, "🛡️ TAMPER: Notification listener was disabled!")
@@ -255,6 +257,35 @@ class KovaForegroundService : Service() {
             .setOngoing(true)
             .build()
         nm.notify(1002, notification)
+    }
+
+    /// Show notification when accessibility service is disabled (EMUI / Huawei workaround)
+    /// Tapping notification opens accessibility settings to re-enable (DIRECTIVE 3)
+    private fun showReEnableAccessibilityNotification() {
+        Log.d(TAG, "[WATCHDOG] Showing re-enable accessibility notification")
+
+        // Create intent to open accessibility settings
+        val settingsIntent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, settingsIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val nm = getSystemService(NotificationManager::class.java)
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("🛡️ KOVA needs your attention")
+            .setContentText("Tap to re-enable protection — accessibility service was turned off")
+            .setSmallIcon(R.drawable.ic_kova_notification)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setContentIntent(pendingIntent)
+            .build()
+
+        nm.notify(1003, notification)
+        Log.d(TAG, "[WATCHDOG] Re-enable accessibility notification shown")
     }
 
     // ─── Remote Unlock Handler ─────────────────────────────────────────────────

@@ -295,7 +295,7 @@ class NetworkSyncService {
         _pairToken = token;
         _cryptoService = CryptoService(token);
 
-        _updateState(NetworkConnectionState.online);
+        _updateState(NetworkConnectionState.internet);
         _startSyncLoop();
 
         // ─── Notify both screens simultaneously ───────────────────────────────
@@ -397,23 +397,36 @@ class NetworkSyncService {
 
   /// Push an alert — uses LAN if available, falls back to Vercel relay
   Future<void> pushAlert(NetworkAlertFull alert, [String? itemId]) async {
+    print('📤 [ALERT PIPELINE] NetworkSyncService.pushAlert() START');
+    print('📤 [ALERT PIPELINE] _lanData.isConnected = ${_lanData.isConnected}');
+    print('📤 [ALERT PIPELINE] _connectionState = $_connectionState');
+    print('📤 [ALERT PIPELINE] _pairToken empty = ${_pairToken.isEmpty}');
+
     // Try LAN first (full data)
     if (_lanData.isConnected) {
+      print('📤 [ALERT PIPELINE] Taking LAN path...');
       _lanData.sendAlert(alert);
       print('📤 Alert sent via LAN (full data)');
       if (itemId != null) {
         await _pendingSyncRepo.deleteList([itemId]);
       }
+      print('✅ [ALERT PIPELINE] LAN path complete');
       return;
     }
 
     // Fallback to Vercel relay (summary only)
+    print('📤 [ALERT PIPELINE] LAN not connected, falling back to Vercel relay...');
     await _pushAlertToRelay(alert, itemId);
+    print('📤 [ALERT PIPELINE] Vercel relay path complete');
   }
 
   /// Push alert summary to Vercel relay
   Future<void> _pushAlertToRelay(NetworkAlertSummary alert, [String? itemId]) async {
-    if (_pairToken.isEmpty) return;
+    print('📤 [ALERT PIPELINE] _pushAlertToRelay() START');
+    if (_pairToken.isEmpty) {
+      print('❌ [ALERT PIPELINE] _pushAlertToRelay: _pairToken is EMPTY - aborting');
+      return;
+    }
     _cryptoService ??= CryptoService(_pairToken);
 
     try {
@@ -426,10 +439,12 @@ class NetworkSyncService {
         childName: alert.childName,
         timestamp: alert.timestamp,
       );
-      
+
       final jsonStr = jsonEncode(summary.toJson());
       final encrypted = _cryptoService!.encryptPayload(jsonStr);
+      print('📤 [ALERT PIPELINE] Encrypting alert for relay: ${summary.app} - ${summary.alertType}');
 
+      print('📤 [ALERT PIPELINE] POST to $_relayBaseUrl/api/alert/push...');
       final response = await http.post(
         Uri.parse('$_relayBaseUrl/api/alert/push'),
         headers: {
@@ -443,14 +458,17 @@ class NetworkSyncService {
         }),
       );
 
+      print('📤 [ALERT PIPELINE] HTTP response: ${response.statusCode}');
       if (response.statusCode == 201) {
-        print('📤 Alert pushed to relay (summary)');
+        print('✅ [ALERT PIPELINE] Alert pushed to relay (summary) - HTTP 201');
       } else {
-        print('❌ Alert push failed: ${response.body}');
+        print('❌ [ALERT PIPELINE] Alert push failed: HTTP ${response.statusCode} - ${response.body}');
       }
-    } catch (e) {
-      print('❌ Alert poll error: $e');
+    } catch (e, stackTrace) {
+      print('❌ [ALERT PIPELINE] _pushAlertToRelay ERROR: $e');
+      print('❌ [ALERT PIPELINE] Stack trace: $stackTrace');
     }
+    print('📤 [ALERT PIPELINE] _pushAlertToRelay() END');
   }
 
   Future<void> _pollHistory() async {
@@ -556,9 +574,27 @@ class NetworkSyncService {
     _syncTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       _syncLoop();
       _pollAcks();
+      _syncChildProfileIfNeeded(); // Retry profile sync periodically (DIRECTIVE 5)
     });
     _syncLoop();
     _pollAcks();
+  }
+
+  /// Periodic check to sync child profile if not yet available (DIRECTIVE 5)
+  Future<void> _syncChildProfileIfNeeded() async {
+    if (_role != 'child' || _pairToken.isEmpty) return;
+
+    // Check if we already have a profile
+    final childId = await LocalStorage.getChildId();
+    if (childId == null) return;
+
+    final childRepo = ChildRepository();
+    final existing = await childRepo.getById(childId);
+    if (existing != null) return; // Already have profile
+
+    // Try to sync profile from relay
+    print('🔄 Periodic child profile sync attempt...');
+    await syncChildProfile();
   }
 
   void triggerSyncLoop() {
@@ -583,6 +619,16 @@ class NetworkSyncService {
         } else if (item.type == 'history') {
           final history = WebHistory.fromJson(jsonDecode(item.payload));
           await pushHistory(history, item.id);
+        } else if (item.type == 'child_profile') {
+          // Retry pushing child profile
+          final data = jsonDecode(item.payload);
+          await pushChildProfile(
+            childId: data['childId'],
+            name: data['name'],
+            age: data['age'] ?? 10,
+            avatarPath: data['avatarPath'],
+            settings: data['settings'],
+          );
         }
       }
     } catch (e) {
@@ -737,6 +783,161 @@ class NetworkSyncService {
       _connectionState = newState;
       _connectionStateController.add(newState);
       print('🌐 Connection state: ${newState.name}');
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Child Profile Sync (DIRECTIVE 1 & 2)
+  // ─────────────────────────────────────────────
+
+  /// Push child profile to relay immediately after creation (parent side)
+  /// Called by ChildProfileService after saving to local SQLite
+  Future<bool> pushChildProfile({
+    required String childId,
+    required String name,
+    int age = 10,
+    String? avatarPath,
+    Map<String, dynamic>? settings,
+  }) async {
+    if (_pairToken.isEmpty) {
+      print('❌ Cannot push child profile: no pair token');
+      return false;
+    }
+
+    _cryptoService ??= CryptoService(_pairToken);
+
+    // Encrypt profile data
+    final profileData = jsonEncode({
+      'childId': childId,
+      'name': name,
+      'age': age,
+      'avatarPath': avatarPath,
+      'settings': settings ?? {},
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+    });
+    final encrypted = _cryptoService!.encryptPayload(profileData);
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_relayBaseUrl/api/child/register'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_pairToken',
+          'Connection': 'keep-alive',
+        },
+        body: jsonEncode({
+          'childId': childId,
+          'name': name,
+          'age': age,
+          'avatarUrl': avatarPath,
+          'settings': settings ?? {},
+          'encryptedData': encrypted['data'],
+          'iv': encrypted['iv'],
+        }),
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        print('👤 Child profile pushed to relay: $name ($childId)');
+        return true;
+      } else {
+        print('❌ Child profile push failed: ${response.statusCode} ${response.body}');
+        // Add to pending sync for retry
+        await _pendingSyncRepo.add(
+          type: 'child_profile',
+          payload: profileData,
+          priority: 10, // High priority
+        );
+        return false;
+      }
+    } catch (e) {
+      print('❌ Child profile push error: $e');
+      // Add to pending sync for retry
+      await _pendingSyncRepo.add(
+        type: 'child_profile',
+        payload: profileData,
+        priority: 10,
+      );
+      return false;
+    }
+  }
+
+  /// Sync child profile from relay to local SQLite (child side)
+  /// Called on boot and periodically until profile is received
+  Future<bool> syncChildProfile() async {
+    if (_pairToken.isEmpty) {
+      print('❌ Cannot sync child profile: no pair token');
+      return false;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('$_relayBaseUrl/api/child/profile'),
+        headers: {
+          'Authorization': 'Bearer $_pairToken',
+          'Connection': 'keep-alive',
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final profile = data['profile'] as Map<String, dynamic>;
+
+        // Decrypt if encrypted data present
+        String? decryptedPayload;
+        if (profile['encryptedData'] != null && profile['iv'] != null) {
+          _cryptoService ??= CryptoService(_pairToken);
+          decryptedPayload = _cryptoService!.decryptPayload(
+            profile['encryptedData'],
+            profile['iv'],
+          );
+        }
+
+        final Map<String, dynamic> childData;
+        if (decryptedPayload != null) {
+          childData = jsonDecode(decryptedPayload);
+        } else {
+          // Use unencrypted fields as fallback
+          childData = {
+            'childId': profile['childId'],
+            'name': profile['name'],
+            'age': profile['age'],
+            'avatarPath': profile['avatarUrl'],
+            'settings': profile['settings'],
+          };
+        }
+
+        // Save to local SQLite via ChildRepository
+        final childRepo = ChildRepository();
+        final existing = await childRepo.getById(childData['childId']);
+
+        if (existing == null) {
+          // Create new child profile
+          await childRepo.create(
+            childData['name'],
+            age: childData['age'] ?? 10,
+            avatarPath: childData['avatarPath'],
+          );
+          print('👤 Child profile saved to SQLite: ${childData['name']}');
+        } else {
+          // Update existing profile
+          await childRepo.updateName(existing.id, childData['name']);
+          if (childData['age'] != null) {
+            await childRepo.updateAge(existing.id, childData['age']);
+          }
+          print('👤 Child profile updated: ${childData['name']}');
+        }
+
+        return true;
+      } else if (response.statusCode == 404) {
+        print('⏳ Child profile not available yet (parent may not have registered)');
+        return false;
+      } else {
+        print('❌ Child profile sync failed: ${response.statusCode} ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Child profile sync error: $e');
+      return false;
     }
   }
 

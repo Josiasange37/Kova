@@ -16,6 +16,10 @@ const activePairs = new Map();
 // Pending ACKs: { pairToken: Set([id, id2, ...]) }
 const pendingAcks = new Map();
 
+// Pending child profiles: { pairToken: Map(childDeviceId -> profile) }
+// Parent pushes profile here, child retrieves it
+const pendingChildProfiles = new Map();
+
 // Cleanup expired codes every invocation
 function cleanup() {
   const now = Date.now();
@@ -26,4 +30,4 @@ function cleanup() {
   }
 }
 
-module.exports = { pairingCodes, pendingAlerts, pendingHistory, activePairs, pendingAcks, cleanup };
+module.exports = { pairingCodes, pendingAlerts, pendingHistory, activePairs, pendingAcks, pendingChildProfiles, cleanup };

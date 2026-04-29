@@ -80,6 +80,16 @@ Future<void> main() async {
       debugPrint('Starting child services...');
       await DetectionOrchestrator.instance.start();
       await NetworkSyncService.instance.start(role: 'child');
+      
+      // Pull child profile from relay (DIRECTIVE 2)
+      debugPrint('🔄 Syncing child profile from relay...');
+      final profileSynced = await NetworkSyncService.instance.syncChildProfile();
+      if (profileSynced) {
+        debugPrint('✅ Child profile synced successfully');
+      } else {
+        debugPrint('⏳ Child profile not available yet - will retry on next sync loop');
+      }
+      
       debugPrint('Child services started');
     } else if (appMode == AppMode.parent) {
       debugPrint('Starting parent services...');

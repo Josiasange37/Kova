@@ -8,6 +8,10 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Context
+import android.view.accessibility.AccessibilityManager
+import android.util.Log
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -90,6 +94,11 @@ class MainActivity : FlutterActivity() {
           val success = openAutoStartSettings()
           result.success(success)
         }
+        "openHuaweiProtectedApps" -> {
+          // EMUI-specific: Direct link to protected apps settings
+          val success = openHuaweiProtectedApps()
+          result.success(success)
+        }
         "getDeviceManufacturer" -> {
           result.success(Build.MANUFACTURER ?: "unknown")
         }
@@ -105,11 +114,15 @@ class MainActivity : FlutterActivity() {
     ).setMethodCallHandler { call, result ->
       when (call.method) {
         "blockApp" -> {
+          Log.d("KOVA_BLOCK", "[OVERLAY PIPELINE] MethodChannel blockApp called")
           val pkg = call.argument<String>("pkg")
           if (pkg != null) {
+            Log.d("KOVA_BLOCK", "[OVERLAY PIPELINE] Showing block overlay for package: $pkg")
             showBlockOverlay(pkg)
             result.success(true)
+            Log.d("KOVA_BLOCK", "[OVERLAY PIPELINE] Block overlay launched successfully")
           } else {
+            Log.e("KOVA_BLOCK", "[OVERLAY PIPELINE] ERROR: Package name is null")
             result.error("INVALID_PKG", "Package name required", null)
           }
         }
@@ -193,8 +206,10 @@ class MainActivity : FlutterActivity() {
   // ═══════════════════════════════════════════════
 
   /// Check if AccessibilityService is enabled
+  /// Uses BOTH Settings check AND live AccessibilityManager check for EMUI compatibility
   private fun isAccessibilityServiceEnabled(): Boolean {
-    return try {
+    // Method 1: Settings check (standard Android)
+    val settingsCheck = try {
       val service = "${packageName}/${KovaAccessibilityService::class.java.canonicalName}"
       val enabledServices = Settings.Secure.getString(
         contentResolver,
@@ -204,6 +219,24 @@ class MainActivity : FlutterActivity() {
     } catch (e: Exception) {
       false
     }
+
+    // Method 2: Live AccessibilityManager check (EMUI-compatible)
+    // This queries the actual running state rather than stored settings
+    val liveCheck = try {
+      val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+      val runningServices = am.getEnabledAccessibilityServiceList(
+        AccessibilityServiceInfo.FEEDBACK_ALL_MASK
+      )
+      runningServices.any {
+        it.resolveInfo.serviceInfo.packageName == packageName
+      }
+    } catch (e: Exception) {
+      false
+    }
+
+    val result = settingsCheck && liveCheck
+    Log.d("KOVA_ACCESS", "[ACCESSIBILITY CHECK] Settings check: $settingsCheck, Live check: $liveCheck, Result: $result")
+    return result
   }
 
   /// Check if NotificationListener is enabled
@@ -319,7 +352,10 @@ class MainActivity : FlutterActivity() {
             manufacturer.contains("oppo") -> intent.component = ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity")
             manufacturer.contains("vivo") -> intent.component = ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")
             manufacturer.contains("letv") -> intent.component = ComponentName("com.letv.android.letvsafe", "com.letv.android.letvsafe.AutobootManageActivity")
-            manufacturer.contains("honor") || manufacturer.contains("huawei") -> intent.component = ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity")
+            manufacturer.contains("honor") || manufacturer.contains("huawei") -> {
+                // Try primary Huawei protected apps intent first
+                return openHuaweiProtectedApps()
+            }
             else -> return false // No specific autostart for this OEM
         }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -329,6 +365,47 @@ class MainActivity : FlutterActivity() {
         e.printStackTrace()
         return false
     }
+  }
+
+  /// Open Huawei Protected Apps settings (EMUI-specific)
+  /// Tries multiple intents as EMUI versions vary
+  private fun openHuaweiProtectedApps(): Boolean {
+    Log.d("KOVA_HUAWEI", "[HUAWEI ONBOARDING] Opening protected apps settings...")
+
+    // Intent 1: StartupNormalAppListActivity (newer EMUI versions)
+    try {
+        val intent = Intent().apply {
+            component = ComponentName(
+                "com.huawei.systemmanager",
+                "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"
+            )
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
+        Log.d("KOVA_HUAWEI", "[HUAWEI ONBOARDING] Opened StartupNormalAppListActivity")
+        return true
+    } catch (e: Exception) {
+        Log.w("KOVA_HUAWEI", "[HUAWEI ONBOARDING] Primary intent failed: ${e.message}")
+    }
+
+    // Intent 2: ProtectActivity (older EMUI versions)
+    try {
+        val intent = Intent().apply {
+            component = ComponentName(
+                "com.huawei.systemmanager",
+                "com.huawei.systemmanager.optimize.process.ProtectActivity"
+            )
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        startActivity(intent)
+        Log.d("KOVA_HUAWEI", "[HUAWEI ONBOARDING] Opened ProtectActivity (fallback)")
+        return true
+    } catch (e: Exception) {
+        Log.w("KOVA_HUAWEI", "[HUAWEI ONBOARDING] Fallback intent failed: ${e.message}")
+    }
+
+    Log.e("KOVA_HUAWEI", "[HUAWEI ONBOARDING] All Huawei intents failed")
+    return false
   }
 
   // ═══════════════════════════════════════════════

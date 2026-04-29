@@ -59,7 +59,8 @@ class BlockOverlayActivity : Activity() {
         blockedPackage = intent.getStringExtra("blocked_package")
         blockReason = intent.getStringExtra("reason") ?: "App is blocked for your safety"
 
-        Log.d(TAG, "Block overlay shown for: $blockedPackage")
+        Log.d(TAG, "[OVERLAY PIPELINE] BlockOverlayActivity.onCreate() - Package: $blockedPackage")
+        Log.d(TAG, "[OVERLAY PIPELINE] Block overlay shown for: $blockedPackage")
 
         // Keep screen on and show over lock screen
         window.addFlags(
