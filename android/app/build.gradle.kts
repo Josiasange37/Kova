@@ -28,6 +28,10 @@ android {
         abortOnError = false
     }
 
+    aaptOptions {
+        noCompress("tflite")
+    }
+
     dependenciesInfo {
         includeInBundle = false
     }
