@@ -587,7 +587,7 @@ class NetworkSyncService {
     if (_role != 'child' || _pairToken.isEmpty) return;
 
     // Check if we already have a profile
-    final childId = await LocalStorage.getChildId();
+    final childId = LocalStorage.getChildId();
     if (childId == null) return;
 
     final childRepo = ChildRepository();

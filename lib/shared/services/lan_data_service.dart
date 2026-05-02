@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:kova/shared/models/network_alert.dart';
-import 'package:kova/shared/services/crypto_service.dart';
+import 'package:kova/shared/services/security_service.dart';
 
 /// TCP-based direct data transfer between paired devices on LAN.
 /// Child runs the server, parent connects as client.
@@ -19,7 +19,7 @@ class LanDataService {
   Socket? _clientSocket;
   Socket? _activeConnection;
   String _pairToken = '';
-  CryptoService? _cryptoService;
+  final SecurityService _securityService = SecurityService();
 
   bool _isServerRunning = false;
   bool _isClientConnected = false;
@@ -40,7 +40,7 @@ class LanDataService {
   Future<void> startServer(String pairToken) async {
     if (_isServerRunning) return;
     _pairToken = pairToken;
-    _cryptoService = CryptoService(pairToken);
+    _securityService.init();
 
     try {
       _server = await ServerSocket.bind(InternetAddress.anyIPv4, _port);
@@ -103,11 +103,22 @@ class LanDataService {
         case 'handshake':
           // Verify pair token
           if (json['pairToken'] == _pairToken) {
-            _sendToSocket(socket, {'type': 'handshake_ok'});
+            if (json['publicKey'] != null) {
+              _securityService.setPeerPublicKey(json['publicKey'] as String);
+            }
+            final myPublicKey = _securityService.generateKeyPair()['public'];
+            _sendToSocket(socket, {'type': 'handshake_ok', 'publicKey': myPublicKey});
             print('✅ Parent authenticated via LAN');
           } else {
             _sendToSocket(socket, {'type': 'handshake_fail', 'reason': 'Invalid token'});
             socket.close();
+          }
+          break;
+          
+        case 'handshake_ok':
+          if (json['publicKey'] != null) {
+            _securityService.setPeerPublicKey(json['publicKey'] as String);
+            print('✅ Handshake OK: Stored peer public key');
           }
           break;
 
@@ -118,18 +129,20 @@ class LanDataService {
           break;
 
         case 'encrypted_alert':
-          if (_cryptoService != null) {
-            final iv = json['iv'] as String? ?? '';
-            final encryptedData = json['data'] as String? ?? '';
-            final decryptedStr = _cryptoService!.decryptPayload(encryptedData, iv);
-            
-            if (decryptedStr.isNotEmpty) {
+          // Decrypt with RSA
+          final encryptedData = json['data'] as String? ?? '';
+          final decryptedStr = _securityService.decryptPayload(encryptedData);
+          
+          if (decryptedStr.isNotEmpty && !decryptedStr.startsWith('DECRYPTION_ERROR')) {
+            try {
               final alertJson = jsonDecode(decryptedStr) as Map<String, dynamic>;
               final alert = NetworkAlertFull.fromJson(alertJson);
               _alertReceivedController.add(alert);
-            } else {
-              print('❌ Failed to decrypt LAN alert');
+            } catch(e) {
+              print('❌ JSON parse error after RSA decryption: $e');
             }
+          } else {
+            print('❌ Failed to decrypt RSA LAN alert: $decryptedStr');
           }
           break;
 
@@ -152,7 +165,7 @@ class LanDataService {
   /// Connect to child device's TCP server
   Future<bool> connectToDevice(LanDeviceInfo device, String pairToken) async {
     _pairToken = pairToken;
-    _cryptoService = CryptoService(pairToken);
+    _securityService.init();
 
     try {
       _clientSocket = await Socket.connect(
@@ -197,9 +210,11 @@ class LanDataService {
       );
 
       // Send handshake
+      final myPublicKey = _securityService.generateKeyPair()['public'];
       _sendToSocket(_clientSocket!, {
         'type': 'handshake',
         'pairToken': pairToken,
+        'publicKey': myPublicKey,
       });
 
       return true;
@@ -217,15 +232,14 @@ class LanDataService {
   /// Send a full alert over LAN (child → parent)
   void sendAlert(NetworkAlertFull alert) {
     final target = _activeConnection ?? _clientSocket;
-    if (target == null || _cryptoService == null) return;
+    if (target == null) return;
 
     final alertJsonStr = jsonEncode(alert.toJson());
-    final encrypted = _cryptoService!.encryptPayload(alertJsonStr);
+    final encryptedAlert = _securityService.encryptPayload(alertJsonStr);
 
     _sendToSocket(target, {
       'type': 'encrypted_alert',
-      'iv': encrypted['iv'],
-      'data': encrypted['data'],
+      'data': encryptedAlert,
     });
   }
 

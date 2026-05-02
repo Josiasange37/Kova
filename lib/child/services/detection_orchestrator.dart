@@ -17,10 +17,10 @@ import 'package:kova/local_backend/repositories/pending_sync_repository.dart';
 import 'package:kova/shared/models/pending_sync.dart';
 import 'package:kova/shared/services/network_sync_service.dart';
 
-import 'text_analyzer.dart';
 import 'context_detector.dart';
 import 'severity_engine.dart';
 import 'monitoring_bridge.dart';
+import 'tflite_analyzer_service.dart';
 
 /// Master service that coordinates all detection and alerting
 /// Only active when mode == AppMode.child
@@ -34,6 +34,7 @@ class DetectionOrchestrator {
   final NetworkSyncService _networkSync = NetworkSyncService();
   final PendingSyncRepository _pendingSyncRepo = PendingSyncRepository();
   final ContextDetector _contextDetector = ContextDetector();
+  final TfLiteAnalyzerService _tfLiteAnalyzer = TfLiteAnalyzerService();
   
   final _alertStreamController = StreamController<AlertModel>.broadcast();
   Stream<AlertModel> get onNewAlert => _alertStreamController.stream;
@@ -58,6 +59,9 @@ class DetectionOrchestrator {
     }
 
     _active = true;
+
+    // Initialize ML model
+    await _tfLiteAnalyzer.init();
 
     // Populate the blocked-app cache from the database
     try {
@@ -87,6 +91,7 @@ class DetectionOrchestrator {
   void stop() {
     _active = false;
     _blockedApps.clear();
+    _tfLiteAnalyzer.close();
     MonitoringBridge.reset();
     _alertStreamController.close();
     if (kDebugMode) debugPrint('🛑 KOVA Detection Orchestrator: STOPPED');
@@ -122,8 +127,8 @@ class DetectionOrchestrator {
       sender: direction == 'outgoing' ? 'child' : senderName,
     );
 
-    // Analyze text
-    final textScores = TextAnalyzer.analyze(text);
+    // Analyze text with ML
+    final textScores = await _tfLiteAnalyzer.analyzeText(text);
     final contextResult = _contextDetector.analyze(conversationId);
 
     // Calculate severity
@@ -222,8 +227,8 @@ class DetectionOrchestrator {
 
     if (texts.isEmpty) return;
 
-    // Batch analyze
-    final batchResult = TextAnalyzer.analyzeBatch(texts);
+    // Batch analyze with ML
+    final batchResult = await _tfLiteAnalyzer.analyzeBatch(texts);
     final conversationId = '${appKey}_$_childId';
     
     // Add all messages to context
@@ -657,7 +662,9 @@ class DetectionOrchestrator {
     required String? senderName,
     required List<String> attachedImagePaths,
   }) async {
-    final textScores = TextAnalyzer.analyze(messageText);
+    final tfLite = TfLiteAnalyzerService();
+    if (!tfLite.isInitialized) await tfLite.init();
+    final textScores = await tfLite.analyzeText(messageText);
     
     final detector = ContextDetector();
     detector.addMessage('${app}_$childId', messageText, sender: senderName);
@@ -689,7 +696,10 @@ class DetectionOrchestrator {
     final texts = messages.map((m) => m['text']?.toString() ?? '').where((t) => t.isNotEmpty).toList();
     if (texts.isEmpty) return null;
     
-    final batchResult = TextAnalyzer.analyzeBatch(texts);
+    final tfLite = TfLiteAnalyzerService();
+    if (!tfLite.isInitialized) await tfLite.init();
+    final batchResult = await tfLite.analyzeBatch(texts);
+    
     final detector = ContextDetector();
     
     for (final msg in messages) {
