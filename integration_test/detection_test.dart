@@ -1,12 +1,10 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:kova/main.dart' as app;
-import 'package:kova/core/app_mode.dart';
 import 'package:kova/child/services/monitoring_bridge.dart';
-import 'package:kova/child/services/detection_orchestrator.dart';
+import 'package:kova/core/app_mode.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -18,8 +16,7 @@ void main() {
 
   testWidgets('Simulate grooming detection and blocking overlay', (WidgetTester tester) async {
     // 1. Force the app mode to Child to trigger DetectionOrchestrator
-    await AppModeManager.setMode(AppMode.child);
-    await AppModeManager.setChildId('test_child_123');
+    await AppModeManager.setChildMode('test_child_123');
     
     // Start the application
     app.main();
@@ -52,7 +49,7 @@ void main() {
 
     // 5. Verify the block overlay is shown
     // We can search for typical overlay texts, for instance "Blocked" or "This app has been blocked"
-    final blockTextFinder = find.textContaining('blocked', skipOffstage: false, ignoreCase: true);
+    final blockTextFinder = find.textContaining('blocked', skipOffstage: false);
     
     // Alternatively, look for typical UI components on the block screen, 
     // such as a "Return to Home" or "Close" button.
