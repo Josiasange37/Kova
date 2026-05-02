@@ -14,6 +14,8 @@ jobs:
     timeout-minutes: 60
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx1536M -Dorg.gradle.daemon=false"
+      JAVA_TOOL_OPTIONS: "-Xmx1536M"
 
     steps:
       - name: Checkout repository
@@ -84,7 +86,7 @@ jobs:
 
       - name: Build Android APK
         run: |
-          flutter build apk --release -v
+          flutter build apk --release --no-tree-shake-icons -v
           echo "✅ APK built successfully"
           ls -lh build/app/outputs/flutter-apk/
 

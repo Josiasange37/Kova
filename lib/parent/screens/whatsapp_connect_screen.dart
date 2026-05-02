@@ -9,6 +9,7 @@ import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/shared/services/network_sync_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:uuid/uuid.dart';
+import 'dart:async';
 
 class WhatsappConnectScreen extends StatefulWidget {
   const WhatsappConnectScreen({super.key});
@@ -26,6 +27,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
 
   final _childRepo = ChildRepository();
   bool _isDisposed = false;
+  StreamSubscription? _pairingSub;
 
   // ── Entrance animations ──
   late AnimationController _entranceCtrl;
@@ -54,6 +56,19 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
     _initAnimations();
     _loadPairingCode();
     _entranceCtrl.forward();
+
+    // Subscribe to reactive pairing complete stream
+    // This fires instantly when LAN pairing succeeds, avoiding poll delays
+    _pairingSub = NetworkSyncService.instance.onPairingComplete.listen((data) {
+      if (!_isDisposed && mounted && !_isConnected) {
+        setState(() => _isConnected = true);
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (!_isDisposed && mounted) {
+            context.go(AppRoutes.parentSuccess);
+          }
+        });
+      }
+    });
   }
 
 
@@ -159,6 +174,7 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
   @override
   void dispose() {
     _isDisposed = true;
+    _pairingSub?.cancel();
     _entranceCtrl.dispose();
     _scanLineCtrl.dispose();
     _pulseCtrl.dispose();
@@ -169,10 +185,14 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
   Future<void> _loadPairingCode() async {
     final children = await _childRepo.getAll();
     String childId;
+    final childName = LocalStorage.getString('child_name');
+    final nameToUse = childName.isNotEmpty ? childName : 'Child';
+
     if (children.isNotEmpty) {
       childId = children.first.id;
+      await _childRepo.updateName(childId, nameToUse);
     } else {
-      childId = await _childRepo.create('Child');
+      childId = await _childRepo.create(nameToUse);
     }
 
     // Ensure parent has a device ID
@@ -216,6 +236,17 @@ class _WhatsappConnectScreenState extends State<WhatsappConnectScreen>
     if (token != null) {
       // Child successfully claimed the code!
       // (networkSync already started)
+
+      // Push child profile to relay so child side can sync the name
+      final children = await _childRepo.getAll();
+      if (children.isNotEmpty) {
+        final child = children.first;
+        await networkSync.pushChildProfile(
+          childId: child.id,
+          name: child.name,
+          age: child.age,
+        );
+      }
       
       if (!_isDisposed && mounted) {
         setState(() {

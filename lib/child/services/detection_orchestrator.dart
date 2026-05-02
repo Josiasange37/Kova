@@ -563,12 +563,27 @@ class DetectionOrchestrator {
       }
     }
 
-    // ── 3. Trigger native overlay ──
+    // ── 3. Trigger native overlay via DUAL approach ──
+    // Approach A: MethodChannel (works when Flutter engine is alive)
+    bool channelSuccess = false;
     try {
       await channel.invokeMethod('blockApp', {'pkg': pkg});
-      if (kDebugMode) debugPrint('🚫 App blocked: $app ($pkg)');
+      channelSuccess = true;
+      if (kDebugMode) debugPrint('🚫 App blocked via MethodChannel: $app ($pkg)');
     } catch (e) {
-      if (kDebugMode) debugPrint('❌ Failed to trigger native block for $app: $e');
+      if (kDebugMode) debugPrint('⚠️ MethodChannel block failed (engine dead?): $e');
+    }
+
+    // Approach B: ForegroundService Intent (works even when Flutter is backgrounded)
+    // This is the reliable path — the service is always running.
+    if (!channelSuccess) {
+      try {
+        const platform = MethodChannel('com.kova.child/setup');
+        await platform.invokeMethod('blockAppViaService', {'pkg': pkg});
+        if (kDebugMode) debugPrint('🚫 App blocked via ForegroundService: $app ($pkg)');
+      } catch (e) {
+        if (kDebugMode) debugPrint('❌ ForegroundService block also failed: $e');
+      }
     }
   }
 

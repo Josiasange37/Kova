@@ -102,6 +102,24 @@ class MainActivity : FlutterActivity() {
         "getDeviceManufacturer" -> {
           result.success(Build.MANUFACTURER ?: "unknown")
         }
+        "blockAppViaService" -> {
+          // Reliable block via ForegroundService — works even when Flutter is backgrounded
+          val pkg = call.argument<String>("pkg")
+          if (pkg != null) {
+            val serviceIntent = Intent(this, KovaForegroundService::class.java).apply {
+              action = KovaForegroundService.ACTION_BLOCK_APP
+              putExtra(KovaForegroundService.EXTRA_BLOCK_PACKAGE, pkg)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+              startForegroundService(serviceIntent)
+            } else {
+              startService(serviceIntent)
+            }
+            result.success(true)
+          } else {
+            result.error("INVALID_PKG", "Package name required", null)
+          }
+        }
         else -> result.notImplemented()
       }
     }

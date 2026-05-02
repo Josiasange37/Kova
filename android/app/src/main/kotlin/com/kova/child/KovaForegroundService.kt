@@ -37,7 +37,10 @@ class KovaForegroundService : Service() {
         const val CHANNEL_ID = "kova_protection_channel"
         const val NOTIFICATION_ID = 1001
         const val ACTION_REMOTE_UNLOCK = "com.kova.ACTION_REMOTE_UNLOCK"
+        const val ACTION_BLOCK_APP = "com.kova.ACTION_BLOCK_APP"
         const val EXTRA_UNLOCK_PACKAGE = "unlock_package"
+        const val EXTRA_BLOCK_PACKAGE = "block_package"
+        const val EXTRA_BLOCK_REASON = "block_reason"
 
         // ─── Watchdog reduced to 10 seconds ──────────────────────────────────
         // 30s was too wide — child had 30s of unmonitored activity after disabling services.
@@ -112,6 +115,22 @@ class KovaForegroundService : Service() {
     // The foreground notification + BOOT_COMPLETED receiver together keep KOVA alive.
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "✅ Foreground service started")
+
+        // Handle block app action
+        if (intent?.action == ACTION_BLOCK_APP) {
+            val pkg = intent.getStringExtra(EXTRA_BLOCK_PACKAGE)
+            val reason = intent.getStringExtra(EXTRA_BLOCK_REASON) ?: "App is blocked for your safety"
+            if (pkg != null) {
+                Log.d(TAG, "[OVERLAY PIPELINE] Service launching block overlay for: $pkg")
+                launchBlockOverlay(pkg, reason)
+            }
+        }
+
+        // Handle remote unlock action
+        if (intent?.action == ACTION_REMOTE_UNLOCK) {
+            val pkg = intent.getStringExtra(EXTRA_UNLOCK_PACKAGE)
+            handleRemoteUnlock(pkg)
+        }
 
         // Re-post watchdog in case the service was restarted mid-cycle
         handler.removeCallbacks(watchdogRunnable)
@@ -296,6 +315,23 @@ class KovaForegroundService : Service() {
             if (packageName != null) putExtra("package", packageName)
         }
         LocalBroadcastManager.getInstance(this).sendBroadcast(unlockIntent)
+    }
+
+    // ─── Block Overlay Launcher ──────────────────────────────────────────────
+    // Launches the block overlay from the service layer so it works even when
+    // the Flutter engine/MainActivity are dead (background monitoring).
+    private fun launchBlockOverlay(packageName: String, reason: String = "App is blocked for your safety") {
+        try {
+            val intent = Intent(this, BlockOverlayActivity::class.java).apply {
+                putExtra("blocked_package", packageName)
+                putExtra("reason", reason)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            startActivity(intent)
+            Log.d(TAG, "[OVERLAY PIPELINE] Block overlay launched for $packageName from ForegroundService")
+        } catch (e: Exception) {
+            Log.e(TAG, "[OVERLAY PIPELINE] Failed to launch overlay from service: ${e.message}")
+        }
     }
 
     // ── Individual service checks ──

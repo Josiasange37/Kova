@@ -6,6 +6,19 @@ import 'dart:io';
 import 'package:kova/shared/models/network_alert.dart';
 import 'package:kova/shared/services/security_service.dart';
 
+/// Data about a child profile received over LAN (used by parent)
+class LanChildProfile {
+  final String childId;
+  final String name;
+  final int age;
+  LanChildProfile({required this.childId, required this.name, required this.age});
+  factory LanChildProfile.fromJson(Map<String, dynamic> j) => LanChildProfile(
+    childId: j['childId'] as String? ?? '',
+    name: j['name'] as String? ?? 'Child',
+    age: j['age'] as int? ?? 10,
+  );
+}
+
 /// TCP-based direct data transfer between paired devices on LAN.
 /// Child runs the server, parent connects as client.
 class LanDataService {
@@ -26,9 +39,12 @@ class LanDataService {
 
   final _alertReceivedController = StreamController<NetworkAlertFull>.broadcast();
   final _connectionStateController = StreamController<bool>.broadcast();
+  final _childProfileReceivedController = StreamController<LanChildProfile>.broadcast();
 
   Stream<NetworkAlertFull> get onAlertReceived => _alertReceivedController.stream;
   Stream<bool> get onConnectionChanged => _connectionStateController.stream;
+  /// Fires when the parent receives a CHILD_PROFILE message from the child device.
+  Stream<LanChildProfile> get onChildProfileReceived => _childProfileReceivedController.stream;
 
   bool get isConnected => _isClientConnected || _activeConnection != null;
 
@@ -120,6 +136,13 @@ class LanDataService {
             _securityService.setPeerPublicKey(json['publicKey'] as String);
             print('✅ Handshake OK: Stored peer public key');
           }
+          break;
+
+        case 'child_profile':
+          // Parent receives child's name/age immediately after LAN pairing
+          final profile = LanChildProfile.fromJson(json['data'] as Map<String, dynamic>? ?? {});
+          print('👶 Received child profile over LAN: ${profile.name} (id=${profile.childId})');
+          _childProfileReceivedController.add(profile);
           break;
 
         case 'alert':
@@ -229,6 +252,31 @@ class LanDataService {
   // Shared — send data
   // ─────────────────────────────────────────────
 
+  /// Send child profile to parent immediately after LAN pairing (child → parent)
+  void sendChildProfile({required String childId, required String name, required int age}) {
+    final target = _activeConnection ?? _clientSocket;
+    if (target == null) {
+      print('⚠️ sendChildProfile: no socket available yet, will retry in 500ms...');
+      // Retry once after 500ms in case TCP connection is still establishing
+      Future.delayed(const Duration(milliseconds: 500), () {
+        final t2 = _activeConnection ?? _clientSocket;
+        if (t2 != null) {
+          _sendToSocket(t2, {
+            'type': 'child_profile',
+            'data': {'childId': childId, 'name': name, 'age': age},
+          });
+          print('📤 Child profile sent via LAN (delayed): $name');
+        }
+      });
+      return;
+    }
+    _sendToSocket(target, {
+      'type': 'child_profile',
+      'data': {'childId': childId, 'name': name, 'age': age},
+    });
+    print('📤 Child profile sent via LAN: $name (id=$childId)');
+  }
+
   /// Send a full alert over LAN (child → parent)
   void sendAlert(NetworkAlertFull alert) {
     final target = _activeConnection ?? _clientSocket;
@@ -277,5 +325,6 @@ class LanDataService {
     disconnectClient();
     _alertReceivedController.close();
     _connectionStateController.close();
+    _childProfileReceivedController.close();
   }
 }

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:kova/core/router.dart';
 
+import 'package:kova/shared/services/local_storage.dart';
+
 class ChildProfileScreen extends StatefulWidget {
   const ChildProfileScreen({super.key});
 
@@ -69,9 +71,12 @@ class _ChildProfileScreenState extends State<ChildProfileScreen> {
               ),
               const Spacer(),
               FilledButton(
-                onPressed: () {
+                onPressed: () async {
                   if (_nameController.text.trim().isNotEmpty) {
-                    context.go(AppRoutes.parentMonitoredApps);
+                    await LocalStorage.setString('child_name', _nameController.text.trim());
+                    if (context.mounted) {
+                      context.go(AppRoutes.parentMonitoredApps);
+                    }
                   }
                 },
                 child: const Text('Continue'),

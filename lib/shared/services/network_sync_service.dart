@@ -84,6 +84,13 @@ class NetworkSyncService {
       _cryptoService = CryptoService(_pairToken);
     }
 
+    // Always attach the LAN alert listener FIRST — before any early return —
+    // so that after pairing completes and the pair token is written, alerts
+    // flowing in via LAN are immediately bridged to onAlertReceived.
+    _lanData.onAlertReceived.listen((alert) {
+      _alertReceivedController.add(alert);
+    });
+
     // Allow starting without a pair token during initial pairing.
     // LAN discovery will run in pairingMode, and relay calls are skipped.
     if (_pairToken.isEmpty) {
@@ -131,10 +138,43 @@ class NetworkSyncService {
       _startSyncLoop();
     }
 
-    // Listen for LAN alerts (both roles)
-    _lanData.onAlertReceived.listen((alert) {
-      _alertReceivedController.add(alert);
-    });
+    // NOTE: LAN alert listener is already attached above (before early-return block)
+
+    // ── Parent: Receive child profile over LAN and persist it ─────────────────
+    // When the child sends its name/age over LAN after pairing, the parent
+    // saves it to SQLite so the dashboard shows the correct child name.
+    if (role == 'parent') {
+      _lanData.onChildProfileReceived.listen((profile) async {
+        try {
+          // Save/update the child record in the local database
+          final childRepo = ChildRepository();
+          final existing = await childRepo.getAll();
+          if (existing.isEmpty) {
+            // First time — create the child record
+            await childRepo.create(profile.name, age: profile.age);
+            print('👶 Child profile CREATED in DB: ${profile.name}');
+          } else {
+            // Already exists — update name/age
+            await childRepo.updateName(existing.first.id, profile.name);
+            await childRepo.updateAge(existing.first.id, profile.age);
+            print('👶 Child profile UPDATED in DB: ${profile.name}');
+          }
+          // Also cache in LocalStorage for fast access
+          await LocalStorage.setString('child_name', profile.name);
+          if (profile.childId.isNotEmpty) {
+            await LocalStorage.setChildId(profile.childId);
+          }
+          // Fire pairingCompleteController so the UI refreshes
+          _pairingCompleteController.add({
+            'method': 'lan_profile',
+            'childName': profile.name,
+            'childId': profile.childId,
+          });
+        } catch (e) {
+          print('❌ Failed to persist child profile from LAN: $e');
+        }
+      });
+    }
 
     // Check initial connectivity
     final result = await Connectivity().checkConnectivity();
@@ -210,24 +250,42 @@ class NetworkSyncService {
       }
     }
 
-    // 2. Try local LAN discovery first
+    // 2. Try local LAN discovery first (with retry for timing issues)
     if (!_lanDiscovery.isRunning) {
       // Start in pairing mode — no pair token required
       await _lanDiscovery.start(role: 'child', pairingMode: true);
     }
-    
-    // ─── Reactive LAN Discovery (replaces polling loop) ──────────────────────
-    // Instead of polling every 500ms, we use a Completer that fires immediately
-    // when the peer is discovered via UDP broadcast. This reduces latency
-    // from up to 4 seconds to <100ms when both devices are on the same WiFi.
+
+    // ─── Reactive LAN Discovery with Retry ───────────────────────────────────
+    // Child waits 1.5s before first attempt so the parent's UDP socket is
+    // fully bound and ready to receive broadcasts. Then retries up to 3x.
+    // This eliminates the "needs 2 attempts" bug.
     LanDeviceInfo? localPeer;
-    try {
-      localPeer = await _lanDiscovery.waitForPeerWithCode(
-        code,
-        const Duration(seconds: 3), // 3s timeout, then fall through to Vercel
-      );
-    } catch (e) {
-      print('⚠️ LAN discovery error: $e');
+    const maxAttempts = 3;
+    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        // Wait before each attempt: 1.5s first try, 2s second, 2.5s third
+        final delayMs = 1500 * attempt;
+        print('📡 LAN discovery attempt $attempt/$maxAttempts (delay: ${delayMs}ms)...');
+        await Future.delayed(Duration(milliseconds: delayMs));
+
+        // Broadcast our presence immediately before listening
+        if (_lanDiscovery.isRunning) {
+          _lanDiscovery.setActivePairCode(code);
+        }
+
+        localPeer = await _lanDiscovery.waitForPeerWithCode(
+          code,
+          const Duration(seconds: 3),
+        );
+        if (localPeer != null) {
+          print('📡 LAN peer found on attempt $attempt');
+          break;
+        }
+        print('⚠️ LAN attempt $attempt: no peer found, retrying...');
+      } catch (e) {
+        print('⚠️ LAN discovery attempt $attempt error: $e');
+      }
     }
 
     if (localPeer != null) {
@@ -248,7 +306,19 @@ class NetworkSyncService {
       _updateState(NetworkConnectionState.lan);
       
       _startSyncLoop();
-      
+
+      // ─── Send child profile over LAN so parent gets the name immediately ─
+      // This fixes the "parent doesn't see child name after pairing" bug.
+      final childName = LocalStorage.getString('child_name', 'Child');
+      final childId = LocalStorage.getString('child_id', _deviceId);
+      final childAge = LocalStorage.getInt('child_age', 10);
+      _lanData.sendChildProfile(
+        childId: childId,
+        name: childName,
+        age: childAge,
+      );
+      print('📤 Child profile sent to parent via LAN: $childName');
+
       // ─── Notify both screens simultaneously ───────────────────────────────
       _pairingCompleteController.add({
         'method': 'lan',
@@ -256,7 +326,7 @@ class NetworkSyncService {
         'peerIp': localPeer.ipAddress,
         'role': 'child',
       });
-      
+
       print('🔗 Pairing claimed via LAN!');
       return _pairToken;
     }

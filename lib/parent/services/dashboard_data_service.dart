@@ -84,6 +84,9 @@ class DashboardDataService extends ChangeNotifier {
 
   /// Initialize and start listening for remote alerts
   void startListening() {
+    // Eagerly load data so alerts can be matched to children immediately
+    loadDashboardData();
+
     // Listen for alerts from network (both LAN and Vercel relay)
     _alertSub = _networkSync.onAlertReceived.listen(_handleRemoteAlert);
 
@@ -98,9 +101,23 @@ class DashboardDataService extends ChangeNotifier {
   /// Handle an alert received from a remote child device
   Future<void> _handleRemoteAlert(NetworkAlertSummary alert) async {
     try {
+      // Ensure children are loaded before processing alerts
+      if (_children == null || _children!.isEmpty) {
+        await loadDashboardData();
+      }
+
       // Find the child this alert belongs to
-      final child = activeChild;
-      if (child == null) return;
+      var child = activeChild;
+      if (child == null) {
+        // Last resort: read directly from DB
+        final freshChildren = await _childRepo.getAll();
+        if (freshChildren.isEmpty) {
+          if (kDebugMode) debugPrint('⚠️ Alert received but no children registered — dropping');
+          return;
+        }
+        _children = freshChildren;
+        child = freshChildren.first;
+      }
 
       // Save alert to local database
       final alertId = await _alertRepo.create(
