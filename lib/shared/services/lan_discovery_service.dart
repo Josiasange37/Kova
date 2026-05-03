@@ -142,7 +142,7 @@ class LanDiscoveryService {
         InternetAddress.anyIPv4,
         _discoveryPort,
         reuseAddress: true,
-        reusePort: true,
+        reusePort: Platform.isAndroid,
       );
 
       _socket!.broadcastEnabled = true;

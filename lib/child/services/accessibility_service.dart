@@ -181,4 +181,14 @@ class AccessibilityService {
       debugPrint('Error opening battery optimization settings: $e');
     }
   }
+
+  /// Check if the app is exempt from battery optimization
+  static Future<bool> isBatteryOptimizationIgnored() async {
+    try {
+      final result = await _setup.invokeMethod<bool>('isBatteryOptimizationIgnored');
+      return result ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
 }

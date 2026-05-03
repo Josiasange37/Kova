@@ -142,7 +142,9 @@ class SeverityEngine {
   }) {
     switch (severity) {
       case 'critical':
-        if (detectedGroomingPhases.isNotEmpty) {
+        if (detectedKeywords.contains('suicide') || detectedKeywords.contains('self-harm')) {
+          return 'Severe self-harm threat detected. URGENT ACTION RECOMMENDED.';
+        } else if (detectedGroomingPhases.isNotEmpty) {
           return 'Potential predatory grooming detected. Pattern: ${detectedGroomingPhases.join(", ")}. URGENT ACTION RECOMMENDED.';
         } else if (detectedKeywords.isNotEmpty) {
           return 'Severe harmful content detected. Keywords: ${detectedKeywords.take(3).join(", ")}. URGENT ACTION RECOMMENDED.';

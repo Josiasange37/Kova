@@ -94,8 +94,12 @@ class MonitoringBridge {
   }
 
   static void _processNotificationData(dynamic arguments) {
+    if (arguments == null || arguments is! Map) {
+      if (kDebugMode) debugPrint('❌ Invalid notification payload');
+      return;
+    }
     try {
-      final args = Map<String, dynamic>.from(arguments as Map);
+      final args = Map<String, dynamic>.from(arguments);
 
       final app = args['app'] as String? ?? 'unknown';
       final text = args['text'] as String? ?? '';
@@ -154,8 +158,12 @@ class MonitoringBridge {
   }
 
   static void _processKeyboardData(dynamic arguments) {
+    if (arguments == null || arguments is! Map) {
+      if (kDebugMode) debugPrint('❌ Invalid keyboard payload');
+      return;
+    }
     try {
-      final args = Map<String, dynamic>.from(arguments as Map);
+      final args = Map<String, dynamic>.from(arguments);
 
       final app = args['app'] as String? ?? 'unknown';
       final text = args['text'] as String? ?? '';
@@ -196,8 +204,12 @@ class MonitoringBridge {
   }
 
   static void _processAccessibilityData(dynamic arguments) {
+    if (arguments == null || arguments is! Map) {
+      if (kDebugMode) debugPrint('❌ Invalid accessibility payload');
+      return;
+    }
     try {
-      final args = Map<String, dynamic>.from(arguments as Map);
+      final args = Map<String, dynamic>.from(arguments);
 
       final event = args['event'] as String? ?? 'unknown';
       final app = args['app'] as String? ?? 'unknown';

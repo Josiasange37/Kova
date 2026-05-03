@@ -94,7 +94,6 @@ Future<void> main() async {
     } else if (appMode == AppMode.parent) {
       debugPrint('Starting parent services...');
       await NetworkSyncService.instance.start(role: 'parent');
-      DashboardDataService.instance.startListening();
       debugPrint('Parent services started');
     }
 
@@ -169,7 +168,7 @@ class _KovaAppState extends State<KovaApp> {
         // Central app state
         ChangeNotifierProvider(create: (_) => AppState()),
         // Parent services
-        ChangeNotifierProvider(create: (_) => DashboardDataService()),
+        ChangeNotifierProvider(create: (_) => DashboardDataService()..startListening()),
         ChangeNotifierProvider(create: (_) => AlertHistoryService()),
         ChangeNotifierProvider(create: (_) => AppControlService()),
         ChangeNotifierProvider(create: (_) => ChildProfileService()),
