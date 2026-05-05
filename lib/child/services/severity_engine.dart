@@ -11,36 +11,44 @@ class SeverityEngine {
     final sexual = (textScores['sexual'] as num?)?.toDouble() ?? 0.0;
     final grooming = (textScores['grooming'] as num?)?.toDouble() ?? 0.0;
     final violence = (textScores['violence'] as num?)?.toDouble() ?? 0.0;
+    final unsafeSubstances = (textScores['unsafe_substances'] as num?)?.toDouble() ?? 0.0;
+    final personalInfo = (textScores['personal_info'] as num?)?.toDouble() ?? 0.0;
     final ctxRisk = (contextScores['grooming_risk'] as num?)?.toDouble() ?? 0.0;
     final escalation = contextScores['escalation'] as bool? ?? false;
 
-    // CRITICAL
-    if (sexual > 0.6 ||
-        violence > 0.7 ||
-        ctxRisk > 0.75 ||
-        (escalation && ctxRisk > 0.5)) {
+    // CRITICAL (stricter)
+    if (sexual > 0.4 ||
+        grooming > 0.5 ||
+        violence > 0.5 ||
+        unsafe > 0.6 ||
+        ctxRisk > 0.6 ||
+        (escalation && ctxRisk > 0.4)) {
       return 'critical';
     }
 
-    // HIGH
-    if (sexual > 0.3 ||
-        grooming > 0.5 ||
-        violence > 0.4 ||
-        ctxRisk > 0.5 ||
-        unsafe > 0.7) {
+    // HIGH (stricter)
+    if (sexual > 0.2 ||
+        grooming > 0.3 ||
+        violence > 0.3 ||
+        unsafeSubstances > 0.4 ||
+        personalInfo > 0.5 ||
+        ctxRisk > 0.3 ||
+        unsafe > 0.4) {
       return 'high';
     }
 
     // MEDIUM
-    if (grooming > 0.25 ||
-        violence > 0.2 ||
-        ctxRisk > 0.3 ||
-        unsafe > 0.5) {
+    if (grooming > 0.15 ||
+        violence > 0.15 ||
+        unsafeSubstances > 0.2 ||
+        personalInfo > 0.3 ||
+        ctxRisk > 0.2 ||
+        unsafe > 0.25) {
       return 'medium';
     }
 
     // LOW
-    if (unsafe > 0.3 || ctxRisk > 0.15) {
+    if (unsafe > 0.1 || ctxRisk > 0.1) {
       return 'low';
     }
 

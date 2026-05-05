@@ -187,18 +187,18 @@ class KovaAccessibilityService : AccessibilityService() {
                 handleWindowStateChanged(event, packageName, now)
             }
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                if (!ALL_MONITORED_APPS.contains(packageName)) return
+                if (!isAppMonitored(packageName)) return
                 // Debounce text extraction (expensive)
                 if (now - lastTextExtractTime < TEXT_DEBOUNCE_MS) return
                 lastTextExtractTime = now
                 handleContentChanged(event, packageName, now)
             }
             AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
-                if (!ALL_MONITORED_APPS.contains(packageName)) return
+                if (!isAppMonitored(packageName)) return
                 handleTextInputChanged(event, packageName, now)
             }
             AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> {
-                if (ALL_MONITORED_APPS.contains(packageName)) {
+                if (isAppMonitored(packageName)) {
                     handleNotificationState(event, packageName, now)
                 }
             }
@@ -240,7 +240,7 @@ class KovaAccessibilityService : AccessibilityService() {
             currentForegroundApp = packageName
             currentWindowClass = className
 
-            val isMonitored = ALL_MONITORED_APPS.contains(packageName)
+            val isMonitored = isAppMonitored(packageName)
             val isBrowser = BROWSER_APPS.contains(packageName)
             val isMessaging = MESSAGING_APPS.contains(packageName)
             val windowType = classifyWindow(className, packageName)
@@ -363,6 +363,20 @@ class KovaAccessibilityService : AccessibilityService() {
                packageName.startsWith("com.android.settings")
     }
 
+    private fun isAppMonitored(packageName: String): Boolean {
+        // Skip our own app
+        if (packageName == applicationContext.packageName) return false
+        // Skip system UI and launcher
+        if (packageName == "com.android.systemui") return false
+        if (packageName == "android") return false
+        if (packageName.startsWith("com.sec.android.app.launcher")) return false
+        if (packageName.startsWith("com.google.android.apps.nexuslauncher")) return false
+        // Skip settings apps
+        if (isSettingsPackage(packageName)) return false
+        
+        return true
+    }
+
     /**
      * Extract text from an AccessibilityNodeInfo tree for self-defense checks.
      */
@@ -426,7 +440,7 @@ class KovaAccessibilityService : AccessibilityService() {
         timestamp: Long
     ) {
         // Only extract text for monitored apps
-        if (!ALL_MONITORED_APPS.contains(packageName)) return
+        if (!isAppMonitored(packageName)) return
 
         extractAndSendVisibleText(packageName, "content_changed", timestamp)
     }

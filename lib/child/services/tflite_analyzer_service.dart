@@ -198,12 +198,18 @@ class TfLiteAnalyzerService {
   }
 
   Map<String, dynamic> _fallbackSafeResult() {
+    // Return all keys that SeverityEngine.calculate() reads.
+    // This ensures a TFLite failure doesn't silently zero-out detection.
+    // The TextAnalyzer (keyword-based) scores will still be merged on top.
     return {
-      'safetyScore': 100,
-      'unsafe': 0.0,
-      'category': 'safe',
-      'confidence': 1.0,
-      'isSafe': true,
+      'unsafe':            0.0,
+      'safe':              1.0,
+      'sexual':            0.0,
+      'grooming':          0.0,
+      'violence':          0.0,
+      'unsafe_substances': 0.0,
+      'personal_info':     0.0,
+      'detected_keywords': 0.0,
     };
   }
 }

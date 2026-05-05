@@ -64,10 +64,9 @@
         <activity
             android:name=".BlockOverlayActivity"
             android:exported="true"
-            android:theme="@style/LaunchTheme"
+            android:theme="@style/BlockOverlayTheme"
             android:launchMode="singleTop"
             android:excludeFromRecents="true"
-            android:noHistory="true"
             android:showOnLockScreen="true"
             android:turnScreenOn="true" />
             

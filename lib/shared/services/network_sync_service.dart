@@ -468,36 +468,49 @@ class NetworkSyncService {
   // ─────────────────────────────────────────────
 
   /// Push an alert — uses LAN if available, falls back to Vercel relay
+  /// CRITICAL: Only deletes from pending sync queue AFTER confirmed delivery.
   Future<void> pushAlert(NetworkAlertFull alert, [String? itemId]) async {
     print('📤 [ALERT PIPELINE] NetworkSyncService.pushAlert() START');
     print('📤 [ALERT PIPELINE] _lanData.isConnected = ${_lanData.isConnected}');
     print('📤 [ALERT PIPELINE] _connectionState = $_connectionState');
     print('📤 [ALERT PIPELINE] _pairToken empty = ${_pairToken.isEmpty}');
 
-    // Try LAN first (full data)
-    if (_lanData.isConnected) {
+    bool delivered = false;
+
+    // Try LAN first (full data) — but VERIFY the socket is truly alive
+    if (_lanData.isConnected && _lanData.isSocketHealthy) {
       print('📤 [ALERT PIPELINE] Taking LAN path...');
-      _lanData.sendAlert(alert);
-      print('📤 Alert sent via LAN (full data)');
-      if (itemId != null) {
-        await _pendingSyncRepo.deleteList([itemId]);
+      final lanSuccess = _lanData.sendAlertSafe(alert);
+      if (lanSuccess) {
+        print('📤 Alert sent via LAN (full data)');
+        delivered = true;
+      } else {
+        print('⚠️ [ALERT PIPELINE] LAN send FAILED — socket dead, falling back to relay');
       }
-      print('✅ [ALERT PIPELINE] LAN path complete');
-      return;
     }
 
-    // Fallback to Vercel relay (summary only)
-    print('📤 [ALERT PIPELINE] LAN not connected, falling back to Vercel relay...');
-    await _pushAlertToRelay(alert, itemId);
-    print('📤 [ALERT PIPELINE] Vercel relay path complete');
+    // Always try Vercel relay as backup if LAN didn't confirm delivery
+    if (!delivered) {
+      print('📤 [ALERT PIPELINE] Falling back to Vercel relay...');
+      delivered = await _pushAlertToRelay(alert, itemId);
+    }
+
+    // Only delete from pending sync if we confirmed delivery via at least one channel
+    if (delivered && itemId != null) {
+      await _pendingSyncRepo.deleteList([itemId]);
+      print('✅ [ALERT PIPELINE] Alert delivered and removed from queue');
+    } else if (!delivered) {
+      print('❌ [ALERT PIPELINE] Alert NOT delivered — keeping in queue for retry');
+    }
   }
 
   /// Push alert summary to Vercel relay
-  Future<void> _pushAlertToRelay(NetworkAlertSummary alert, [String? itemId]) async {
+  /// Returns true if the relay accepted the alert (HTTP 201)
+  Future<bool> _pushAlertToRelay(NetworkAlertSummary alert, [String? itemId]) async {
     print('📤 [ALERT PIPELINE] _pushAlertToRelay() START');
     if (_pairToken.isEmpty) {
       print('❌ [ALERT PIPELINE] _pushAlertToRelay: _pairToken is EMPTY - aborting');
-      return;
+      return false;
     }
     _cryptoService ??= CryptoService(_pairToken);
 
@@ -528,19 +541,21 @@ class NetworkSyncService {
           'iv': encrypted['iv'],
           'id': itemId
         }),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       print('📤 [ALERT PIPELINE] HTTP response: ${response.statusCode}');
       if (response.statusCode == 201) {
         print('✅ [ALERT PIPELINE] Alert pushed to relay (summary) - HTTP 201');
+        return true;
       } else {
         print('❌ [ALERT PIPELINE] Alert push failed: HTTP ${response.statusCode} - ${response.body}');
+        return false;
       }
     } catch (e, stackTrace) {
       print('❌ [ALERT PIPELINE] _pushAlertToRelay ERROR: $e');
       print('❌ [ALERT PIPELINE] Stack trace: $stackTrace');
+      return false;
     }
-    print('📤 [ALERT PIPELINE] _pushAlertToRelay() END');
   }
 
   Future<void> _pollHistory() async {
@@ -632,7 +647,8 @@ class NetworkSyncService {
 
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    // Poll every 10 seconds instead of 30 — critical for timely parent alerts
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       _pollAlerts();
       _pollHistory();
     });
@@ -643,7 +659,8 @@ class NetworkSyncService {
 
   void _startSyncLoop() {
     _syncTimer?.cancel();
-    _syncTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    // Sync every 8 seconds for faster alert delivery
+    _syncTimer = Timer.periodic(const Duration(seconds: 8), (_) {
       _syncLoop();
       _pollAcks();
       _syncChildProfileIfNeeded(); // Retry profile sync periodically (DIRECTIVE 5)
@@ -675,38 +692,61 @@ class NetworkSyncService {
     }
   }
 
+  DateTime? _syncStartedAt;
+
   Future<void> _syncLoop() async {
     if (_role != 'child' || _pairToken.isEmpty) return;
+
+    // Safety: if _isSyncing has been stuck for more than 30 seconds, force-reset it
+    if (_isSyncing && _syncStartedAt != null) {
+      final elapsed = DateTime.now().difference(_syncStartedAt!).inSeconds;
+      if (elapsed > 30) {
+        print('⚠️ [SYNC] _isSyncing stuck for ${elapsed}s — force-resetting');
+        _isSyncing = false;
+      } else {
+        return;
+      }
+    }
     if (_isSyncing) return;
     _isSyncing = true;
+    _syncStartedAt = DateTime.now();
 
     try {
       final items = await _pendingSyncRepo.getAll();
       if (items.isEmpty) return;
 
-      for (var item in items) {
-        if (item.type == 'alert') {
-          final alert = NetworkAlertFull.fromJson(jsonDecode(item.payload));
-          await pushAlert(alert, item.id);
-        } else if (item.type == 'history') {
-          final history = WebHistory.fromJson(jsonDecode(item.payload));
-          await pushHistory(history, item.id);
-        } else if (item.type == 'child_profile') {
-          // Retry pushing child profile
-          final data = jsonDecode(item.payload);
-          await pushChildProfile(
-            childId: data['childId'],
-            name: data['name'],
-            age: data['age'] ?? 10,
-            avatarPath: data['avatarPath'],
-            settings: data['settings'],
-          );
+      // Process at most 10 items per cycle to avoid blocking the pipeline
+      final batch = items.take(10).toList();
+
+      for (var item in batch) {
+        try {
+          if (item.type == 'alert') {
+            final alert = NetworkAlertFull.fromJson(jsonDecode(item.payload));
+            await pushAlert(alert, item.id);
+          } else if (item.type == 'history') {
+            final history = WebHistory.fromJson(jsonDecode(item.payload));
+            await pushHistory(history, item.id);
+          } else if (item.type == 'child_profile') {
+            // Retry pushing child profile
+            final data = jsonDecode(item.payload);
+            await pushChildProfile(
+              childId: data['childId'],
+              name: data['name'],
+              age: data['age'] ?? 10,
+              avatarPath: data['avatarPath'],
+              settings: data['settings'],
+            );
+          }
+        } catch (e) {
+          print('❌ Sync item ${item.id} error: $e');
+          // Continue processing other items — don't let one failure block all
         }
       }
     } catch (e) {
       print('❌ Sync loop error: $e');
     } finally {
       _isSyncing = false;
+      _syncStartedAt = null;
     }
   }
 
@@ -757,8 +797,8 @@ class NetworkSyncService {
   Future<void> _pollAlerts() async {
     if (_pairToken.isEmpty) return;
 
-    // Skip polling if LAN is connected (data comes directly)
-    if (_connectionState == NetworkConnectionState.lan) return;
+    // REMOVED: "Skip polling if LAN" — LAN can silently fail (dead socket).
+    // Always poll relay as a backup channel to ensure alert delivery.
 
     try {
       final response = await http.get(

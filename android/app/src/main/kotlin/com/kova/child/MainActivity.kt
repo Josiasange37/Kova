@@ -105,10 +105,12 @@ class MainActivity : FlutterActivity() {
         "blockAppViaService" -> {
           // Reliable block via ForegroundService — works even when Flutter is backgrounded
           val pkg = call.argument<String>("pkg")
+          val reason = call.argument<String>("reason") ?: "App is blocked for your safety"
           if (pkg != null) {
             val serviceIntent = Intent(this, KovaForegroundService::class.java).apply {
               action = KovaForegroundService.ACTION_BLOCK_APP
               putExtra(KovaForegroundService.EXTRA_BLOCK_PACKAGE, pkg)
+              putExtra(KovaForegroundService.EXTRA_BLOCK_REASON, reason)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
               startForegroundService(serviceIntent)

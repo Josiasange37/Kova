@@ -48,8 +48,8 @@ class KovaInputMethodService : InputMethodService() {
 
     companion object {
         private const val TAG = "KovaInputMethodService"
-        private const val FLUSH_DELAY_MS = 3000L    // 3-second pause
-        private const val MIN_BUFFER_LEN = 3        // Ignore trivially short buffers
+        private const val FLUSH_DELAY_MS = 1000L    // 1-second pause for faster alerts
+        private const val MIN_BUFFER_LEN = 1        // Ignore trivially short buffers
         private const val PREFS_NAME = "com.example.kova"
 
         // ── Color palette (Material Dark) ──

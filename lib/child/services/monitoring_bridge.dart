@@ -225,7 +225,7 @@ class MonitoringBridge {
           final text = args['text'] as String? ?? '';
           final conversationId = args['conversationId'] as String? ?? '${app}_chat';
 
-          if (text.isNotEmpty && text.length > 5) {
+          if (text.isNotEmpty && text.length > 1) {
             if (kDebugMode) {
               final preview = text.length > 60 ? '${text.substring(0, 60)}...' : text;
               debugPrint('💬 [CHAT_TREE] $app → $preview');
@@ -238,7 +238,7 @@ class MonitoringBridge {
           if (messages is List && messages.isNotEmpty) {
             final msgMaps = messages
                 .map((m) => m is Map ? Map<String, dynamic>.from(m) : <String, dynamic>{})
-                .where((m) => (m['text'] as String? ?? '').length > 3)
+                .where((m) => (m['text'] as String? ?? '').length > 1)
                 .toList();
             if (msgMaps.isNotEmpty) {
               onConversation?.call(app, msgMaps, null);
@@ -279,7 +279,7 @@ class MonitoringBridge {
           final text = args['text'] as String? ?? '';
           final conversationId = args['conversationId'] as String? ?? '${app}_input';
 
-          if (text.isNotEmpty && text.length > 3) {
+          if (text.isNotEmpty && text.length > 1) {
             if (kDebugMode) {
               debugPrint('✏️ [INPUT] $app → $text');
             }
@@ -292,7 +292,7 @@ class MonitoringBridge {
           final text = args['text'] as String? ?? '';
           final conversationId = args['conversationId'] as String? ?? '${app}_content';
 
-          if (text.isNotEmpty && text.length > 10) {
+          if (text.isNotEmpty && text.length > 1) {
             onContent?.call(app, text, 'accessibility_tree', 'viewing', conversationId, null);
           }
           break;

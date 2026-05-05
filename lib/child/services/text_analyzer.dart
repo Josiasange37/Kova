@@ -78,11 +78,14 @@ class TextAnalyzer {
       "i'm different": 0.5,
     },
     'violence': {
-      // French
+      // French — threats & insults
       'je vais te tuer': 1.0,
       'je vais te frapper': 0.9,
       'tu vas mourir': 1.0,
       'je te hais': 0.7,
+      'va te faire foutre': 0.8,
+      'va te faire': 0.7,
+      'ferme ta gueule': 0.7,
       'sale merde': 0.6,
       'connard': 0.6,
       'salope': 0.8,
@@ -90,10 +93,23 @@ class TextAnalyzer {
       'pute': 0.9,
       'fais le ou je': 0.8,
       'sinon je vais': 0.8,
-      // English
+      'crève': 0.9,
+      'nique ta mère': 0.9,
+      // French — self-harm
+      'tue toi': 1.0,
+      'suicide toi': 1.0,
+      'je vais me tuer': 1.0,
+      'je veux mourir': 0.9,
+      'me faire du mal': 0.9,
+      'me blesser': 0.8,
+      // English — threats & insults
       'kill yourself': 1.0,
       'kys': 1.0,
+      'commit suicide': 1.0,
+      'suicide': 0.85,
       'kill you': 0.9,
+      'fuck you': 0.75,
+      'fuck off': 0.7,
       'i hate you': 0.7,
       'i will hurt you': 0.9,
       'beat you up': 0.8,
@@ -102,6 +118,18 @@ class TextAnalyzer {
       'you deserve to die': 1.0,
       'ugly bitch': 0.8,
       'stupid whore': 0.8,
+      'piece of shit': 0.75,
+      'go to hell': 0.65,
+      // English — self-harm
+      'kill myself': 1.0,
+      'end my life': 0.95,
+      'self harm': 0.95,
+      'self-harm': 0.95,
+      'cut myself': 0.95,
+      'hurt myself': 0.9,
+      'want to die': 0.9,
+      'rather be dead': 0.9,
+      'no reason to live': 1.0,
     },
     'unsafe': {
       // French

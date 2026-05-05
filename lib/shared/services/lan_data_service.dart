@@ -48,6 +48,30 @@ class LanDataService {
 
   bool get isConnected => _isClientConnected || _activeConnection != null;
 
+  /// Verify the socket is truly healthy (not just "connected" in our state)
+  bool get isSocketHealthy {
+    final target = _activeConnection ?? _clientSocket;
+    if (target == null) return false;
+    // Check if the socket's remote address is still reachable
+    // If the socket was closed, accessing remoteAddress throws
+    try {
+      target.remoteAddress;
+      return true;
+    } catch (_) {
+      // Socket is dead — clean up our state
+      if (_activeConnection != null) {
+        _activeConnection = null;
+        _connectionStateController.add(false);
+      }
+      if (_isClientConnected) {
+        _isClientConnected = false;
+        _clientSocket = null;
+        _connectionStateController.add(false);
+      }
+      return false;
+    }
+  }
+
   // ─────────────────────────────────────────────
   // Server side (runs on CHILD device)
   // ─────────────────────────────────────────────
@@ -289,6 +313,40 @@ class LanDataService {
       'type': 'encrypted_alert',
       'data': encryptedAlert,
     });
+  }
+
+  /// Safe version of sendAlert that returns true only if the socket write succeeded.
+  /// Used by NetworkSyncService to decide whether to delete from the pending queue.
+  bool sendAlertSafe(NetworkAlertFull alert) {
+    final target = _activeConnection ?? _clientSocket;
+    if (target == null) return false;
+
+    try {
+      // Verify socket is still alive before writing
+      target.remoteAddress; // throws if socket is closed
+
+      final alertJsonStr = jsonEncode(alert.toJson());
+      final encryptedAlert = _securityService.encryptPayload(alertJsonStr);
+
+      final line = '${jsonEncode({
+        'type': 'encrypted_alert',
+        'data': encryptedAlert,
+      })}\n';
+      target.add(utf8.encode(line));
+      return true;
+    } catch (e) {
+      print('LAN sendAlertSafe FAILED (socket dead): $e');
+      // Clean up dead socket state
+      if (target == _activeConnection) {
+        _activeConnection = null;
+      }
+      if (target == _clientSocket) {
+        _isClientConnected = false;
+        _clientSocket = null;
+      }
+      _connectionStateController.add(false);
+      return false;
+    }
   }
 
   void _sendToSocket(Socket socket, Map<String, dynamic> data) {

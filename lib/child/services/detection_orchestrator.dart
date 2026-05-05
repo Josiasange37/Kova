@@ -21,6 +21,7 @@ import 'context_detector.dart';
 import 'severity_engine.dart';
 import 'monitoring_bridge.dart';
 import 'tflite_analyzer_service.dart';
+import 'text_analyzer.dart';
 
 /// Master service that coordinates all detection and alerting
 /// Only active when mode == AppMode.child
@@ -46,6 +47,10 @@ class DetectionOrchestrator {
 
   /// In-memory cache of blocked app keys — avoids DB reads on every window_changed
   final Set<String> _blockedApps = {};
+
+  /// Cached child model — avoids DB reads on every message (major latency fix)
+  dynamic _cachedChild;
+  DateTime? _childCacheTime;
 
   /// Start detection services
   Future<void> start() async {
@@ -81,6 +86,10 @@ class DetectionOrchestrator {
     MonitoringBridge.onTamper = _processTamper;
     MonitoringBridge.onBrowserContent = _processBrowserContent;
     
+    // Pre-cache child model so first detection is instant
+    _cachedChild = await _childRepo.getById(_childId!);
+    _childCacheTime = DateTime.now();
+
     // Initialize bridge (registers handlers on 3 channels)
     MonitoringBridge.init();
 
@@ -91,10 +100,55 @@ class DetectionOrchestrator {
   void stop() {
     _active = false;
     _blockedApps.clear();
+    _cachedChild = null;
+    _childCacheTime = null;
     _tfLiteAnalyzer.close();
     MonitoringBridge.reset();
     _alertStreamController.close();
     if (kDebugMode) debugPrint('🛑 KOVA Detection Orchestrator: STOPPED');
+  }
+
+  /// Get child model from cache (refreshes every 60 seconds)
+  Future<dynamic> _getChild() async {
+    final now = DateTime.now();
+    if (_cachedChild != null && _childCacheTime != null &&
+        now.difference(_childCacheTime!).inSeconds < 60) {
+      return _cachedChild;
+    }
+    _cachedChild = await _childRepo.getById(_childId!);
+    _childCacheTime = now;
+    return _cachedChild;
+  }
+
+  /// Merge TFLite and keyword scores by taking the max of each field.
+  /// This ensures detection works even when TFLite fails to initialize.
+  Map<String, dynamic> _mergeScores(
+    Map<String, dynamic> tfliteScores,
+    Map<String, double> keywordScores,
+  ) {
+    double max(String key) {
+      final a = (tfliteScores[key] as num?)?.toDouble() ?? 0.0;
+      final b = keywordScores[key] ?? 0.0;
+      return a > b ? a : b;
+    }
+
+    final unsafe   = max('unsafe');
+    final sexual   = max('sexual');
+    final grooming = max('grooming');
+    final violence = max('violence');
+    final unsafeSubstances = max('unsafe_substances');
+    final personalInfo     = max('personal_info');
+
+    return {
+      'unsafe':            unsafe,
+      'safe':              (1.0 - unsafe).clamp(0.0, 1.0),
+      'sexual':            sexual,
+      'grooming':          grooming,
+      'violence':          violence,
+      'unsafe_substances': unsafeSubstances,
+      'personal_info':     personalInfo,
+      'detected_keywords': keywordScores['detected_keywords'] ?? 0.0,
+    };
   }
 
   /// Process single content from monitoring services
@@ -109,8 +163,8 @@ class DetectionOrchestrator {
   ) async {
     if (!_active || _childId == null) return;
 
-    // Check if monitoring is enabled for this app
-    final child = await _childRepo.getById(_childId!);
+    // Use cached child model — avoids blocking DB read on every message
+    final child = await _getChild();
     if (child == null) return;
 
     final appKey = _normalizeAppName(app);
@@ -127,8 +181,19 @@ class DetectionOrchestrator {
       sender: direction == 'outgoing' ? 'child' : senderName,
     );
 
-    // Analyze text with ML
-    final textScores = await _tfLiteAnalyzer.analyzeText(text);
+    // Analyze with both engines and merge (max-wins strategy)
+    // TextAnalyzer runs first — it's synchronous and always works offline.
+    // TFLite runs second — improves confidence when model is loaded.
+    final keywordScores = TextAnalyzer.analyze(text);
+    final tfliteScores  = await _tfLiteAnalyzer.analyzeText(text);
+    final textScores    = _mergeScores(tfliteScores, keywordScores);
+
+    if (kDebugMode) {
+      debugPrint('🔍 [$app] keyword_unsafe=${keywordScores["unsafe"]?.toStringAsFixed(2)} '
+          'tflite_unsafe=${(tfliteScores["unsafe"] as num?)?.toStringAsFixed(2)} '
+          'merged_unsafe=${(textScores["unsafe"] as num?)?.toStringAsFixed(2)}');
+    }
+
     final contextResult = _contextDetector.analyze(conversationId);
 
     // Calculate severity
@@ -187,8 +252,9 @@ class DetectionOrchestrator {
     await _showAlertNotification(appKey, severity, alertId, text);
 
     // Push alert to parent via network (LAN full data or Vercel summary)
+    // For critical/high severity, push IMMEDIATELY instead of just queuing
     print('📤 [ALERT PIPELINE] Step 1: Calling _pushAlertToNetwork for alert $alertId');
-    await _pushAlertToNetwork(
+    _pushAlertToNetwork(
       severity: severity,
       app: appKey,
       alertType: alertType,
@@ -197,6 +263,7 @@ class DetectionOrchestrator {
       scoreText: textScores['unsafe'] ?? 0.0,
       scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
       scoreDelta: delta,
+      immediateSync: severity == 'critical' || severity == 'high',
     );
 
     print('✅ [ALERT PIPELINE] Step 5: Alert pipeline complete for $alertId');
@@ -211,8 +278,8 @@ class DetectionOrchestrator {
   ) async {
     if (!_active || _childId == null || messages.isEmpty) return;
 
-    // Check if monitoring is enabled
-    final child = await _childRepo.getById(_childId!);
+    // Use cached child model — avoids blocking DB read
+    final child = await _getChild();
     if (child == null) return;
 
     final appKey = _normalizeAppName(app);
@@ -227,8 +294,17 @@ class DetectionOrchestrator {
 
     if (texts.isEmpty) return;
 
-    // Batch analyze with ML
-    final batchResult = await _tfLiteAnalyzer.analyzeBatch(texts);
+    // Batch analyze with both engines and merge
+    final tfliteBatch  = await _tfLiteAnalyzer.analyzeBatch(texts);
+    final keywordBatch = TextAnalyzer.analyzeBatch(texts);
+    final batchResult  = _mergeScores(
+      tfliteBatch,
+      Map<String, double>.fromEntries(
+        keywordBatch.entries
+            .where((e) => e.value is num)
+            .map((e) => MapEntry(e.key, (e.value as num).toDouble())),
+      ),
+    );
     final conversationId = '${appKey}_$_childId';
     
     // Add all messages to context
@@ -455,6 +531,7 @@ class DetectionOrchestrator {
   }
 
   /// Push alert to parent device via network (LAN or Internet)
+  /// If [immediateSync] is true, calls pushAlert directly instead of just queuing.
   Future<void> _pushAlertToNetwork({
     required String severity,
     required String app,
@@ -464,6 +541,7 @@ class DetectionOrchestrator {
     double scoreText = 0.0,
     double scoreGrooming = 0.0,
     int scoreDelta = 0,
+    bool immediateSync = false,
   }) async {
     print('📤 [ALERT PIPELINE] Step 2: _pushAlertToNetwork started - app=$app, severity=$severity');
     try {
@@ -494,9 +572,19 @@ class DetectionOrchestrator {
       );
       await _pendingSyncRepo.insert(pendingItem);
 
-      // Trigger sync manually (optional, or let periodic loop handle)
-      print('📤 [ALERT PIPELINE] Step 3: Triggering network sync loop...');
-      _networkSync.triggerSyncLoop();
+      // For critical/high severity, push immediately instead of waiting for sync loop
+      if (immediateSync) {
+        print('📤 [ALERT PIPELINE] Step 3: IMMEDIATE sync for $severity alert...');
+        try {
+          await _networkSync.pushAlert(alert, pendingItem.id);
+        } catch (e) {
+          print('⚠️ [ALERT PIPELINE] Immediate push failed, sync loop will retry: $e');
+        }
+      } else {
+        // Trigger sync manually (periodic loop will also handle it)
+        print('📤 [ALERT PIPELINE] Step 3: Triggering network sync loop...');
+        _networkSync.triggerSyncLoop();
+      }
 
       print('✅ [ALERT PIPELINE] Step 4: Alert queued and sync triggered');
       if (kDebugMode) debugPrint('📤 Alert queued for network push');
@@ -546,8 +634,6 @@ class DetectionOrchestrator {
 
   /// Block an app using native blocker, persist to DB + in-memory cache
   Future<void> _blockApp(String app) async {
-    const channel = MethodChannel('com.kova.child/blocker');
-
     final pkg = _pkgMap[app];
     if (pkg == null) return;
 
@@ -563,26 +649,29 @@ class DetectionOrchestrator {
       }
     }
 
-    // ── 3. Trigger native overlay via DUAL approach ──
-    // Approach A: MethodChannel (works when Flutter engine is alive)
-    bool channelSuccess = false;
+    // ── 3. Trigger native overlay via ForegroundService FIRST ──
+    // The service is always running and can launch activities even when
+    // the Flutter engine / MainActivity is backgrounded or dead.
+    // This fixes the "black flash then disappear" bug caused by MethodChannel
+    // silently failing when the engine isn't in foreground.
+    bool launched = false;
     try {
-      await channel.invokeMethod('blockApp', {'pkg': pkg});
-      channelSuccess = true;
-      if (kDebugMode) debugPrint('🚫 App blocked via MethodChannel: $app ($pkg)');
+      const platform = MethodChannel('com.kova.child/setup');
+      await platform.invokeMethod('blockAppViaService', {'pkg': pkg});
+      launched = true;
+      if (kDebugMode) debugPrint('🚫 App blocked via ForegroundService: $app ($pkg)');
     } catch (e) {
-      if (kDebugMode) debugPrint('⚠️ MethodChannel block failed (engine dead?): $e');
+      if (kDebugMode) debugPrint('⚠️ ForegroundService block failed: $e');
     }
 
-    // Approach B: ForegroundService Intent (works even when Flutter is backgrounded)
-    // This is the reliable path — the service is always running.
-    if (!channelSuccess) {
+    // Fallback: MethodChannel direct (only if service path failed)
+    if (!launched) {
       try {
-        const platform = MethodChannel('com.kova.child/setup');
-        await platform.invokeMethod('blockAppViaService', {'pkg': pkg});
-        if (kDebugMode) debugPrint('🚫 App blocked via ForegroundService: $app ($pkg)');
+        const channel = MethodChannel('com.kova.child/blocker');
+        await channel.invokeMethod('blockApp', {'pkg': pkg});
+        if (kDebugMode) debugPrint('🚫 App blocked via MethodChannel fallback: $app ($pkg)');
       } catch (e) {
-        if (kDebugMode) debugPrint('❌ ForegroundService block also failed: $e');
+        if (kDebugMode) debugPrint('❌ Both block paths failed for $app: $e');
       }
     }
   }

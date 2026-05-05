@@ -4,6 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:kova/main.dart' as app;
 import 'package:kova/child/services/monitoring_bridge.dart';
+import 'package:kova/child/services/text_analyzer.dart';
 import 'package:kova/core/app_mode.dart';
 
 void main() {
@@ -14,10 +15,52 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   });
 
-  testWidgets('Simulate grooming detection and blocking overlay', (WidgetTester tester) async {
+  // ── Fast unit-style checks (no device needed) ────────────────────────────
+
+  group('TextAnalyzer keyword detection', () {
+    test('"fuck you" scores as violence high', () {
+      final result = TextAnalyzer.analyze('fuck you');
+      expect(result['violence'], greaterThan(0.5),
+          reason: '"fuck you" should trigger violence score > 0.5');
+      expect(result['unsafe'], greaterThan(0.5),
+          reason: 'Overall unsafe score should be > 0.5');
+    });
+
+    test('"commit suicide" scores as critical violence', () {
+      final result = TextAnalyzer.analyze('commit suicide');
+      expect(result['violence'], greaterThanOrEqualTo(0.85),
+          reason: '"commit suicide" should trigger violence score >= 0.85');
+    });
+
+    test('"kill myself" scores as critical self-harm', () {
+      final result = TextAnalyzer.analyze('i want to kill myself');
+      expect(result['violence'], equals(1.0),
+          reason: '"kill myself" should be max severity');
+    });
+
+    test('"send nudes" scores as sexual', () {
+      final result = TextAnalyzer.analyze('send nudes');
+      expect(result['sexual'], greaterThanOrEqualTo(0.9));
+    });
+
+    test('"our secret" scores as grooming', () {
+      final result = TextAnalyzer.analyze("this is our secret, don't tell");
+      expect(result['grooming'], greaterThan(0.5));
+    });
+
+    test('safe message returns low risk', () {
+      final result = TextAnalyzer.analyze('how was school today?');
+      expect(result['unsafe'], lessThan(0.2));
+    });
+  });
+
+  // ── Full app integration test ────────────────────────────────────────────
+
+  testWidgets('Simulate grooming detection and blocking overlay',
+      (WidgetTester tester) async {
     // 1. Force the app mode to Child to trigger DetectionOrchestrator
     await AppModeManager.setChildMode('test_child_123');
-    
+
     // Start the application
     app.main();
     await tester.pumpAndSettle();
@@ -30,29 +73,36 @@ void main() {
       retries++;
     }
 
-    expect(MonitoringBridge.onContent, isNotNull, reason: "MonitoringBridge was not initialized");
+    expect(MonitoringBridge.onContent, isNotNull,
+        reason: 'MonitoringBridge was not initialized');
 
-    // 3. Inject a simulated incoming grooming message directly via the bridge
-    // This simulates the Android service passing a notification payload
+    // 3a. Inject a grooming message
     MonitoringBridge.onContent?.call(
       'com.whatsapp',
-      'send me naked pictures', // keyword trigger for high severity
+      "don't tell your parents about us", // grooming trigger
       'notification',
       'incoming',
-      'convo_1',
-      'Predator'
+      'convo_grooming',
+      'Predator',
     );
 
-    // 4. Wait for the app to process it through TfLiteAnalyzerService and SeverityEngine
-    // Since this is async and pushes to the Navigation stack, we need pumpAndSettle
+    // 3b. Inject a self-harm message (previously undetected)
+    MonitoringBridge.onContent?.call(
+      'com.whatsapp',
+      'commit suicide you loser', // self-harm + insult trigger
+      'notification',
+      'incoming',
+      'convo_selfharm',
+      'Bully',
+    );
+
+    // 4. Wait for the app to process and update UI
     await tester.pumpAndSettle(const Duration(seconds: 5));
 
     // 5. Verify the block overlay is shown
-    // We can search for typical overlay texts, for instance "Blocked" or "This app has been blocked"
     final blockTextFinder = find.textContaining('blocked', skipOffstage: false);
-    
-    // Alternatively, look for typical UI components on the block screen, 
-    // such as a "Return to Home" or "Close" button.
-    expect(blockTextFinder, findsWidgets, reason: "Block screen was not displayed after grooming message");
+    expect(blockTextFinder, findsWidgets,
+        reason: 'Block screen was not displayed after harmful message');
   });
 }
+
