@@ -146,9 +146,16 @@ class KovaForegroundService : Service() {
         handler.removeCallbacks(watchdogRunnable)
         unregisterReceiver(remoteUnlockReceiver)
 
-        // Immediately reschedule restart
-        val restartIntent = Intent(applicationContext, KovaForegroundService::class.java)
-        startService(restartIntent)
+        try {
+            val restartIntent = Intent(applicationContext, KovaForegroundService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(restartIntent)
+            } else {
+                startService(restartIntent)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to restart service directly in onDestroy: ${e.message}")
+        }
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -160,12 +167,16 @@ class KovaForegroundService : Service() {
             PendingIntent.FLAG_ONE_SHOT or
             PendingIntent.FLAG_IMMUTABLE
         )
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
-        alarmManager.set(
-            android.app.AlarmManager.ELAPSED_REALTIME,
-            SystemClock.elapsedRealtime() + 1000,
-            pendingIntent
-        )
+        try {
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            alarmManager.set(
+                android.app.AlarmManager.ELAPSED_REALTIME,
+                SystemClock.elapsedRealtime() + 1000,
+                pendingIntent
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to schedule restart with AlarmManager: ${e.message}")
+        }
         super.onTaskRemoved(rootIntent)
     }
 

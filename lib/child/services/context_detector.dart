@@ -26,6 +26,30 @@ class ContextDetector {
     }
     
     _history[conversationId] = msgs;
+    _cleanupStaleConversations();
+  }
+
+  void _cleanupStaleConversations() {
+    if (_history.length > 200) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      _history.removeWhere((key, msgs) {
+        if (msgs.isEmpty) return true;
+        final lastMsgTime = msgs.last['timestamp'] as int;
+        return (now - lastMsgTime) > (24 * 60 * 60 * 1000); // 24 hours
+      });
+      
+      if (_history.length > 300) {
+        final sortedKeys = _history.keys.toList()
+          ..sort((a, b) {
+            final timeA = _history[a]!.last['timestamp'] as int;
+            final timeB = _history[b]!.last['timestamp'] as int;
+            return timeA.compareTo(timeB);
+          });
+        for (var i = 0; i < sortedKeys.length - 200; i++) {
+          _history.remove(sortedKeys[i]);
+        }
+      }
+    }
   }
 
   /// Analyze a conversation for grooming patterns

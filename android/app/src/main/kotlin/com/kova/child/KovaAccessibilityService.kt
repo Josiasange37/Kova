@@ -263,7 +263,9 @@ class KovaAccessibilityService : AccessibilityService() {
 
             // When entering a monitored app, do an immediate text extraction
             if (isMonitored) {
-                extractAndSendVisibleText(packageName, "window_entry", timestamp)
+                Thread {
+                    extractAndSendVisibleText(packageName, "window_entry", timestamp)
+                }.start()
             }
         }
     }
@@ -442,7 +444,9 @@ class KovaAccessibilityService : AccessibilityService() {
         // Only extract text for monitored apps
         if (!isAppMonitored(packageName)) return
 
-        extractAndSendVisibleText(packageName, "content_changed", timestamp)
+        Thread {
+            extractAndSendVisibleText(packageName, "content_changed", timestamp)
+        }.start()
     }
 
     // ─────────────────────────────────────────────

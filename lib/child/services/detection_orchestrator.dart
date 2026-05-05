@@ -224,15 +224,28 @@ class DetectionOrchestrator {
       contextScores: contextResult,
     );
 
-    final alertId = await _alertRepo.create(
-      childId: _childId!,
-      app: appKey,
-      type: alertType,
-      severity: severity,
-      scoreText: textScores['unsafe'] ?? 0.0,
-      scoreImage: 0.0,
-      scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
-    );
+    // Create alert with retry logic to prevent SQLite database_is_locked concurrency crashes
+    String alertId = '';
+    for (int retry = 0; retry < 3; retry++) {
+      try {
+        alertId = await _alertRepo.create(
+          childId: _childId!,
+          app: appKey,
+          type: alertType,
+          severity: severity,
+          scoreText: textScores['unsafe'] ?? 0.0,
+          scoreImage: 0.0,
+          scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+        );
+        break; // Success
+      } catch (e) {
+        if (retry == 2) {
+          debugPrint('❌ Failed to create alert after 3 retries: $e');
+          return; // Give up
+        }
+        await Future.delayed(Duration(milliseconds: 100 * (retry + 1))); // Backoff
+      }
+    }
 
     _alertStreamController.add(AlertModel(
       id: alertId,

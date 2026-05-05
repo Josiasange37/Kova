@@ -74,8 +74,9 @@ object KovaChannelManager {
      */
     fun send(channelKey: String, payload: Map<String, Any?>) {
         if (!isReady) {
-            // Queue up to 100 messages while engine initialises
-            if (pendingMessages.size < 100) {
+            // Queue up to 10000 messages while engine initialises
+            // Prevent silent alert dropping if Flutter engine is slow to start
+            if (pendingMessages.size < 10000) {
                 pendingMessages.add(channelKey to payload)
             }
             return
