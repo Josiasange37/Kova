@@ -209,9 +209,16 @@ class DetectionOrchestrator {
     // Skip safe content
     if (severity == 'safe') return;
 
-    // Handle high/critical severity
+    // Handle high/critical severity - decoupled from alert pipeline
     if (severity == 'critical' || severity == 'high') {
-      await _blockApp(appKey);
+      try {
+        // Fire and forget so we don't block the alert
+        _blockApp(appKey).catchError((e) {
+          if (kDebugMode) debugPrint('⚠️ Non-fatal: blockApp failed: $e');
+        });
+      } catch (e) {
+        if (kDebugMode) debugPrint('⚠️ Non-fatal: blockApp threw exception: $e');
+      }
     }
 
     // Update child score
@@ -339,9 +346,16 @@ class DetectionOrchestrator {
 
     if (severity == 'safe') return;
 
-    // Handle blocking
+    // Handle blocking - decoupled from alert pipeline
     if (severity == 'critical' || severity == 'high') {
-      await _blockApp(appKey);
+      try {
+        // Fire and forget so we don't block the alert
+        _blockApp(appKey).catchError((e) {
+          if (kDebugMode) debugPrint('⚠️ Non-fatal: blockApp failed: $e');
+        });
+      } catch (e) {
+        if (kDebugMode) debugPrint('⚠️ Non-fatal: blockApp threw exception: $e');
+      }
     }
 
     // Update score

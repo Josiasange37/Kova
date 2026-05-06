@@ -2,9 +2,23 @@ package com.kova.child
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.graphics.PixelFormat
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.util.Log
+import android.view.LayoutInflater
+import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.widget.Button
+import android.widget.TextView
+import androidx.core.app.NotificationCompat
 
 /**
  * MODULE 3 — KovaAccessibilityService (UPGRADED)
@@ -40,6 +54,12 @@ class KovaAccessibilityService : AccessibilityService() {
     companion object {
         private const val TAG = "KovaAccessibilityService"
         private const val PREFS_NAME = "com.example.kova"
+        private const val BLOCK_NOTIFICATION_CHANNEL = "kova_block_channel"
+
+        // Static instance so overlay can be triggered from anywhere
+        @Volatile
+        var instance: KovaAccessibilityService? = null
+            private set
 
         // ═══════════════════════════════════════════
         // ALL monitored apps — messaging + social + browsers
@@ -129,6 +149,10 @@ class KovaAccessibilityService : AccessibilityService() {
     private var lastTextExtractTime: Long = 0
     private var lastExtractedTextHash: Int = 0  // Avoid sending duplicate content
 
+    // WindowManager overlay (replaces crash-prone BlockOverlayActivity)
+    private var overlayView: View? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     // ─────────────────────────────────────────────
     // Lifecycle
     // ─────────────────────────────────────────────
@@ -137,9 +161,13 @@ class KovaAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         Log.d(TAG, "✅ Accessibility service connected — FULL TEXT MODE")
 
+        instance = this
+
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         childId = prefs.getString("child_id", null)
         prefs.edit().putBoolean("accessibility_enabled", true).apply()
+
+        createBlockNotificationChannel()
 
         // Configure: full text reading + all event types
         val info = AccessibilityServiceInfo().apply {
@@ -164,6 +192,8 @@ class KovaAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        instance = null
+        hideBlockOverlay()
         Log.d(TAG, "❌ Accessibility service destroyed")
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         prefs.edit().putBoolean("accessibility_enabled", false).apply()
@@ -895,5 +925,129 @@ class KovaAccessibilityService : AccessibilityService() {
             lower.contains("search")                                      -> "search"
             else -> "other"
         }
+    }
+
+    // ─────────────────────────────────────────────
+    // Block Overlay (WindowManager) & Resilience
+    // ─────────────────────────────────────────────
+
+    private fun createBlockNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                BLOCK_NOTIFICATION_CHANNEL,
+                "Content Blocking Alerts",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Shows when harmful content is blocked"
+            }
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun hasOverlayPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Settings.canDrawOverlays(this)
+        } else {
+            true
+        }
+    }
+
+    fun showBlockOverlay(reason: String) {
+        mainHandler.post {
+            if (!hasOverlayPermission()) {
+                Log.w(TAG, "No overlay permission - falling back to persistent notification")
+                showFallbackNotification(reason)
+                return@post // graceful skip, don't crash
+            }
+            
+            try {
+                // If already showing, just update text
+                if (overlayView != null) {
+                    overlayView?.findViewById<TextView>(R.id.tvReason)?.text = reason
+                    return@post
+                }
+
+                val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+                val inflater = LayoutInflater.from(this)
+                val view = inflater.inflate(R.layout.kova_block_overlay, null)
+                
+                view.findViewById<TextView>(R.id.tvReason).text = reason
+                view.findViewById<Button>(R.id.btnDismiss).setOnClickListener {
+                    hideBlockOverlay()
+                    
+                    // Go home when dismissed
+                    val homeIntent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
+                        addCategory(android.content.Intent.CATEGORY_HOME)
+                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    startActivity(homeIntent)
+                }
+                
+                val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE
+                }
+
+                val params = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    layoutFlag,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+                    PixelFormat.TRANSLUCENT
+                )
+                
+                overlayView = view
+                windowManager.addView(view, params)
+            } catch (e: Exception) {
+                Log.e(TAG, "Overlay failed: ${e.message}")
+                showFallbackNotification(reason)
+            }
+        }
+    }
+
+    fun hideBlockOverlay() {
+        mainHandler.post {
+            try {
+                overlayView?.let {
+                    val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+                    windowManager.removeView(it)
+                    overlayView = null
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Hide overlay failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun showFallbackNotification(reason: String) {
+        try {
+            // We use launcher_icon since ic_kova_notification may not exist yet, 
+            // but in production it should be a proper silhouette icon.
+            val notification = NotificationCompat.Builder(this, BLOCK_NOTIFICATION_CHANNEL)
+                .setContentTitle("⚠️ KOVA blocked harmful content")
+                .setContentText(reason)
+                .setSmallIcon(R.mipmap.launcher_icon) 
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .build()
+
+            val nm = getSystemService(NotificationManager::class.java)
+            nm.notify(System.currentTimeMillis().toInt(), notification)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to show fallback notification: ${e.message}")
+        }
+    }
+
+    override fun onInterrupt() {
+        Log.w(TAG, "Accessibility service interrupted - will restart")
+    }
+
+    override fun onStartCommand(intent: android.content.Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY  // Android restarts this if killed
     }
 }

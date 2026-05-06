@@ -1,4 +1,5 @@
 // main.dart — KOVA App Entry Point
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,7 +29,16 @@ import 'package:kova/parent/services/child_profile_service.dart';
 import 'package:kova/parent/services/settings_service.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Wrap the entire app in runZonedGuarded to catch all unhandled asynchronous Dart errors
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    
+    // Global error handler for Flutter framework errors
+    FlutterError.onError = (FlutterErrorDetails details) {
+      FlutterError.presentError(details);
+      debugPrint('🚨 [GLOBAL] FlutterError caught: ${details.exception}');
+      debugPrint('Stack trace: ${details.stack}');
+    };
 
   try {
     // Initialize database factory for desktop platforms
@@ -104,6 +114,11 @@ Future<void> main() async {
     debugPrint('Stack trace: $stackTrace');
     runApp(ErrorApp(error: e.toString()));
   }
+  }, (error, stack) {
+    // Global error handler for asynchronous Dart errors (prevents full app crash)
+    debugPrint('🚨 [GLOBAL] runZonedGuarded caught unhandled error: $error');
+    debugPrint('Stack trace: $stack');
+  });
 }
 
 // Error display widget for initialization failures

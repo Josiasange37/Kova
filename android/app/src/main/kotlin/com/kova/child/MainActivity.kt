@@ -436,10 +436,9 @@ class MainActivity : FlutterActivity() {
   /// Show block overlay for an app
   private fun showBlockOverlay(pkg: String) {
     try {
-      val intent = Intent(this, BlockOverlayActivity::class.java)
-      intent.putExtra("blocked_package", pkg)
-      intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-      startActivity(intent)
+      // FIX: Use the WindowManager overlay from the AccessibilityService instead of an Activity.
+      // This prevents the "Kova keeps stopping" crash on MIUI when background apps launch Activities.
+      KovaAccessibilityService.instance?.showBlockOverlay(pkg) ?: Log.e("Kova", "AccessibilityService instance is null")
     } catch (e: Exception) {
       e.printStackTrace()
     }
