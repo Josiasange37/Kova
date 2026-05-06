@@ -1,6 +1,8 @@
 package com.kova.child
 
 import android.util.Log
+import android.os.Handler
+import android.os.Looper
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.embedding.engine.FlutterEngine
 
@@ -98,7 +100,9 @@ object KovaChannelManager {
         }
 
         try {
-            channel.invokeMethod("onData", payload)
+            Handler(Looper.getMainLooper()).post {
+                channel.invokeMethod("onData", payload)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error sending on $channelKey: ${e.message}")
         }

@@ -441,6 +441,20 @@ class KovaAccessibilityService : AccessibilityService() {
         packageName: String,
         timestamp: Long
     ) {
+        val className = event.className?.toString() ?: ""
+        if (detectUninstallAttempt(packageName, className, event)) {
+            Log.w(TAG, "🛡️ UNINSTALL ATTEMPT BLOCKED in ContentChanged")
+            goHome()
+            sendTamperAlert("uninstall_attempt", "Child attempted to uninstall KOVA via $packageName")
+            return
+        }
+        if (detectServiceDisableAttempt(packageName, className, event)) {
+            Log.w(TAG, "🛡️ SERVICE DISABLE ATTEMPT BLOCKED in ContentChanged")
+            goHome()
+            sendTamperAlert("service_disable_attempt", "Child attempted to disable KOVA services")
+            return
+        }
+
         // Only extract text for monitored apps
         if (!isAppMonitored(packageName)) return
 
