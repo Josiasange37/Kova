@@ -1042,9 +1042,6 @@ class KovaAccessibilityService : AccessibilityService() {
         }
     }
 
-    override fun onInterrupt() {
-        Log.w(TAG, "Accessibility service interrupted - will restart")
-    }
 
     override fun onStartCommand(intent: android.content.Intent?, flags: Int, startId: Int): Int {
         return START_STICKY  // Android restarts this if killed
