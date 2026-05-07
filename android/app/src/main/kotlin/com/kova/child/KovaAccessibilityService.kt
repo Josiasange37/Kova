@@ -987,7 +987,6 @@ class KovaAccessibilityService : AccessibilityService() {
                 val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 } else {
-                    @Suppress("DEPRECATION")
                     WindowManager.LayoutParams.TYPE_PHONE
                 }
 
@@ -1036,7 +1035,7 @@ class KovaAccessibilityService : AccessibilityService() {
                 .setAutoCancel(true)
                 .build()
 
-            val nm = getSystemService(NotificationManager::class.java)
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             nm.notify(System.currentTimeMillis().toInt(), notification)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to show fallback notification: ${e.message}")
