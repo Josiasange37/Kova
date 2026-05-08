@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>KOVA - Documentation Complète</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        h1 { color: #2c3e50; font-size: 32px; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #34495e; font-size: 24px; margin-top: 30px; border-bottom: 2px solid #3498db; }
+        h3 { color: #2c3e50; font-size: 18px; margin-top: 20px; }
+        p { font-size: 14px; text-align: justify; }
+        ul, ol { margin-left: 20px; }
+        li { margin: 5px 0; }
+        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+        th { background-color: #3498db; color: white; padding: 12px; text-align: left; font-weight: bold; }
+        td { border: 1px solid #ddd; padding: 10px; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+        .code { background-color: #f4f4f4; padding: 10px; border-left: 4px solid #3498db; font-family: monospace; }
+        hr { border: none; height: 2px; background-color: #3498db; margin: 30px 0; }
+        .toc { background-color: #f8f9fa; padding: 20px; border: 1px solid #dee2e6; }
+        .toc a { color: #3498db; text-decoration: none; }
+        .section-number { color: #3498db; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<center>
+    <h1 style="font-size: 48px; border: none;">KOVA</h1>
+    <h2 style="font-size: 28px; border: none; color: #3498db;">Kids Online Vigilance & AI</h2>
+    <p style="font-size: 18px; color: #666;">Documentation Complète en Français</p>
+    <hr>
+</center>
+
+<div class="toc">
+<h2>Table des Matières</h2>
+<ol>
+    <li><a href="#intro">Introduction</a></li>
+    <li><a href="#features">Fonctionnalités Principales</a></li>
+    <li><a href="#principles">Principes Fondamentaux</a></li>
+    <li><a href="#problems">Problèmes Résolus</a></li>
+    <li><a href="#architecture">Architecture Technique</a></li>
+    <li><a href="#differentiation">Différenciation vs Concurrents</a></li>
+    <li><a href="#pitch">Comment Parler du Projet</a></li>
+    <li><a href="#faq">FAQ</a></li>
+    <li><a href="#future">Futurs Développements</a></li>
+    <li><a href="#funding">Stratégie de Financement</a></li>
+    <li><a href="#expansion">Expansion Mondiale</a></li>
+    <li><a href="#developers">Guide Développeurs</a></li>
+</ol>
+</div>
+
+<hr>
+
+<h1 id="intro"><span class="section-number">1.</span> Introduction</h1>
+
+<h2>Qu'est-ce que KOVA ?</h2>
+
+<p><strong>KOVA</strong> (Kids Online Vigilance & AI) est une application mobile innovante de protection de l'enfance en ligne, conçue pour protéger les enfants contre les dangers numériques tout en respectant leur vie privée et en favorisant la confiance parent-enfant.</p>
+
+<h2>Notre Vision</h2>
+
+<p>Créer un monde numérique plus sûr pour les enfants, où les parents peuvent surveiller efficacement les activités en ligne de leurs enfants sans compromettre leur autonomie ni leur relation de confiance.</p>
+
+<h2>Notre Mission</h2>
+
+<p>Développer une solution technologique accessible, intelligente et respectueuse de la vie privée qui permet aux parents de :</p>
+<ul>
+    <li>Détecter les menaces en temps réel (grooming, cyberharcèlement, contenu inapproprié)</li>
+    <li>Contrôler l'accès aux applications dangereuses</li>
+    <li>Recevoir des alertes immédiates en cas de danger</li>
+    <li>Éduquer leurs enfants sur les bonnes pratiques numériques</li>
+</ul>
+
+<hr>
+
+<h1 id="features"><span class="section-number">2.</span> Fonctionnalités Principales</h1>
+
+<h2>2.1 Surveillance en Temps Réel</h2>
+
+<p><strong>Applications supportées :</strong></p>
+<ul>
+    <li>WhatsApp, WhatsApp Business</li>
+    <li>Instagram, Facebook, Messenger</li>
+    <li>TikTok, Snapchat</li>
+    <li>Telegram, Signal, Discord</li>
+    <li>SMS et messages Android</li>
+    <li>Navigateurs web (Chrome, Firefox, Brave, etc.)</li>
+</ul>
+
+<p><strong>Types de surveillance :</strong></p>
+<ul>
+    <li>Messages texte entrants et sortants</li>
+    <li>Notifications des applications</li>
+    <li>Historique de navigation web</li>
+    <li>Métadonnées des conversations</li>
+</ul>
+
+<h2>2.2 Détection par Intelligence Artificielle</h2>
+
+<p><strong>Moteurs de détection :</strong></p>
+<ul>
+    <li><strong>TextAnalyzer</strong> : Analyse par mots-clés (fonctionne toujours hors-ligne)</li>
+    <li><strong>TfLiteAnalyzer</strong> : Analyse par TensorFlow Lite (modèles ML on-device)</li>
+    <li><strong>ContextDetector</strong> : Détection de patterns de grooming et d'abus</li>
+    <li><strong>SeverityEngine</strong> : Calcul du score de gravité (0-100)</li>
+</ul>
+
+<p><strong>Catégories de menaces détectées :</strong></p>
+<ul>
+    <li>Contenu sexuel inapproprié</li>
+    <li>Grooming et manipulation</li>
+    <li>Violence et menaces</li>
+    <li>Substances dangereuses</li>
+    <li>Divulgation d'informations personnelles</li>
+    <li>Cyberharcèlement</li>
+</ul>
+
+<h2>2.3 Blocage d'Applications</h2>
+
+<ul>
+    <li>Blocage instantané d'applications</li>
+    <li>Overlay de blocage persistant</li>
+    <li>Survit au redémarrage de l'appareil</li>
+    <li>Protection contre la désinstallation</li>
+    <li>Cache en mémoire pour blocage immédiat</li>
+</ul>
+
+<h2>2.4 Alertes et Notifications</h2>
+
+<p><strong>Types d'alertes :</strong></p>
+<ul>
+    <li><span style="color: red; font-weight: bold;">Alertes critiques (rouge)</span> - Action immédiate requise</li>
+    <li><span style="color: orange; font-weight: bold;">Alertes haute gravité (orange)</span> - Attention nécessaire</li>
+    <li><span style="color: #d4ac0d; font-weight: bold;">Alertes moyenne gravité (jaune)</span> - Surveillance recommandée</li>
+    <li>Alertes de tentative de falsification (tamper detection)</li>
+</ul>
+
+<h2>2.5 Mode Double (Parent/Enfant)</h2>
+
+<p><strong>Mode Parent :</strong></p>
+<ul>
+    <li>Tableau de bord de surveillance</li>
+    <li>Gestion des profils enfants</li>
+    <li>Historique des alertes</li>
+    <li>Contrôle des applications</li>
+    <li>Paramètres de configuration</li>
+</ul>
+
+<p><strong>Mode Enfant :</strong></p>
+<ul>
+    <li>Interface de transparence</li>
+    <li>Rapport de fonctionnalité</li>
+    <li>Configuration initiale</li>
+    <li>Écran de blocage en cas d'alerte critique</li>
+</ul>
+
+<h2>2.6 Architecture Hors-Ligne</h2>
+
+<ul>
+    <li>Base de données SQLite locale (6 tables)</li>
+    <li>Aucune dépendance serveur pour le fonctionnement</li>
+    <li>Synchronisation optionnelle via WiFi ou cloud</li>
+    <li>Fonctionne complètement hors-ligne</li>
+</ul>
+
+<hr>
+
+<h1 id="principles"><span class="section-number">3.</span> Principes Fondamentaux</h1>
+
+<h2>3.1 Protection avant la Surveillance</h2>
+
+<p>KOVA privilégie la protection active de l'enfant plutôt que la simple surveillance passive. L'application intervient automatiquement pour bloquer les contenus dangereux avant qu'ils ne causent du tort.</p>
+
+<h2>3.2 Respect de la Vie Privée</h2>
+
+<p><strong>Approche :</strong></p>
+<ul>
+    <li>Traitement local des données (on-device AI)</li>
+    <li>Aucune transmission de messages complets vers le cloud</li>
+    <li>Seules les alertes et métadonnées sont synchronisées</li>
+    <li>Chiffrement des données sensibles</li>
+</ul>
+
+<h2>3.3 Confiance Parent-Enfant</h2>
+
+<p><strong>Philosophie :</strong></p>
+<ul>
+    <li>Transparence pour l'enfant (il sait que KOVA est actif)</li>
+    <li>Éducation plutôt que punition</li>
+    <li>Communication ouverte sur les dangers numériques</li>
+    <li>Équilibre entre protection et autonomie</li>
+</ul>
+
+<h2>3.4 Intelligence Adaptative</h2>
+
+<ul>
+    <li>Apprentissage des patterns de communication</li>
+    <li>Détection contextuelle (pas juste mots-clés)</li>
+    <li>Réduction des faux positifs</li>
+    <li>Amélioration continue avec les modèles ML</li>
+</ul>
+
+<h2>3.5 Résilience Technique</h2>
+
+<ul>
+    <li>Survit au redémarrage de l'appareil</li>
+    <li>Protection contre la désinstallation</li>
+    <li>Détection de tentative de falsification</li>
+    <li>Services en arrière-plan persistants</li>
+</ul>
+
+<hr>
+
+<h1 id="problems"><span class="section-number">4.</span> Problèmes Résolus</h1>
+
+<h2>4.1 Grooming en Ligne</h2>
+
+<p><strong>Problème :</strong> Les prédateurs en ligne utilisent des techniques de manipulation subtiles pour gagner la confiance des enfants.</p>
+
+<p><strong>Solution KOVA :</strong></p>
+<ul>
+    <li>Détection de patterns de grooming</li>
+    <li>Analyse contextuelle des conversations</li>
+    <li>Alertes immédiates aux parents</li>
+    <li>Blocage automatique des applications concernées</li>
+</ul>
+
+<h2>4.2 Cyberharcèlement</h2>
+
+<p><strong>Problème :</strong> Le harcèlement en ligne peut avoir des conséquences dévastatrices sur la santé mentale des enfants.</p>
+
+<p><strong>Solution KOVA :</strong></p>
+<ul>
+    <li>Détection de langage abusif et menaçant</li>
+    <li>Historique des conversations pour preuve</li>
+    <li>Alertes aux parents en temps réel</li>
+    <li>Possibilité de bloquer les harceleurs</li>
+</ul>
+
+<h2>4.3 Exposition à du Contenu Inapproprié</h2>
+
+<p><strong>Solution KOVA :</strong></p>
+<ul>
+    <li>Filtrage par mots-clés et IA</li>
+    <li>Surveillance de l'historique de navigation</li>
+    <li>Blocage de sites et applications</li>
+    <li>Alertes aux parents</li>
+</ul>
+
+<h2>4.4 Faux Positifs des Solutions Existantes</h2>
+
+<p><strong>Problème :</strong> De nombreuses solutions génèrent trop de fausses alertes, créant de la fatigue parentale.</p>
+
+<p><strong>Solution KOVA :</strong></p>
+<ul>
+    <li>Analyse contextuelle pour réduire les faux positifs</li>
+    <li>Score de confiance IA</li>
+    <li>Filtres configurables par les parents</li>
+    <li>Apprentissage adaptatif</li>
+</ul>
+
+<hr>
+
+<h1 id="architecture"><span class="section-number">5.</span> Architecture Technique</h1>
+
+<h2>5.1 Vue d'Ensemble</h2>
+
+<p>L'architecture KOVA est composée de plusieurs couches :</p>
+
+<ol>
+    <li><strong>Flutter UI Layer (Dart)</strong> - 32 écrans (Parent + Enfant), state management via Provider</li>
+    <li><strong>Accessibility Bridge (MethodChannel)</strong> - Communication Flutter-Kotlin</li>
+    <li><strong>Kotlin Native Layer</strong> - Services Android natifs pour capture temps réel</li>
+    <li><strong>Moteur de Détection IA</strong> - TensorFlow Lite on-device</li>
+    <li><strong>Stockage Local SQLite</strong> - 6 tables pour données locales</li>
+    <li><strong>Synchronisation Réseau (Optionnelle)</strong> - Node.js backend sur Vercel</li>
+</ol>
+
+<h2>5.2 Stack Technique</h2>
+
+<table>
+    <tr>
+        <th>Composant</th>
+        <th>Technologie</th>
+    </tr>
+    <tr>
+        <td>Mobile Frontend</td>
+        <td>Flutter 3.0+, Dart</td>
+    </tr>
+    <tr>
+        <td>State Management</td>
+        <td>Provider</td>
+    </tr>
+    <tr>
+        <td>Base de données locale</td>
+        <td>SQLite (sqflite)</td>
+    </tr>
+    <tr>
+        <td>ML on-device</td>
+        <td>TensorFlow Lite (tflite_flutter)</td>
+    </tr>
+    <tr>
+        <td>Android Natif</td>
+        <td>Kotlin</td>
+    </tr>
+    <tr>
+        <td>Backend (optionnel)</td>
+        <td>Node.js, Express.js</td>
+    </tr>
+    <tr>
+        <td>Base de données cloud</td>
+        <td>PostgreSQL</td>
+    </tr>
+    <tr>
+        <td>Déploiement</td>
+        <td>Vercel</td>
+    </tr>
+</table>
+
+<h2>5.3 Tables SQLite</h2>
+
+<ol>
+    <li><strong>children</strong> - Profils des enfants liés</li>
+    <li><strong>alerts</strong> - Alertes de sécurité détectées</li>
+    <li><strong>score_history</strong> - Historique des scores de sécurité</li>
+    <li><strong>app_controls</strong> - Paramètres de contrôle par application</li>
+    <li><strong>pending_sync</strong> - File d'attente de synchronisation</li>
+    <li><strong>config</strong> - Configuration et état de l'application</li>
+</ol>
+
+<hr>
+
+<h1 id="differentiation"><span class="section-number">6.</span> Différenciation par Rapport aux Autres Solutions</h1>
+
+<h2>Tableau Comparatif</h2>
+
+<table>
+    <tr>
+        <th>Caractéristique</th>
+        <th>KOVA</th>
+        <th>Qustodio</th>
+        <th>Family Link</th>
+        <th>Norton Family</th>
+        <th>Bark</th>
+    </tr>
+    <tr>
+        <td>IA On-Device</td>
+        <td style="color: green; font-weight: bold;">Oui</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+    </tr>
+    <tr>
+        <td>Fonctionne Hors-Ligne</td>
+        <td style="color: green; font-weight: bold;">Oui</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+    </tr>
+    <tr>
+        <td>Pas de Cloud Requis</td>
+        <td style="color: green; font-weight: bold;">Oui</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+    </tr>
+    <tr>
+        <td>Détection Contextuelle</td>
+        <td style="color: green; font-weight: bold;">Oui</td>
+        <td style="color: orange;">Limité</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+        <td style="color: orange;">Partiel</td>
+    </tr>
+    <tr>
+        <td>Blocage Instantané</td>
+        <td style="color: green; font-weight: bold;">Oui</td>
+        <td style="color: orange;">Différé</td>
+        <td style="color: orange;">Différé</td>
+        <td style="color: orange;">Différé</td>
+        <td style="color: red;">Non</td>
+    </tr>
+    <tr>
+        <td>Survit au Redémarrage</td>
+        <td style="color: green; font-weight: bold;">Oui</td>
+        <td style="color: orange;">Variable</td>
+        <td style="color: orange;">Variable</td>
+        <td style="color: orange;">Variable</td>
+        <td style="color: red;">Non</td>
+    </tr>
+    <tr>
+        <td>Protection Anti-Désinstall</td>
+        <td style="color: green; font-weight: bold;">Oui</td>
+        <td style="color: orange;">Variable</td>
+        <td style="color: orange;">Variable</td>
+        <td style="color: orange;">Variable</td>
+        <td style="color: red;">Non</td>
+    </tr>
+    <tr>
+        <td>Transparence Enfant</td>
+        <td style="color: green; font-weight: bold;">Oui</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+    </tr>
+    <tr>
+        <td>Code Source Ouvert</td>
+        <td style="color: green; font-weight: bold;">Oui</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+        <td style="color: red;">Non</td>
+    </tr>
+    <tr>
+        <td>Gratuit</td>
+        <td style="color: green; font-weight: bold;">Oui</td>
+        <td style="color: red;">Payant</td>
+        <td style="color: green;">Gratuit</td>
+        <td style="color: red;">Payant</td>
+        <td style="color: red;">Payant</td>
+    </tr>
+</table>
+
+<h2>Avantages Uniques</h2>
+
+<ol>
+    <li><strong>Intelligence Artificielle On-Device</strong> - Toutes les solutions existantes dépendent du cloud pour l'analyse IA. KOVA traite tout localement sur l'appareil.</li>
+    <li><strong>Architecture Hors-Ligne Complète</strong> - Aucune solution concurrente ne fonctionne complètement hors-ligne.</li>
+    <li><strong>Détection Contextuelle Avancée</strong> - Moins de faux positifs grâce à l'analyse de contexte.</li>
+    <li><strong>Protection Anti-Tamper</strong> - Services natifs Android qui survivent au redémarrage et détectent la désinstallation.</li>
+    <li><strong>Approche Éducative et Transparente</strong> - L'enfant sait qu'il est protégé, renforce la confiance.</li>
+    <li><strong>Open Source et Communautaire</strong> - Aucune solution commerciale majeure n'est open source.</li>
+</ol>
+
+<hr>
+
+<h1 id="pitch"><span class="section-number">7.</span> Comment Parler du Projet</h1>
+
+<h2>Pitch Élevator (30 secondes)</h2>
+
+<p>"KOVA est une application mobile de protection de l'enfance en ligne qui utilise l'intelligence artificielle sur l'appareil pour détecter en temps réel les menaces comme le grooming, le cyberharcèlement et le contenu inapproprié. Contrairement aux solutions existantes qui dépendent du cloud, KOVA fonctionne complètement hors-ligne, respecte la vie privée des enfants, et offre une protection continue même sans connexion internet. C'est open source, gratuit, et conçu pour renforcer la confiance entre parents et enfants."</p>
+
+<h2>Pitch pour Investisseurs (2 minutes)</h2>
+
+<p>"Le marché du contrôle parental représente 1,2 milliard de dollars et croît de 15% par an. Cependant, les solutions existantes ont des problèmes majeurs : elles dépendent du cloud (risque de vie privée), ne fonctionnent pas hors-ligne, et génèrent trop de faux positifs.</p>
+
+<p>KOVA résout ces problèmes avec une approche révolutionnaire :</p>
+<ol>
+    <li>IA on-device : Tout le traitement se fait localement, zéro transmission de messages privés</li>
+    <li>Architecture hors-ligne : Fonctionne même sans internet, protection 24/7 garantie</li>
+    <li>Détection contextuelle : Moins de faux positifs grâce à l'analyse de contexte</li>
+    <li>Open source : Confiance totale, auditabilité, contributions communautaires</li>
+</ol>
+
+<p>Notre modèle économique repose sur :</p>
+<ul>
+    <li>Version de base gratuite (open source)</li>
+    <li>Version entreprise pour écoles et organisations</li>
+    <li>Services de consultation et formation</li>
+    <li>Partenariats avec les opérateurs télécoms</li>
+</ul>
+
+<p>Nous cherchons 500k€ pour accélérer le développement, étendre l'IA, et lancer le marketing."</p>
+
+<h2>Messages Clés</h2>
+
+<p><strong>Pour les Parents :</strong></p>
+<ul>
+    <li>"Protégez votre enfant sans envahir sa vie privée"</li>
+    <li>"L'IA qui comprend le contexte, pas juste les mots"</li>
+    <li>"Fonctionne même sans internet"</li>
+    <li>"Gratuit et open source"</li>
+</ul>
+
+<p><strong>Pour les Investisseurs :</strong></p>
+<ul>
+    <li>"Marché en croissance de 15% par an"</li>
+    <li>"Technologie différenciante (IA on-device)"</li>
+    <li>"Modèle économique diversifié"</li>
+</ul>
+
+<hr>
+
+<h1 id="faq"><span class="section-number">8.</span> FAQ - Questions Fréquentes</h1>
+
+<h2>Questions Générales</h2>
+
+<p><strong>Q : Qu'est-ce que KOVA exactement ?</strong></p>
+<p>R : KOVA est une application mobile de protection de l'enfance en ligne qui utilise l'intelligence artificielle pour détecter en temps réel les menaces numériques et alerter les parents. L'application fonctionne sur l'appareil de l'enfant et peut bloquer automatiquement les applications dangereuses.</p>
+
+<p><strong>Q : KOVA est-il gratuit ?</strong></p>
+<p>R : Oui, la version de base de KOVA est complètement gratuite et open source. Nous prévoyons des versions payantes pour les entreprises (écoles, organisations) à l'avenir, mais la protection de base restera toujours gratuite pour les familles.</p>
+
+<p><strong>Q : Sur quels appareils KOVA fonctionne-t-il ?</strong></p>
+<p>R : KOVA est actuellement disponible sur Android. Une version iOS est en développement. L'application nécessite Android 7.0 ou supérieur.</p>
+
+<h2>Questions Techniques</h2>
+
+<p><strong>Q : KOVA fonctionne-t-il sans connexion internet ?</strong></p>
+<p>R : Oui, c'est l'un des avantages uniques de KOVA. L'application fonctionne complètement hors-ligne grâce à son architecture on-device. L'IA traite tout localement sur l'appareil.</p>
+
+<p><strong>Q : KOVA ralentit-il l'appareil de mon enfant ?</strong></p>
+<p>R : Non, KOVA est optimisé pour avoir un impact minimal sur les performances. L'IA on-device est légère et les services en arrière-plan sont conçus pour être économes en ressources.</p>
+
+<h2>Questions de Vie Privée</h2>
+
+<p><strong>Q : KOVA envoie-t-il les messages de mon enfant dans le cloud ?</strong></p>
+<p>R : Non, c'est le point fort de KOVA. Tous les messages sont analysés localement sur l'appareil de l'enfant. Seules les alertes (sans le contenu complet des messages) sont synchronisées avec l'appareil parent.</p>
+
+<p><strong>Q : Mon enfant peut-il désinstaller KOVA ?</strong></p>
+<p>R : KOVA utilise des services d'administrateur d'appareil pour empêcher la désinstallation non autorisée. Si votre enfant tente de désinstaller l'application, vous en serez immédiatement alerté.</p>
+
+<p><strong>Q : KOVA est-il conforme au RGPD ?</strong></p>
+<p>R : Oui, KOVA est conçu pour être conforme au RGPD. Nous minimisons la collecte de données, traitons tout localement lorsque possible.</p>
+
+<h2>Questions de Fonctionnement</h2>
+
+<p><strong>Q : Comment KOVA détecte-t-il les menaces ?</strong></p>
+<p>R : KOVA utilise plusieurs moteurs de détection :</p>
+<ul>
+    <li>Analyse par mots-clés (toujours active)</li>
+    <li>IA TensorFlow Lite (analyse contextuelle)</li>
+    <li>Détection de patterns de grooming</li>
+    <li>Analyse de la gravité des messages</li>
+</ul>
+
+<p><strong>Q : Quelles applications KOVA peut-il surveiller ?</strong></p>
+<p>R : WhatsApp, Instagram, Facebook, Messenger, TikTok, Snapchat, Telegram, Signal, Discord, SMS, et la plupart des navigateurs web.</p>
+
+<p><strong>Q : KOVA peut-il bloquer des applications ?</strong></p>
+<p>R : Oui, KOVA peut bloquer instantanément n'importe quelle application détectée comme dangereuse. Le blocage est persistant et survit au redémarrage.</p>
+
+<p><strong>Q : Comment je suis alerté en cas de danger ?</strong></p>
+<p>R : Vous recevez une notification push sur votre appareil parent avec les détails de l'alerte. L'alerte apparaît également dans votre tableau de bord KOVA.</p>
+
+<h2>Questions d'Installation</h2>
+
+<p><strong>Q : Comment installer KOVA ?</strong></p>
+<p>R :</p>
+<ol>
+    <li>Téléchargez l'APK depuis notre site ou le Play Store</li>
+    <li>Installez sur l'appareil de votre enfant</li>
+    <li>Sélectionnez "Mode Enfant" lors de la configuration</li>
+    <li>Scannez le QR code depuis votre appareil parent</li>
+    <li>Accordez les permissions requises (accessibilité, administrateur, etc.)</li>
+</ol>
+
+<p><strong>Q : Quelles permissions sont requises ?</strong></p>
+<p>R : KOVA nécessite les permissions suivantes :</p>
+<ul>
+    <li>Accessibilité (pour lire les messages)</li>
+    <li>Administrateur d'appareil (pour empêcher la désinstallation)</li>
+    <li>Notifications (pour les alertes)</li>
+    <li>Accès au stockage (pour la base de données locale)</li>
+    <li>Accès réseau (pour la synchronisation optionnelle)</li>
+</ul>
+
+<p><strong>Q : Comment désinstaller KOVA ?</strong></p>
+<p>R : Pour désinstaller KOVA de l'appareil de votre enfant :</p>
+<ol>
+    <li>Désactivez d'abord les permissions d'administrateur d'appareil</li>
+    <li>Désactivez le service d'accessibilité</li>
+    <li>Désinstallez normalement l'application</li>
+</ol>
+<p>Note : Vous recevrez une alerte si votre enfant tente de désinstaller KOVA.</p>
+
+<hr>
+
+<h1 id="future"><span class="section-number">9.</span> Futurs Développements</h1>
+
+<h2>Roadmap Court Terme (3-6 mois)</h2>
+
+<ol>
+    <li><strong>Amélioration de l'IA</strong> - Intégrer des modèles TensorFlow Lite entraînés, réduire les faux positifs de 50%, détection d'images inappropriées</li>
+    <li><strong>Version iOS</strong> - Porter l'application sur iOS avec parité fonctionnelle</li>
+    <li><strong>Interface Web Parent</strong> - Dashboard web pour accès depuis n'importe quel appareil</li>
+    <li><strong>Multi-langue</strong> - Support de 10+ langues principales</li>
+</ol>
+
+<h2>Roadmap Moyen Terme (6-12 mois)</h2>
+
+<ol>
+    <li><strong>KOVA École/Entreprise</strong> - Version adaptée pour établissements scolaires avec dashboard centralisé</li>
+    <li><strong>Détection de Cyberharcèlement Avancée</strong> - Analyse de réseaux sociaux pour détecter le harcèlement</li>
+    <li><strong>Gestion du Temps d'Écran</strong> - Suivi détaillé du temps par application avec limites configurables</li>
+    <li><strong>Mode Apprentissage</strong> - Modules éducatifs pour les enfants sur la sécurité en ligne</li>
+</ol>
+
+<h2>Roadmap Long Terme (1-3 ans)</h2>
+
+<ol>
+    <li><strong>IA Prédictive</strong> - Prédire les risques avant qu'ils ne surviennent</li>
+    <li><strong>Communauté et Réseau de Parents</strong> - Forum de parents pour partager les expériences</li>
+    <li><strong>Intégration avec les Opérateurs</strong> - Partenariats avec les opérateurs télécoms</li>
+    <li><strong>Expansion Internationale</strong> - Adaptation aux régulations locales dans 20+ pays</li>
+</ol>
+
+<hr>
+
+<h1 id="funding"><span class="section-number">10.</span> Stratégie de Financement</h1>
+
+<h2>Modèle Économique</h2>
+
+<ol>
+    <li><strong>Version Gratuite (B2C)</strong> - 100% gratuite pour les familles, open source, support communautaire</li>
+    <li><strong>Version Premium Familiale (B2C)</strong> - 5€/mois par famille avec IA améliorée, stockage cloud illimité, support prioritaire</li>
+    <li><strong>KOVA École (B2B)</strong> - 2€/élève/mois avec dashboard centralisé, formation incluse</li>
+    <li><strong>KOVA Entreprise (B2B)</strong> - Sur devis selon la taille avec intégration LDAP/AD, SLA garanti</li>
+    <li><strong>Services de Consulting</strong> - Formation des parents (500€/jour), audit complet (2000€)</li>
+    <li><strong>Partenariats Opérateurs</strong> - Intégration dans les forfaits (1€/abonné/mois reversé à KOVA)</li>
+</ol>
+
+<h2>Besoins de Financement</h2>
+
+<p><strong>Round Seed : 500k€</strong></p>
+<ul>
+    <li>200k€ - Développement (2 développeurs full-time, 12 mois)</li>
+    <li>100k€ - Amélioration IA (dataset, modèles, infrastructure)</li>
+    <li>100k€ - Marketing et acquisition utilisateurs</li>
+    <li>50k€ - Légal et conformité</li>
+    <li>50k€ - Frais généraux</li>
+</ul>
+<p>Objectifs : 50 000 utilisateurs actifs, lancer version premium</p>
+
+<p><strong>Round Series A : 2M€</strong></p>
+<ul>
+    <li>800k€ - Développement (équipe de 5)</li>
+    <li>400k€ - IA et R&D</li>
+    <li>400k€ - Expansion internationale</li>
+    <li>400k€ - Marketing et growth</li>
+</ul>
+<p>Objectifs : 500 000 utilisateurs, version iOS, expansion en Europe</p>
+
+<h2>Projections Financières</h2>
+
+<table>
+    <tr>
+        <th>Année</th>
+        <th>Revenus</th>
+        <th>Dépenses</th>
+        <th>Résultat</th>
+    </tr>
+    <tr>
+        <td>Année 1</td>
+        <td>180k€</td>
+        <td>380k€</td>
+        <td style="color: red;">-200k€</td>
+    </tr>
+    <tr>
+        <td>Année 2</td>
+        <td>980k€</td>
+        <td>740k€</td>
+        <td style="color: green;">+240k€</td>
+    </tr>
+    <tr>
+        <td>Année 3</td>
+        <td>4.15M€</td>
+        <td>2.3M€</td>
+        <td style="color: green;">+1.85M€</td>
+    </tr>
+</table>
+
+<hr>
+
+<h1 id="expansion"><span class="section-number">11.</span> Expansion Mondiale</h1>
+
+<h2>Stratégie par Région</h2>
+
+<p><strong>Europe (Priorité 1) - Timeline : 12-18 mois</strong></p>
+<p>Pays cibles : France (marché domestique), Allemagne, Royaume-Uni, Espagne, Italie, Pays-Bas, Scandinavie. Déjà conforme RGPD.</p>
+
+<p><strong>Amérique du Nord (Priorité 2) - Timeline : 18-24 mois</strong></p>
+<p>Pays cibles : États-Unis (plus grand marché), Canada. Conformité COPPA (USA), PIPEDA (Canada). Défis : concurrence forte, culture litigieuse.</p>
+
+<p><strong>Asie (Priorité 3) - Timeline : 24-36 mois</strong></p>
+<p>Pays cibles : Japon, Corée du Sud, Singapour, Inde. Barrières linguistiques, différences culturelles importantes.</p>
+
+<p><strong>Amérique Latine (Priorité 4) - Timeline : 24-36 mois</strong></p>
+<p>Pays cibles : Brésil, Mexique, Argentine, Colombie. Croissance rapide, familles nombreuses.</p>
+
+<p><strong>Moyen-Orient et Afrique (Priorité 5) - Timeline : 36-48 mois</strong></p>
+<p>Pays cibles : UAE, Arabie Saoudite, Afrique du Sud, Nigeria. Marchés émergents, faible concurrence.</p>
+
+<h2>Conformité Réglementaire</h2>
+
+<ul>
+    <li><strong>Europe</strong> : RGPD (déjà conforme), ePrivacy Directive, DSA</li>
+    <li><strong>Amérique du Nord</strong> : COPPA (USA), CCPA/CPRA (Californie), PIPEDA (Canada)</li>
+    <li><strong>Asie</strong> : Personal Data Protection Act (Singapour), Cybersecurity Law (Chine)</li>
+    <li><strong>Amérique Latine</strong> : LGPD (Brésil), Ley de Protección de Datos (Argentine)</li>
+</ul>
+
+<hr>
+
+<h1 id="developers"><span class="section-number">12.</span> Guide pour les Développeurs</h1>
+
+<h2>Pour Commencer</h2>
+
+<p><strong>Prérequis :</strong></p>
+<ul>
+    <li>Flutter 3.0+</li>
+    <li>Android Studio</li>
+    <li>Kotlin</li>
+    <li>Node.js 18+</li>
+    <li>Git</li>
+</ul>
+
+<p><strong>Installation :</strong></p>
+<div class="code">
+git clone https://github.com/Josiasange37/Kova.git
+cd Kova
+flutter pub get
+cd server
+npm install
+</div>
+
+<p><strong>Lancement :</strong></p>
+<div class="code">
+# App mobile
+flutter run
+
+# Server (optionnel)
+cd server
+npm start
+</div>
+
+<h2>Structure du Projet</h2>
+
+<div class="code">
+Kova/
+├── lib/
+│   ├── child/           # Mode Enfant
+│   ├── parent/          # Mode Parent
+│   ├── shared/          # Code partagé
+│   ├── core/            # Cœur de l'application
+│   ├── local_backend/   # Backend local (SQLite)
+│   └── main.dart        # Point d'entrée
+├── android/             # Android natif (Kotlin)
+├── server/              # Backend Node.js
+└── pubspec.yaml         # Dépendances Flutter
+</div>
+
+<h2>Contribution</h2>
+
+<p><strong>Processus :</strong></p>
+<ol>
+    <li>Fork le repository</li>
+    <li>Créer une branche feature/xxx</li>
+    <li>Faire les modifications</li>
+    <li>Tester (flutter test)</li>
+    <li>Commit avec messages clairs</li>
+    <li>Push et créer une Pull Request</li>
+    <li>Attendre la review</li>
+</ol>
+
+<h2>Ressources</h2>
+
+<ul>
+    <li>Flutter : https://flutter.dev/docs</li>
+    <li>Kotlin : https://kotlinlang.org/docs/</li>
+    <li>TensorFlow Lite : https://www.tensorflow.org/lite</li>
+    <li>Node.js : https://nodejs.org/docs/</li>
+</ul>
+
+<hr>
+
+<h1>Conclusion</h1>
+
+<p>KOVA représente une nouvelle approche de la protection de l'enfance en ligne, combinant intelligence artificielle, respect de la vie privée, et transparence. Contrairement aux solutions existantes, KOVA fonctionne hors-ligne, traite tout localement, et est conçu pour renforcer la confiance parent-enfant plutôt que de créer une surveillance opaque.</p>
+
+<p>Avec une architecture technique solide, un modèle économique diversifié, et une feuille de route ambitieuse, KOVA est positionné pour devenir le leader mondial de la protection numérique des enfants.</p>
+
+<p><strong>Notre engagement :</strong></p>
+<ul>
+    <li>Protection efficace des enfants</li>
+    <li>Respect de la vie privée</li>
+    <li>Transparence totale</li>
+    <li>Innovation continue</li>
+    <li>Accessibilité pour tous</li>
+</ul>
+
+<p><strong>Rejoignez-nous dans cette mission pour créer un internet plus sûr pour les enfants de demain.</strong></p>
+
+<hr>
+
+<p><strong>Contact :</strong></p>
+<ul>
+    <li>Email : contact@kova.app</li>
+    <li>GitHub : https://github.com/Josiasange37/Kova</li>
+    <li>Site web : https://kova.app</li>
+</ul>
+
+<p><strong>Version :</strong> 1.0 | <strong>Dernière mise à jour :</strong> Mai 2026 | <strong>Licence :</strong> MIT (Open Source)</p>
+
+</body>
+</html>

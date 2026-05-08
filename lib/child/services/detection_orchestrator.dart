@@ -210,15 +210,16 @@ class DetectionOrchestrator {
     if (severity == 'safe') return;
 
     // Handle high/critical severity - decoupled from alert pipeline
+    // CRITICAL FIX: Delay the block to avoid race conditions with UI thread
     if (severity == 'critical' || severity == 'high') {
-      try {
-        // Fire and forget so we don't block the alert
-        _blockApp(appKey).catchError((e) {
-          if (kDebugMode) debugPrint('⚠️ Non-fatal: blockApp failed: $e');
-        });
-      } catch (e) {
-        if (kDebugMode) debugPrint('⚠️ Non-fatal: blockApp threw exception: $e');
-      }
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!_active) return; // Check if still active
+        try {
+          _safeBlockApp(appKey);
+        } catch (e) {
+          debugPrint('⚠️ [BLOCK] Failed to block app $appKey: $e');
+        }
+      });
     }
 
     // Update child score
@@ -347,15 +348,14 @@ class DetectionOrchestrator {
     if (severity == 'safe') return;
 
     // Handle blocking - decoupled from alert pipeline
+    // CRITICAL FIX: Use safer blocking method with delay
     if (severity == 'critical' || severity == 'high') {
-      try {
-        // Fire and forget so we don't block the alert
-        _blockApp(appKey).catchError((e) {
-          if (kDebugMode) debugPrint('⚠️ Non-fatal: blockApp failed: $e');
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!_active) return;
+        _safeBlockApp(appKey).catchError((e) {
+          debugPrint('⚠️ [CONVERSATION BLOCK] Failed: $e');
         });
-      } catch (e) {
-        if (kDebugMode) debugPrint('⚠️ Non-fatal: blockApp threw exception: $e');
-      }
+      });
     }
 
     // Update score
@@ -431,8 +431,10 @@ class DetectionOrchestrator {
         if (kDebugMode) {
           debugPrint('🔒 BLOCKED APP DETECTED: $appKey — re-triggering block overlay');
         }
-        // Fire-and-forget: don't await to keep the metadata handler fast
-        _blockApp(appKey);
+        // Fire-and-forget with safety wrapper
+        _safeBlockApp(appKey).catchError((e) {
+          debugPrint('⚠️ [METADATA] Non-fatal block error: $e');
+        });
         return;
       }
 
@@ -444,7 +446,10 @@ class DetectionOrchestrator {
           if (kDebugMode) {
             debugPrint('🔒 BLOCKED PKG DETECTED: $rawPkg — re-triggering block overlay');
           }
-          _blockApp(blocked);
+          // Fire-and-forget with safety wrapper
+          _safeBlockApp(blocked).catchError((e) {
+            debugPrint('⚠️ [METADATA] Non-fatal block error: $e');
+          });
           return;
         }
       }
@@ -700,6 +705,59 @@ class DetectionOrchestrator {
       } catch (e) {
         if (kDebugMode) debugPrint('❌ Both block paths failed for $app: $e');
       }
+    }
+  }
+
+  /// SAFER version of _blockApp with proper error handling and retry logic
+  /// This prevents crashes on MIUI and other OEM skins
+  Future<void> _safeBlockApp(String app) async {
+    final pkg = _pkgMap[app];
+    if (pkg == null) {
+      debugPrint('⚠️ [BLOCK] No package mapping for app: $app');
+      return;
+    }
+
+    // Add to in-memory cache immediately
+    _blockedApps.add(app);
+
+    // Persist to database
+    if (_childId != null) {
+      try {
+        await _childRepo.setAppBlocked(_childId!, app, true);
+        debugPrint('✅ [BLOCK] App $app blocked in database');
+      } catch (e) {
+        debugPrint('⚠️ [BLOCK] Failed to persist block for $app: $e');
+        // Continue even if DB fails - in-memory cache is still active
+      }
+    }
+
+    // Try to show overlay with retry logic
+    int attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      try {
+        const platform = MethodChannel('com.kova.child/setup');
+        await platform.invokeMethod('blockAppViaService', {'pkg': pkg});
+        debugPrint('🚫 [BLOCK] Successfully blocked app via ForegroundService: $app');
+        return; // Success - exit
+      } catch (e) {
+        attempts++;
+        debugPrint('⚠️ [BLOCK] Attempt $attempts/$maxAttempts failed: $e');
+        if (attempts < maxAttempts) {
+          await Future.delayed(Duration(milliseconds: 300 * attempts));
+        }
+      }
+    }
+
+    // Final fallback: try direct MethodChannel
+    try {
+      const channel = MethodChannel('com.kova.child/blocker');
+      await channel.invokeMethod('blockApp', {'pkg': pkg});
+      debugPrint('🚫 [BLOCK] Successfully blocked app via fallback: $app');
+    } catch (e) {
+      debugPrint('❌ [BLOCK] All blocking methods failed for $app: $e');
+      // App is still in _blockedApps cache, so it will be blocked on next window change
     }
   }
 
