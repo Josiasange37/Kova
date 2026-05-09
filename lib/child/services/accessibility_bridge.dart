@@ -31,15 +31,14 @@ class AccessibilityBridge {
   }
 
   /// Block an app/conversation
+  /// CRITICAL FIX: Now uses safe blocking via DetectionOrchestrator
   static Future<void> blockApp(String childId, String app) async {
     try {
-      const blocker = MethodChannel('com.kova.child/blocker');
-      await blocker.invokeMethod<void>('blockApp', {
-        'childId': childId,
-        'pkg': app,
-      });
+      // Use the safe blocking method from DetectionOrchestrator
+      // which has retry logic and error handling
+      await DetectionOrchestrator.instance.safeBlockApp(app);
     } catch (e) {
-      debugPrint('Error blocking app: $e');
+      debugPrint('Error blocking app via bridge: $e');
     }
   }
 

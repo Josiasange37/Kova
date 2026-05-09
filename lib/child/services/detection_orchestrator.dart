@@ -104,12 +104,29 @@ class DetectionOrchestrator {
     _childCacheTime = null;
     _tfLiteAnalyzer.close();
     MonitoringBridge.reset();
-    _alertStreamController.close();
+    
+    // Don't close the stream controller if already closed
+    if (!_alertStreamController.isClosed) {
+      _alertStreamController.close();
+    }
+    
     if (kDebugMode) debugPrint('🛑 KOVA Detection Orchestrator: STOPPED');
+  }
+
+  /// Dispose resources - call when app is shutting down
+  void dispose() {
+    stop();
+    if (kDebugMode) debugPrint('🗑️ KOVA Detection Orchestrator: DISPOSED');
   }
 
   /// Get child model from cache (refreshes every 60 seconds)
   Future<dynamic> _getChild() async {
+    // CRITICAL FIX: Check _childId is not null
+    if (_childId == null) {
+      debugPrint('❌ Cannot get child: _childId is null');
+      return null;
+    }
+
     final now = DateTime.now();
     if (_cachedChild != null && _childCacheTime != null &&
         now.difference(_childCacheTime!).inSeconds < 60) {
@@ -215,7 +232,7 @@ class DetectionOrchestrator {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (!_active) return; // Check if still active
         try {
-          _safeBlockApp(appKey);
+          safeBlockApp(appKey);
         } catch (e) {
           debugPrint('⚠️ [BLOCK] Failed to block app $appKey: $e');
         }
@@ -253,6 +270,12 @@ class DetectionOrchestrator {
         }
         await Future.delayed(Duration(milliseconds: 100 * (retry + 1))); // Backoff
       }
+    }
+
+    // CRITICAL FIX: Check _childId is not null before using
+    if (_childId == null) {
+      debugPrint('❌ Cannot create alert: _childId is null');
+      return;
     }
 
     _alertStreamController.add(AlertModel(
@@ -377,6 +400,12 @@ class DetectionOrchestrator {
       scoreImage: 0.0,
       scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
     );
+
+    // CRITICAL FIX: Check _childId is not null before using
+    if (_childId == null) {
+      debugPrint('❌ Cannot create conversation alert: _childId is null');
+      return;
+    }
 
     _alertStreamController.add(AlertModel(
       id: alertId,
@@ -532,6 +561,12 @@ class DetectionOrchestrator {
       scoreGrooming: 0.0,
     );
 
+    // CRITICAL FIX: Check _childId is not null before using
+    if (_childId == null) {
+      debugPrint('❌ Cannot create tamper alert: _childId is null');
+      return;
+    }
+
     _alertStreamController.add(AlertModel(
       id: alertId,
       childId: _childId!,
@@ -556,7 +591,7 @@ class DetectionOrchestrator {
     );
 
     // 3. Send local notification
-    NotificationService.showCriticalAlert(
+    await NotificationService.showCriticalAlert(
       '🛡️ Tamper Alert',
       description,
     );
@@ -710,7 +745,8 @@ class DetectionOrchestrator {
 
   /// SAFER version of _blockApp with proper error handling and retry logic
   /// This prevents crashes on MIUI and other OEM skins
-  Future<void> _safeBlockApp(String app) async {
+  /// PUBLIC: Can be called from accessibility bridge
+  Future<void> safeBlockApp(String app) async {
     final pkg = _pkgMap[app];
     if (pkg == null) {
       debugPrint('⚠️ [BLOCK] No package mapping for app: $app');

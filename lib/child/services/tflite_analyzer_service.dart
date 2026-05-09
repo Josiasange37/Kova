@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -32,11 +33,26 @@ class TfLiteAnalyzerService {
     if (_isInitialized) return;
 
     try {
-      // 1. Load vocabulary for tokenization
-      final vocabString = await rootBundle.loadString('assets/ml/vocab.txt');
-      _vocab = _loadVocab(vocabString);
+      // 1. Check if model files exist before loading
+      final manifest = await rootBundle.loadString('AssetManifest.json');
+      final Map<String, dynamic> manifestMap = jsonDecode(manifest);
+      
+      if (!manifestMap.containsKey('assets/ml/text_classifier_quantized.tflite')) {
+        if (kDebugMode) debugPrint('⚠️ TFLite model file not found, using keyword-only mode');
+        _isInitialized = false;
+        return;
+      }
 
-      // 2. Initialize the interpreter with the quantized model
+      // 2. Load vocabulary for tokenization (optional - app works without it)
+      try {
+        final vocabString = await rootBundle.loadString('assets/ml/vocab.txt');
+        _vocab = _loadVocab(vocabString);
+      } catch (e) {
+        if (kDebugMode) debugPrint('⚠️ Vocab file not found, using basic tokenization');
+        _vocab = {};
+      }
+
+      // 3. Initialize the interpreter with the quantized model
       final options = InterpreterOptions()..threads = 2; // Optimize for mobile
       _interpreter = await Interpreter.fromAsset(
         'assets/ml/text_classifier_quantized.tflite', 
