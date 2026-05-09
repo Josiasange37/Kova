@@ -3,7 +3,6 @@
 // This file provides the static analysis methods used by other components.
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'detection_orchestrator.dart';
 
 class AccessibilityBridge {

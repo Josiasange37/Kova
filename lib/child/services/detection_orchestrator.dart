@@ -375,7 +375,7 @@ class DetectionOrchestrator {
     if (severity == 'critical' || severity == 'high') {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (!_active) return;
-        _safeBlockApp(appKey).catchError((e) {
+        safeBlockApp(appKey).catchError((e) {
           debugPrint('⚠️ [CONVERSATION BLOCK] Failed: $e');
         });
       });
@@ -461,7 +461,7 @@ class DetectionOrchestrator {
           debugPrint('🔒 BLOCKED APP DETECTED: $appKey — re-triggering block overlay');
         }
         // Fire-and-forget with safety wrapper
-        _safeBlockApp(appKey).catchError((e) {
+        safeBlockApp(appKey).catchError((e) {
           debugPrint('⚠️ [METADATA] Non-fatal block error: $e');
         });
         return;
@@ -476,7 +476,7 @@ class DetectionOrchestrator {
             debugPrint('🔒 BLOCKED PKG DETECTED: $rawPkg — re-triggering block overlay');
           }
           // Fire-and-forget with safety wrapper
-          _safeBlockApp(blocked).catchError((e) {
+          safeBlockApp(blocked).catchError((e) {
             debugPrint('⚠️ [METADATA] Non-fatal block error: $e');
           });
           return;
