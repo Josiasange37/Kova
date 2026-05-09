@@ -470,37 +470,52 @@ class NetworkSyncService {
   /// Push an alert — uses LAN if available, falls back to Vercel relay
   /// CRITICAL: Only deletes from pending sync queue AFTER confirmed delivery.
   Future<void> pushAlert(NetworkAlertFull alert, [String? itemId]) async {
-    print('📤 [ALERT PIPELINE] NetworkSyncService.pushAlert() START');
-    print('📤 [ALERT PIPELINE] _lanData.isConnected = ${_lanData.isConnected}');
-    print('📤 [ALERT PIPELINE] _connectionState = $_connectionState');
-    print('📤 [ALERT PIPELINE] _pairToken empty = ${_pairToken.isEmpty}');
+    print('📤 [ALERT] LAN connected=${_lanData.isConnected} healthy=${_lanData.isSocketHealthy}');
+    print('📤 [ALERT] pairToken empty=${_pairToken.isEmpty}');
 
     bool delivered = false;
 
-    // Try LAN first (full data) — but VERIFY the socket is truly alive
-    if (_lanData.isConnected && _lanData.isSocketHealthy) {
-      print('📤 [ALERT PIPELINE] Taking LAN path...');
+    // Try LAN first
+    if (_lanData.isConnected) {
+      // Try even if isSocketHealthy is false — attempt reconnect first
+      if (!_lanData.isSocketHealthy) {
+        print('⚠️ [ALERT] Socket unhealthy, attempting reconnect...');
+        try {
+          final lastPeer = LocalStorage.getString('last_child_peer');
+          if (lastPeer != null) {
+            final device = LanDeviceInfo.fromJson(jsonDecode(lastPeer), jsonDecode(lastPeer)['ip'] ?? '');
+            await _lanData.connectToDevice(device, _pairToken);
+            print('� [ALERT] Reconnected to child LAN');
+          }
+        } catch (e) {
+          print('⚠️ [ALERT] Reconnect failed: $e');
+        }
+      }
+
       final lanSuccess = _lanData.sendAlertSafe(alert);
       if (lanSuccess) {
-        print('📤 Alert sent via LAN (full data)');
+        print('✅ [ALERT] Delivered via LAN');
         delivered = true;
       } else {
-        print('⚠️ [ALERT PIPELINE] LAN send FAILED — socket dead, falling back to relay');
+        print('❌ [ALERT] LAN send failed after reconnect attempt');
+      }
+    } else {
+      print('⚠️ [ALERT] LAN not connected, skipping LAN path');
+    }
+
+    // Vercel fallback
+    if (!delivered) {
+      print('📤 [ALERT] Trying Vercel relay...');
+      delivered = await _pushAlertToRelay(alert, itemId);
+      if (delivered) {
+        print('✅ [ALERT] Delivered via Vercel');
+      } else {
+        print('❌ [ALERT] Vercel also failed — alert queued for retry');
       }
     }
 
-    // Always try Vercel relay as backup if LAN didn't confirm delivery
-    if (!delivered) {
-      print('📤 [ALERT PIPELINE] Falling back to Vercel relay...');
-      delivered = await _pushAlertToRelay(alert, itemId);
-    }
-
-    // Only delete from pending sync if we confirmed delivery via at least one channel
     if (delivered && itemId != null) {
       await _pendingSyncRepo.deleteList([itemId]);
-      print('✅ [ALERT PIPELINE] Alert delivered and removed from queue');
-    } else if (!delivered) {
-      print('❌ [ALERT PIPELINE] Alert NOT delivered — keeping in queue for retry');
     }
   }
 

@@ -130,22 +130,33 @@ class DashboardDataService extends ChangeNotifier {
         scoreGrooming: alert is NetworkAlertFull ? alert.scoreGrooming : 0.0,
       );
 
-      // Show notification
-      final isLan = _connectionState == NetworkConnectionState.lan;
-      final title = isLan
-          ? '🚨 Alert: ${alert.alertType}'
-          : '⚠️ ${alert.severity.toUpperCase()} Alert';
-      final body = isLan && alert is NetworkAlertFull
-          ? '${alert.app}: ${alert.contentPreview ?? alert.alertType}'
-          : '${alert.app} — ${alert.alertType}';
+      // 3. Show system notification — CRITICAL for parent awareness
+      try {
+        final severity = alert.severity ?? 'medium';
+        final app = alert.app ?? 'Unknown';
+        final childName = child?.name ?? 'Your child';
 
-      await NotificationService.showAlert(title, body);
+        final title = switch (severity) {
+          'critical' => '🚨 ALERTE CRITIQUE — $childName',
+          'high'     => '⚠️ Contenu dangereux — $childName',
+          'medium'   => '⚡ Contenu suspect — $childName',
+          _          => 'KOVA — Alerte pour $childName',
+        };
+
+        final body = 'Activité suspecte détectée sur $app. Vérifiez maintenant.';
+
+        await NotificationService.showAlert(title, body);
+        debugPrint('🔔 [PARENT] Notification shown: $title');
+      } catch (e) {
+        debugPrint('❌ [PARENT] Failed to show notification: $e');
+      }
 
       // Refresh dashboard data
       await loadDashboardData();
 
       if (kDebugMode) {
-        debugPrint('📥 Remote alert saved: $alertId (via ${isLan ? "LAN" : "internet"})');
+        final via = _connectionState == NetworkConnectionState.lan ? "LAN" : "internet";
+        debugPrint('📥 Remote alert saved: $alertId (via $via)');
       }
     } catch (e) {
       if (kDebugMode) debugPrint('⚠️ Failed to process remote alert: $e');
