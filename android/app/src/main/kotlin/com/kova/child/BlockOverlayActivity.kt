@@ -87,9 +87,9 @@ class BlockOverlayActivity : Activity() {
             WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
         )
 
-        setupFullscreen()
         setupBackIntercept()
         buildUI()
+        setupFullscreen()
         startCountdown()
     }
 
@@ -335,19 +335,24 @@ class BlockOverlayActivity : Activity() {
     override fun onTouchEvent(event: MotionEvent?): Boolean = true
 
     private fun setupFullscreen() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.insetsController?.let {
-                it.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-                it.systemBarsBehavior =
-                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                window.insetsController?.let {
+                    it.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+                    it.systemBarsBehavior =
+                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                )
             }
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = (
-                View.SYSTEM_UI_FLAG_FULLSCREEN or
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-            )
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ setupFullscreen failed (non-fatal): ${e.message}")
+            // Overlay still shows — fullscreen is cosmetic only
         }
     }
 }

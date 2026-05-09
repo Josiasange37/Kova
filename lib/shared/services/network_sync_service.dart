@@ -511,7 +511,16 @@ class NetworkSyncService {
     }
 
     if (!delivered) {
-      debugPrint('💾 [PUSH ALERT] Both paths failed — queued for retry');
+      debugPrint('💾 [PUSH ALERT] Saving to local queue for LAN retry...');
+      try {
+        await _pendingSyncRepo.create(
+          type: 'alert',
+          payload: jsonEncode(alert.toJson()),
+        );
+        debugPrint('✅ [PUSH ALERT] Queued for retry when parent reconnects');
+      } catch (e) {
+        debugPrint('❌ [PUSH ALERT] Queue failed: $e');
+      }
     }
 
     if (delivered && itemId != null) {
@@ -545,9 +554,11 @@ class NetworkSyncService {
       final encrypted = _cryptoService!.encryptPayload(jsonStr);
       print('📤 [ALERT PIPELINE] Encrypting alert for relay: ${summary.app} - ${summary.alertType}');
 
-      print('📤 [ALERT PIPELINE] POST to $_relayBaseUrl/api/alert/push...');
+      final url = Uri.parse('$_relayBaseUrl/api/alert/push');
+      print('🌐 [RELAY] POST $url');
+
       final response = await http.post(
-        Uri.parse('$_relayBaseUrl/api/alert/push'),
+        url,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_pairToken',
@@ -559,16 +570,20 @@ class NetworkSyncService {
         }),
       ).timeout(const Duration(seconds: 10));
 
-      print('📤 [ALERT PIPELINE] HTTP response: ${response.statusCode}');
-      if (response.statusCode == 201) {
-        print('✅ [ALERT PIPELINE] Alert pushed to relay (summary) - HTTP 201');
+      print('🌐 [RELAY] Response: ${response.statusCode} — ${response.body}');
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        print('✅ [RELAY] Alert delivered successfully');
         return true;
       } else {
-        print('❌ [ALERT PIPELINE] Alert push failed: HTTP ${response.statusCode} - ${response.body}');
+        print('❌ [RELAY] Server error: ${response.statusCode} ${response.body}');
         return false;
       }
+    } on TimeoutException {
+      print('❌ [RELAY] Timeout — Vercel not responding');
+      return false;
     } catch (e, stackTrace) {
-      print('❌ [ALERT PIPELINE] _pushAlertToRelay ERROR: $e');
+      print('❌ [RELAY] Exception: $e');
       print('❌ [ALERT PIPELINE] Stack trace: $stackTrace');
       return false;
     }
