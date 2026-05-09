@@ -133,19 +133,19 @@ class _FinalActiveScreenState extends State<FinalActiveScreen> {
                   // Step 2: Push via NetworkSyncService
                   final networkSync = NetworkSyncService();
                   debugPrint('🔍 [TEST] LAN connected=${networkSync.isLanConnected}');
-                  debugPrint('🔍 [TEST] pairToken=${networkSync.pairToken}');
 
                   final alert = NetworkAlertFull(
-                    childId: LocalStorage.getString('child_id') ?? 'test_child',
-                    childName: LocalStorage.getString('child_name') ?? 'Child',
+                    severity: 'critical',
                     app: 'com.whatsapp',
                     alertType: 'grooming',
-                    severity: 'critical',
-                    scoreText: 0.95,
-                    scoreGrooming: 0.88,
-                    scoreDelta: 0.5,
-                    timestamp: DateTime.now().toIso8601String(),
+                    childName: LocalStorage.getString('child_name') ?? 'Child',
+                    timestamp: DateTime.now(),
+                    aiConfidence: 0.95,
                     contentPreview: 'TEST ALERT — pipeline check',
+                    scoreText: 0.95,
+                    scoreImage: 0.0,
+                    scoreGrooming: 0.88,
+                    scoreDelta: 0,
                   );
 
                   await networkSync.pushAlert(alert, alertId.toString());

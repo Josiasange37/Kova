@@ -470,7 +470,7 @@ class NetworkSyncService {
   Future<void> pushAlert(NetworkAlertFull alert, [String? itemId]) async {
     debugPrint('═══════════════════════════════════════');
     debugPrint('📤 [PUSH ALERT] Starting alert delivery');
-    debugPrint('  childId   = ${alert.childId}');
+    debugPrint('  childName = ${alert.childName}');
     debugPrint('  severity  = ${alert.severity}');
     debugPrint('  pairToken = $_pairToken');
     debugPrint('  LAN connected  = ${_lanData.isConnected}');
