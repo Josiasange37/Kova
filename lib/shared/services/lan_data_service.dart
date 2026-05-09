@@ -82,19 +82,28 @@ class LanDataService {
   // Server side (runs on CHILD device)
   // ─────────────────────────────────────────────
 
+  void setPairToken(String token) {
+    _pairToken = token;
+  }
+
   /// Start TCP server to accept parent connections
-  Future<void> startServer(String pairToken) async {
+  Future<void> startServer([String pairToken = '']) async {
     if (_isServerRunning) return;
-    _pairToken = pairToken;
+    if (pairToken.isNotEmpty) {
+      _pairToken = pairToken;
+    }
     _securityService.init();
 
     try {
       _server = await ServerSocket.bind(InternetAddress.anyIPv4, _port);
       _isServerRunning = true;
-      print('🖥️ LAN Data server started on port $_port');
+      debugPrint('✅ [LAN] Parent TCP server listening on port $_port');
 
       _server!.listen(
-        (socket) => _handleIncomingConnection(socket),
+        (socket) {
+           debugPrint('✅ [LAN SERVER] Client connected: ${socket.remoteAddress}');
+           _handleIncomingConnection(socket);
+        },
         onError: (e) => print('LAN Server error: $e'),
       );
     } catch (e) {
@@ -148,13 +157,16 @@ class LanDataService {
       switch (type) {
         case 'handshake':
           // Verify pair token
-          if (json['pairToken'] == _pairToken) {
+          if (_pairToken.isEmpty || json['pairToken'] == _pairToken) {
+            if (_pairToken.isEmpty) {
+              _pairToken = json['pairToken'] as String;
+            }
             if (json['publicKey'] != null) {
               _securityService.setPeerPublicKey(json['publicKey'] as String);
             }
             final myPublicKey = _securityService.generateKeyPair()['public'];
             _sendToSocket(socket, {'type': 'handshake_ok', 'publicKey': myPublicKey});
-            print('✅ Parent authenticated via LAN');
+            print('✅ Client authenticated via LAN');
           } else {
             _sendToSocket(socket, {'type': 'handshake_fail', 'reason': 'Invalid token'});
             socket.close();
@@ -221,74 +233,76 @@ class LanDataService {
 
   /// Connect to child device's TCP server
   Future<bool> connectToDevice(LanDeviceInfo device, String pairToken) async {
-    _lastPeerIp = device.ipAddress;
-    _lastPeerPort = device.port;
-    _lastPairToken = pairToken;
-    return await _doConnect(device.ipAddress, device.port, pairToken);
+    return await connectToParent(device.ipAddress, device.port, pairToken);
   }
 
-  Future<bool> _doConnect(String ip, int port, String pairToken) async {
-    _pairToken = pairToken;
+  Future<bool> connectToParent(String ip, int port, String token) async {
+    debugPrint('🔌 [LAN] Connecting to parent at $ip:$port...');
+    _lastPeerIp = ip;
+    _lastPeerPort = port;
+    _lastPairToken = token;
+    _pairToken = token;
     _securityService.init();
 
-    try {
-      _clientSocket?.destroy();
-      _clientSocket = await Socket.connect(
-        ip,
-        port,
-        timeout: const Duration(seconds: 5),
-      );
+    int attempts = 0;
+    while (attempts < 5) {
+      try {
+        _clientSocket?.destroy();
+        _clientSocket = await Socket.connect(
+          ip,
+          port,
+          timeout: const Duration(seconds: 5),
+        );
+        _isClientConnected = true;
+        _connectionStateController.add(true);
+        startHeartbeat();
+        debugPrint('✅ [LAN] TCP socket connected to $ip:$port');
 
-      _isClientConnected = true;
-      _connectionStateController.add(true);
-      startHeartbeat();
-      print('🔌 Connected to child at $ip:$port');
-
-      // Buffer for incomplete messages
-      String buffer = '';
-
-      _clientSocket!.listen(
-        (data) {
-          buffer += utf8.decode(data);
-
-          while (buffer.contains('\n')) {
-            final idx = buffer.indexOf('\n');
-            final line = buffer.substring(0, idx).trim();
-            buffer = buffer.substring(idx + 1);
-
-            if (line.isNotEmpty) {
-              _handleIncomingMessage(line, _clientSocket!);
+        String buffer = '';
+        _clientSocket!.listen(
+          (data) {
+            buffer += utf8.decode(data);
+            while (buffer.contains('\n')) {
+              final idx = buffer.indexOf('\n');
+              final line = buffer.substring(0, idx).trim();
+              buffer = buffer.substring(idx + 1);
+              if (line.isNotEmpty) {
+                _handleIncomingMessage(line, _clientSocket!);
+              }
             }
-          }
-        },
-        onDone: () {
-          print('🔌 Disconnected from child');
-          _isClientConnected = false;
-          _clientSocket = null;
-          _connectionStateController.add(false);
-        },
-        onError: (e) {
-          print('LAN Client error: $e');
-          _isClientConnected = false;
-          _clientSocket = null;
-          _connectionStateController.add(false);
-        },
-      );
+          },
+          onDone: () {
+            print('🔌 Disconnected from parent');
+            _isClientConnected = false;
+            _clientSocket = null;
+            _connectionStateController.add(false);
+          },
+          onError: (e) {
+            print('LAN Client error: $e');
+            _isClientConnected = false;
+            _clientSocket = null;
+            _connectionStateController.add(false);
+          },
+        );
 
-      // Send handshake
-      final myPublicKey = _securityService.generateKeyPair()['public'];
-      _sendToSocket(_clientSocket!, {
-        'type': 'handshake',
-        'pairToken': pairToken,
-        'publicKey': myPublicKey,
-      });
+        // Send handshake
+        final myPublicKey = _securityService.generateKeyPair()['public'];
+        _sendToSocket(_clientSocket!, {
+          'type': 'handshake',
+          'pairToken': token,
+          'publicKey': myPublicKey,
+        });
 
-      return true;
-    } catch (e) {
-      print('❌ LAN connect failed: $e');
-      _isClientConnected = false;
-      return false;
+        return true;
+      } catch (e) {
+        attempts++;
+        debugPrint('⚠️ [LAN] Connect attempt $attempts failed: $e');
+        await Future.delayed(Duration(milliseconds: 500 * attempts));
+      }
     }
+    debugPrint('❌ [LAN] Failed to connect after 5 attempts');
+    _isClientConnected = false;
+    return false;
   }
 
   Future<void> attemptReconnect() async {

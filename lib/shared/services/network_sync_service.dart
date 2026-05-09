@@ -114,29 +114,25 @@ class NetworkSyncService {
     // Listen for LAN device discovery
     _deviceFoundSub = _lanDiscovery.onDeviceFound.listen(_handleDeviceFound);
 
-    // If child, start LAN server
-    if (role == 'child') {
-      await _lanData.startServer(_pairToken);
-    }
-
-    // If parent, start polling Vercel relay
+    // If parent, start LAN server immediately and poll Vercel relay
     if (role == 'parent') {
+      await _lanData.startServer(_pairToken);
       _startPolling();
-      // Try to reconnect to last known child on LAN
+    } else {
+      _startSyncLoop();
+      // If child, try to reconnect to last known parent on LAN
       if (_pairToken.isNotEmpty) {
-        final lastChildInfo = LocalStorage.getLastChildPeer();
-        if (lastChildInfo != null) {
+        final lastParentInfo = LocalStorage.getLastChildPeer(); // We'll just use what we have
+        if (lastParentInfo != null) {
           try {
-            final device = LanDeviceInfo.fromJson(lastChildInfo, lastChildInfo['ip'] ?? '');
-            await _lanData.connectToDevice(device, _pairToken);
+            final device = LanDeviceInfo.fromJson(lastParentInfo, lastParentInfo['ip'] ?? '');
+            await _lanData.connectToParent(device.ipAddress, device.port, _pairToken);
             print('🔁 LAN reconnected after reboot');
           } catch (e) {
             print('⚠️ LAN reconnect failed, will use Vercel: $e');
           }
         }
       }
-    } else {
-      _startSyncLoop();
     }
 
     // NOTE: LAN alert listener is already attached above (before early-return block)
@@ -301,10 +297,16 @@ class NetworkSyncService {
       
       _lanDiscovery.setActivePairCode(code);
       await _lanDiscovery.start(role: 'child');
-      
-      // Child starts the TCP server
-      await _lanData.startServer(_pairToken);
-      _updateState(NetworkConnectionState.lan);
+
+      // After pairing via UDP discovery, establish TCP data channel
+      final connected = await _lanData.connectToParent(localPeer.ipAddress, 18757, _pairToken);
+      if (connected) {
+        debugPrint('✅ [LAN] TCP data channel established');
+        _updateState(NetworkConnectionState.lan);
+      } else {
+        debugPrint('❌ [LAN] TCP connect failed — alerts will use Vercel');
+        _updateState(NetworkConnectionState.internet);
+      }
       
       _startSyncLoop();
 
@@ -406,8 +408,8 @@ class NetworkSyncService {
       
       await LocalStorage.setLastChildPeer(childPeer.toJson());
 
-      // Parent connects to the child's TCP server
-      await _lanData.connectToDevice(childPeer, _pairToken);
+      // Parent is already running the TCP server, child will connect to us
+      _lanData.setPairToken(_pairToken);
       _updateState(NetworkConnectionState.lan);
       if (_role == 'parent') {
         _startPolling();
@@ -913,9 +915,9 @@ class NetworkSyncService {
   void _handleDeviceFound(LanDeviceInfo device) {
     print('🔍 Paired device found on LAN: ${device.ipAddress}');
 
-    // If parent, connect to child's TCP server
-    if (_role == 'parent') {
-      _lanData.connectToDevice(device, _pairToken).then((connected) {
+    // If child, connect to parent's TCP server
+    if (_role == 'child') {
+      _lanData.connectToParent(device.ipAddress, device.port, _pairToken).then((connected) {
         if (connected) {
           _updateState(NetworkConnectionState.lan);
         }
