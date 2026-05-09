@@ -956,54 +956,113 @@ class KovaAccessibilityService : AccessibilityService() {
     fun showBlockOverlay(reason: String) {
         mainHandler.post {
             if (!hasOverlayPermission()) {
-                Log.w(TAG, "No overlay permission - falling back to persistent notification")
+                Log.w(TAG, "No overlay permission - showing fallback notification")
                 showFallbackNotification(reason)
-                return@post // graceful skip, don't crash
+                return@post
             }
-            
+
             try {
                 // If already showing, just update text
                 if (overlayView != null) {
-                    overlayView?.findViewById<TextView>(R.id.tvReason)?.text = reason
+                    (overlayView?.tag as? android.widget.TextView)?.text = reason
                     return@post
                 }
 
-                val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-                val inflater = LayoutInflater.from(this)
-                val view = inflater.inflate(R.layout.kova_block_overlay, null)
-                
-                view.findViewById<TextView>(R.id.tvReason).text = reason
-                view.findViewById<Button>(R.id.btnDismiss).setOnClickListener {
-                    hideBlockOverlay()
-                    
-                    // Go home when dismissed
-                    val homeIntent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
-                        addCategory(android.content.Intent.CATEGORY_HOME)
-                        flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    startActivity(homeIntent)
-                }
-                
-                val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                } else {
-                    WindowManager.LayoutParams.TYPE_PHONE
+                val ctx = this
+
+                // ── Build layout 100% programmatically — no XML needed ──────────
+                val root = android.widget.LinearLayout(ctx).apply {
+                    orientation = android.widget.LinearLayout.VERTICAL
+                    gravity = android.view.Gravity.CENTER
+                    setBackgroundColor(android.graphics.Color.parseColor("#CC1a1a2e"))
+                    setPadding(60, 60, 60, 60)
                 }
 
-                val params = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.MATCH_PARENT,
+                // Shield icon emoji as large text (no drawable needed)
+                val icon = android.widget.TextView(ctx).apply {
+                    text = "🛡️"
+                    textSize = 64f
+                    gravity = android.view.Gravity.CENTER
+                }
+
+                // Title
+                val title = android.widget.TextView(ctx).apply {
+                    text = "KOVA a bloqué ce contenu"
+                    textSize = 22f
+                    setTextColor(android.graphics.Color.WHITE)
+                    gravity = android.view.Gravity.CENTER
+                    setTypeface(null, android.graphics.Typeface.BOLD)
+                    setPadding(0, 24, 0, 16)
+                }
+
+                // Reason text — this is what gets updated on refresh
+                val reasonText = android.widget.TextView(ctx).apply {
+                    text = reason
+                    textSize = 16f
+                    setTextColor(android.graphics.Color.parseColor("#FFCCCC"))
+                    gravity = android.view.Gravity.CENTER
+                    setPadding(0, 0, 0, 48)
+                    tag = "reason" // used to find this view for updates
+                }
+
+                // OK Button
+                val okBtn = android.widget.Button(ctx).apply {
+                    text = "OK — Retour à l'accueil"
+                    textSize = 16f
+                    setTextColor(android.graphics.Color.WHITE)
+                    setBackgroundColor(android.graphics.Color.parseColor("#E53935"))
+                    val lp = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    )
+                    lp.setMargins(0, 0, 0, 16)
+                    layoutParams = lp
+                    setOnClickListener {
+                        hideBlockOverlay()
+                        val homeIntent = android.content.Intent(
+                            android.content.Intent.ACTION_MAIN
+                        ).apply {
+                            addCategory(android.content.Intent.CATEGORY_HOME)
+                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        startActivity(homeIntent)
+                    }
+                }
+
+                root.addView(icon)
+                root.addView(title)
+                root.addView(reasonText)
+                root.addView(okBtn)
+
+                // Store reasonText as tag on root so we can update it later
+                root.tag = reasonText
+
+                val layoutFlag = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.view.WindowManager.LayoutParams.TYPE_PHONE
+                }
+
+                val params = android.view.WindowManager.LayoutParams(
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                    android.view.WindowManager.LayoutParams.MATCH_PARENT,
                     layoutFlag,
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                    PixelFormat.OPAQUE
+                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                    android.graphics.PixelFormat.OPAQUE
                 )
-                
-                overlayView = view
-                windowManager.addView(view, params)
+
+                val windowManager = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
+                overlayView = root
+                windowManager.addView(root, params)
+
+                Log.d(TAG, "✅ [OVERLAY] Programmatic overlay shown successfully")
+
             } catch (e: Exception) {
-                Log.e(TAG, "Overlay failed: ${e.message}")
+                Log.e(TAG, "❌ [OVERLAY] Failed to show overlay: ${e.message}")
+                overlayView = null
                 showFallbackNotification(reason)
             }
         }
