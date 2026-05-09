@@ -519,9 +519,12 @@ class NetworkSyncService {
     if (!delivered) {
       debugPrint('💾 [PUSH ALERT] Saving to local queue for LAN retry...');
       try {
-        await _pendingSyncRepo.create(
-          type: 'alert',
-          payload: jsonEncode(alert.toJson()),
+        await _pendingSyncRepo.insert(
+          PendingSync(
+            id: const Uuid().v4(),
+            type: 'alert',
+            payload: jsonEncode(alert.toJson()),
+          ),
         );
         debugPrint('✅ [PUSH ALERT] Queued for retry when parent reconnects');
       } catch (e) {

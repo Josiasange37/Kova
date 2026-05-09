@@ -312,7 +312,7 @@ class LanDataService {
     }
     debugPrint('🔁 [LAN] Attempting reconnect to $_lastPeerIp...');
     try {
-      await _doConnect(_lastPeerIp!, _lastPeerPort ?? 18757, _lastPairToken ?? '');
+      await connectToParent(_lastPeerIp!, _lastPeerPort ?? 18757, _lastPairToken ?? '');
       debugPrint('✅ [LAN] Reconnected successfully');
     } catch (e) {
       debugPrint('❌ [LAN] Reconnect failed: $e');
