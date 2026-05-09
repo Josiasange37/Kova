@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:kova/shared/models/network_alert.dart';
 import 'package:kova/shared/services/security_service.dart';
 
@@ -36,6 +37,11 @@ class LanDataService {
 
   bool _isServerRunning = false;
   bool _isClientConnected = false;
+
+  Timer? _heartbeatTimer;
+  String? _lastPeerIp;
+  int? _lastPeerPort;
+  String? _lastPairToken;
 
   final _alertReceivedController = StreamController<NetworkAlertFull>.broadcast();
   final _connectionStateController = StreamController<bool>.broadcast();
@@ -197,6 +203,10 @@ class LanDataService {
           // Alert acknowledged
           break;
 
+        case 'ping':
+          // Heartbeat ping — silently ignore (keeps connection alive)
+          break;
+
         default:
           print('Unknown LAN message type: $type');
       }
@@ -211,19 +221,28 @@ class LanDataService {
 
   /// Connect to child device's TCP server
   Future<bool> connectToDevice(LanDeviceInfo device, String pairToken) async {
+    _lastPeerIp = device.ipAddress;
+    _lastPeerPort = device.port;
+    _lastPairToken = pairToken;
+    return await _doConnect(device.ipAddress, device.port, pairToken);
+  }
+
+  Future<bool> _doConnect(String ip, int port, String pairToken) async {
     _pairToken = pairToken;
     _securityService.init();
 
     try {
+      _clientSocket?.destroy();
       _clientSocket = await Socket.connect(
-        device.ipAddress,
-        device.port,
+        ip,
+        port,
         timeout: const Duration(seconds: 5),
       );
 
       _isClientConnected = true;
       _connectionStateController.add(true);
-      print('🔌 Connected to child at ${device.ipAddress}:${device.port}');
+      startHeartbeat();
+      print('🔌 Connected to child at $ip:$port');
 
       // Buffer for incomplete messages
       String buffer = '';
@@ -270,6 +289,44 @@ class LanDataService {
       _isClientConnected = false;
       return false;
     }
+  }
+
+  Future<void> attemptReconnect() async {
+    if (_lastPeerIp == null) {
+      debugPrint('⚠️ [LAN] Cannot reconnect — no previous peer info');
+      return;
+    }
+    debugPrint('🔁 [LAN] Attempting reconnect to $_lastPeerIp...');
+    try {
+      await _doConnect(_lastPeerIp!, _lastPeerPort ?? 18757, _lastPairToken ?? '');
+      debugPrint('✅ [LAN] Reconnected successfully');
+    } catch (e) {
+      debugPrint('❌ [LAN] Reconnect failed: $e');
+      _isClientConnected = false;
+    }
+  }
+
+  void startHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      final target = _activeConnection ?? _clientSocket;
+      if (target != null) {
+        try {
+          // Send lightweight ping — just a newline the other side ignores
+          target.writeln('{"type":"ping"}');
+          debugPrint('💓 [LAN] Heartbeat sent');
+        } catch (e) {
+          debugPrint('⚠️ [LAN] Heartbeat failed — socket dead: $e');
+          _isClientConnected = false;
+          attemptReconnect();
+        }
+      }
+    });
+  }
+
+  void stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
   }
 
   // ─────────────────────────────────────────────
@@ -372,6 +429,7 @@ class LanDataService {
   }
 
   void disconnectClient() {
+    stopHeartbeat();
     _clientSocket?.close();
     _clientSocket = null;
     _isClientConnected = false;
@@ -379,6 +437,7 @@ class LanDataService {
   }
 
   void dispose() {
+    stopHeartbeat();
     stopServer();
     disconnectClient();
     _alertReceivedController.close();

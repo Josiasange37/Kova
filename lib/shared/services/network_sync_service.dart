@@ -469,32 +469,36 @@ class NetworkSyncService {
   // ─────────────────────────────────────────────
 
   Future<void> pushAlert(NetworkAlertFull alert, [String? itemId]) async {
-    debugPrint('═══════════════════════════════════════');
-    debugPrint('📤 [PUSH ALERT] Starting alert delivery');
-    debugPrint('  childName = ${alert.childName}');
-    debugPrint('  severity  = ${alert.severity}');
-    debugPrint('  pairToken = $_pairToken');
-    debugPrint('  LAN connected  = ${_lanData.isConnected}');
-    debugPrint('  LAN healthy    = ${_lanData.isSocketHealthy}');
-    debugPrint('  relayUrl       = $_relayBaseUrl');
-    debugPrint('═══════════════════════════════════════');
+    debugPrint('📤 [PUSH ALERT] severity=${alert.severity}');
 
     bool delivered = false;
 
-    // ── LAN path ──────────────────────────────────────────
+    // If socket dropped, reconnect before giving up on LAN
+    if (!_lanData.isConnected || !_lanData.isSocketHealthy) {
+      debugPrint('🔁 [PUSH ALERT] LAN down — attempting reconnect...');
+      try {
+        await _lanData.attemptReconnect();
+        await Future.delayed(const Duration(milliseconds: 500));
+        debugPrint('  After reconnect: connected=${_lanData.isConnected}');
+      } catch (e) {
+        debugPrint('⚠️ [PUSH ALERT] Reconnect failed: $e');
+      }
+    }
+
+    // Try LAN
     if (_lanData.isConnected) {
-      debugPrint('📡 [PUSH ALERT] Trying LAN...');
+      debugPrint('📡 [PUSH ALERT] Sending via LAN...');
       try {
         final success = _lanData.sendAlertSafe(alert);
         debugPrint(success
-            ? '✅ [PUSH ALERT] LAN delivery SUCCESS'
-            : '❌ [PUSH ALERT] LAN sendAlertSafe returned false');
+            ? '✅ [PUSH ALERT] LAN SUCCESS'
+            : '❌ [PUSH ALERT] LAN returned false');
         delivered = success;
       } catch (e) {
         debugPrint('❌ [PUSH ALERT] LAN exception: $e');
       }
     } else {
-      debugPrint('⚠️ [PUSH ALERT] LAN not connected — skipping LAN path');
+      debugPrint('❌ [PUSH ALERT] LAN still down after reconnect attempt');
     }
 
     // ── Vercel relay fallback ──────────────────────────────

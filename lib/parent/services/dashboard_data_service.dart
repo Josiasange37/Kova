@@ -91,15 +91,39 @@ class DashboardDataService extends ChangeNotifier {
 
     // Listen for alerts from network (both LAN and Vercel relay)
     _alertSub = _networkSync.onAlertReceived.listen((alert) async {
-      debugPrint('═══════════════════════════════════════');
-      debugPrint('🔔 [PARENT RECEIVED] Alert arrived!');
+      debugPrint('🔔 [PARENT] Alert received via LAN!');
       debugPrint('  severity = ${alert.severity}');
       debugPrint('  app      = ${alert.app}');
-      debugPrint('  child    = ${alert.childName}');
-      debugPrint('═══════════════════════════════════════');
+
+      _alerts?.insert(0, AlertModel(
+        id: '',
+        childId: '',
+        app: alert.app ?? '',
+        type: alert.alertType ?? '',
+        severity: alert.severity ?? 'medium',
+        timestamp: DateTime.now(),
+        read: false,
+      ));
+      notifyListeners();
+
+      // Show system notification
+      try {
+        final title = alert.severity == 'critical'
+            ? '🚨 ALERTE CRITIQUE — ${alert.childName ?? "Enfant"}'
+            : '⚠️ Alerte KOVA — ${alert.childName ?? "Enfant"}';
+        final body =
+            'Activité suspecte sur ${alert.app ?? "une application"}';
+
+        await NotificationService.showAlert(title, body);
+        debugPrint('✅ [PARENT] System notification shown');
+      } catch (e) {
+        debugPrint('❌ [PARENT] Notification failed: $e');
+      }
 
       await _handleRemoteAlert(alert);
     });
+
+    debugPrint('✅ [PARENT] onAlertReceived listener active');
 
     // Listen for connection state changes
     _connectionSub = _networkSync.onConnectionStateChanged.listen((state) {
