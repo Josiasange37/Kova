@@ -9,7 +9,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
+import 'package:kova/parent/services/parent_permission_service.dart';
+import 'package:kova/parent/screens/parent_permission_screen.dart';
 import 'package:kova/providers/app_state.dart';
+import 'package:kova/shared/services/local_storage.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -112,12 +115,34 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 2200));
     if (!mounted) return;
 
-    // Route based on login state
-    final route = appState.isLoggedIn
-        ? AppRoutes.parentDashboard
-        : AppRoutes.roleSelection;
-    if (!mounted) return;
-    context.go(route);
+    // Check if permissions are granted (for parent mode)
+    final hasNotif = await ParentPermissionService.hasNotificationPermission();
+    final isFirstLaunch = LocalStorage.getBool('parent_permissions_done') != true;
+    
+    if ((!hasNotif || isFirstLaunch) && appState.isLoggedIn) {
+      // Show permission screen before dashboard
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ParentPermissionScreen(
+            onComplete: () async {
+              await LocalStorage.setBool('parent_permissions_done', true);
+              if (context.mounted) {
+                context.go(AppRoutes.parentDashboard);
+              }
+            },
+          ),
+        ),
+      );
+    } else {
+      // Route based on login state
+      final route = appState.isLoggedIn
+          ? AppRoutes.parentDashboard
+          : AppRoutes.roleSelection;
+      if (!mounted) return;
+      context.go(route);
+    }
   }
 
   @override

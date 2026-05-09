@@ -86,8 +86,18 @@ class MainActivity : FlutterActivity() {
           openInputMethodPicker()
           result.success(true)
         }
+        "isBatteryOptimizationIgnored" -> {
+          val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+          result.success(pm.isIgnoringBatteryOptimizations(packageName))
+        }
         "requestIgnoreBatteryOptimizations" -> {
-          requestIgnoreBatteryOptimizations()
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val intent = Intent(
+              Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+              android.net.Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+          }
           result.success(true)
         }
         "openAutoStartSettings" -> {
