@@ -101,8 +101,12 @@ class DashboardDataService extends ChangeNotifier {
         app: alert.app ?? '',
         type: alert.alertType ?? '',
         severity: alert.severity ?? 'medium',
-        timestamp: DateTime.now(),
         read: false,
+        createdAt: DateTime.now(),
+        resolved: false,
+        scoreGrooming: alert is NetworkAlertFull ? alert.scoreGrooming : 0.0,
+        scoreImage: alert is NetworkAlertFull ? alert.scoreImage : 0.0,
+        scoreText: alert is NetworkAlertFull ? alert.scoreText : 0.0,
       ));
       notifyListeners();
 
