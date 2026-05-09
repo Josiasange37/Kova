@@ -226,19 +226,6 @@ class DetectionOrchestrator {
     // Skip safe content
     if (severity == 'safe') return;
 
-    // Handle high/critical severity - decoupled from alert pipeline
-    // CRITICAL FIX: Delay the block to avoid race conditions with UI thread
-    if (severity == 'critical' || severity == 'high') {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!_active) return; // Check if still active
-        try {
-          safeBlockApp(appKey);
-        } catch (e) {
-          debugPrint('⚠️ [BLOCK] Failed to block app $appKey: $e');
-        }
-      });
-    }
-
     // Update child score
     final delta = SeverityEngine.scoreDelta(severity);
     await _childRepo.updateScore(_childId!, delta);
@@ -295,22 +282,47 @@ class DetectionOrchestrator {
     // Show notification
     await _showAlertNotification(appKey, severity, alertId, text);
 
-    // Push alert to parent via network (LAN full data or Vercel summary)
-    // For critical/high severity, push IMMEDIATELY instead of just queuing
-    print('📤 [ALERT PIPELINE] Step 1: Calling _pushAlertToNetwork for alert $alertId');
-    _pushAlertToNetwork(
-      severity: severity,
-      app: appKey,
-      alertType: alertType,
-      aiConfidence: textScores['unsafe'] ?? 0.0,
-      contentPreview: text.length > 200 ? '${text.substring(0, 200)}...' : text,
-      scoreText: textScores['unsafe'] ?? 0.0,
-      scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
-      scoreDelta: delta,
-      immediateSync: severity == 'critical' || severity == 'high',
-    );
+    // For critical/high: await delivery BEFORE blocking so crash can't kill the alert
+    if (severity == 'critical' || severity == 'high') {
+      await _pushAlertToNetwork(
+        severity: severity,
+        app: appKey,
+        alertType: alertType,
+        aiConfidence: textScores['unsafe'] ?? 0.0,
+        contentPreview: text.length > 200 ? '${text.substring(0, 200)}...' : text,
+        scoreText: textScores['unsafe'] ?? 0.0,
+        scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+        scoreDelta: delta,
+        immediateSync: true,
+      );
+      debugPrint('✅ [ALERT PIPELINE] Alert delivered to parent before blocking action');
+    } else {
+      _pushAlertToNetwork(
+        severity: severity,
+        app: appKey,
+        alertType: alertType,
+        aiConfidence: textScores['unsafe'] ?? 0.0,
+        contentPreview: text.length > 200 ? '${text.substring(0, 200)}...' : text,
+        scoreText: textScores['unsafe'] ?? 0.0,
+        scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+        scoreDelta: delta,
+        immediateSync: false,
+      );
+    }
 
-    print('✅ [ALERT PIPELINE] Step 5: Alert pipeline complete for $alertId');
+    // Handle high/critical severity - block AFTER alert is delivered
+    // CRITICAL FIX: Delay the block to avoid race conditions with UI thread
+    if (severity == 'critical' || severity == 'high') {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!_active) return; // Check if still active
+        try {
+          safeBlockApp(appKey);
+        } catch (e) {
+          debugPrint('⚠️ [BLOCK] Failed to block app $appKey: $e');
+        }
+      });
+    }
+
     if (kDebugMode) debugPrint('🚨 Alert created: $alertId');
   }
 

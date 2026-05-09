@@ -127,31 +127,31 @@ class BlockOverlayActivity : Activity() {
         }
     }
 
-    /**
-     * Setup block screen UI
-     */
     private fun setupUI() {
-        setContentView(R.layout.activity_block_overlay)
-        
-        // Get block message
+        val layoutExists = try {
+            setContentView(R.layout.activity_block_overlay)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "⚠️ [OVERLAY] Layout failed: ${e.message} — delegating to WindowManager overlay")
+            false
+        }
+
+        if (!layoutExists) {
+            KovaAccessibilityService.instance?.showBlockOverlay(blockReason ?: "Blocked for your safety")
+            finish()
+            return
+        }
+
         val appName = getAppName(blockedPackage ?: "Unknown")
-        val message = "$appName is blocked.\n\n$blockReason"
-        
-        // Set message
-        val messageText = findViewById<TextView>(R.id.block_message)
-        messageText.text = message
-        
-        // Setup "OK" button - closes overlay and re-locks
-        val okButton = findViewById<Button>(R.id.block_ok_button)
-        okButton.setOnClickListener {
-            finishBlock()
-        }
-        
-        // Setup "Report" button - for user reporting
-        val reportButton = findViewById<Button>(R.id.block_report_button)
-        reportButton.setOnClickListener {
-            reportToParent()
-        }
+        val message = "$appName is blocked.\n\n${blockReason ?: "Blocked for your safety"}"
+
+        try { findViewById<TextView>(R.id.block_message)?.text = message } catch (_: Exception) {}
+        try {
+            findViewById<Button>(R.id.block_ok_button)?.setOnClickListener { finishBlock() }
+        } catch (_: Exception) {}
+        try {
+            findViewById<Button>(R.id.block_report_button)?.setOnClickListener { reportToParent() }
+        } catch (_: Exception) {}
     }
 
     // ─── Dismiss Block ───────────────────────────────────────────────────────
