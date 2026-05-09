@@ -956,122 +956,21 @@ class KovaAccessibilityService : AccessibilityService() {
         }
     }
 
+    /**
+     * DEPRECATED — WindowManager overlay causes black screen on MIUI.
+     * Use BlockOverlayActivity.start(context, pkg, reason) instead.
+     */
+    @Deprecated("Use BlockOverlayActivity.start() instead - Activity-based overlay is MIUI-safe")
     fun showBlockOverlay(reason: String) {
-        mainHandler.post {
-            if (!hasOverlayPermission()) {
-                Log.w(TAG, "No overlay permission - showing fallback notification")
-                showFallbackNotification(reason)
-                return@post
-            }
-
-            try {
-                // If already showing, just update text
-                if (overlayView != null) {
-                    (overlayView?.tag as? TextView)?.text = reason
-                    return@post
-                }
-
-                val ctx = this
-
-                // ── Build layout 100% programmatically — no XML needed ──────────
-                val root = LinearLayout(ctx).apply {
-                    orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER
-                    setBackgroundColor(Color.parseColor("#CC1a1a2e"))
-                    setPadding(60, 60, 60, 60)
-                }
-
-                // Shield icon emoji as large text (no drawable needed)
-                val icon = TextView(ctx).apply {
-                    text = "🛡️"
-                    textSize = 64f
-                    gravity = Gravity.CENTER
-                }
-
-                // Title
-                val title = TextView(ctx).apply {
-                    text = "KOVA a bloqué ce contenu"
-                    textSize = 22f
-                    setTextColor(Color.WHITE)
-                    gravity = Gravity.CENTER
-                    setTypeface(null, android.graphics.Typeface.BOLD)
-                    setPadding(0, 24, 0, 16)
-                }
-
-                // Reason text — this is what gets updated on refresh
-                val reasonText = TextView(ctx).apply {
-                    text = reason
-                    textSize = 16f
-                    setTextColor(Color.parseColor("#FFCCCC"))
-                    gravity = Gravity.CENTER
-                    setPadding(0, 0, 0, 48)
-                    tag = "reason" // used to find this view for updates
-                }
-
-                // OK Button
-                val okBtn = Button(ctx).apply {
-                    text = "OK — Retour à l'accueil"
-                    textSize = 16f
-                    setTextColor(Color.WHITE)
-                    setBackgroundColor(Color.parseColor("#E53935"))
-                    val lp = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                    )
-                    lp.setMargins(0, 0, 0, 16)
-                    layoutParams = lp
-                    setOnClickListener {
-                        hideBlockOverlay()
-                        val homeIntent = android.content.Intent(
-                            android.content.Intent.ACTION_MAIN
-                        ).apply {
-                            addCategory(android.content.Intent.CATEGORY_HOME)
-                            flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-                        }
-                        startActivity(homeIntent)
-                    }
-                }
-
-                root.addView(icon)
-                root.addView(title)
-                root.addView(reasonText)
-                root.addView(okBtn)
-
-                // Store reasonText as tag on root so we can update it later
-                root.tag = reasonText
-
-                val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                } else {
-                    @Suppress("DEPRECATION")
-                    WindowManager.LayoutParams.TYPE_PHONE
-                }
-
-                val params = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    WindowManager.LayoutParams.MATCH_PARENT,
-                    layoutFlag,
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                    PixelFormat.OPAQUE
-                )
-
-                val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-                overlayView = root
-                windowManager.addView(root, params)
-
-                Log.d(TAG, "✅ [OVERLAY] Programmatic overlay shown successfully")
-
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ [OVERLAY] Failed to show overlay: ${e.message}")
-                e.printStackTrace()
-                overlayView = null
-                showFallbackNotification(reason)
-            }
-        }
+        Log.w(TAG, "⚠️ [OVERLAY] showBlockOverlay is DEPRECATED — use BlockOverlayActivity.start()")
+        // Fallback: just show notification
+        showFallbackNotification(reason)
     }
 
+    /**
+     * DEPRECATED — Clean up any lingering WindowManager overlay
+     */
+    @Deprecated("No longer needed with BlockOverlayActivity")
     fun hideBlockOverlay() {
         mainHandler.post {
             try {
@@ -1081,7 +980,7 @@ class KovaAccessibilityService : AccessibilityService() {
                     overlayView = null
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Hide overlay failed: ${e.message}")
+                // Ignore cleanup errors
             }
         }
     }

@@ -65,11 +65,12 @@
         <activity
             android:name=".BlockOverlayActivity"
             android:exported="true"
-            android:theme="@style/BlockOverlayTheme"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
             android:launchMode="singleTop"
             android:excludeFromRecents="true"
             android:showOnLockScreen="true"
-            android:turnScreenOn="true" />
+            android:turnScreenOn="true"
+            android:showWhenLocked="true" />
             
         <!-- ═══════════════════════════════════════════════ -->
         <!-- MANAGE SPACE ACTIVITY (Prevents Clear Data) -->

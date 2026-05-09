@@ -87,8 +87,19 @@ class DashboardDataService extends ChangeNotifier {
     // Eagerly load data so alerts can be matched to children immediately
     loadDashboardData();
 
+    debugPrint('✅ [PARENT] onAlertReceived subscription active');
+
     // Listen for alerts from network (both LAN and Vercel relay)
-    _alertSub = _networkSync.onAlertReceived.listen(_handleRemoteAlert);
+    _alertSub = _networkSync.onAlertReceived.listen((alert) async {
+      debugPrint('═══════════════════════════════════════');
+      debugPrint('🔔 [PARENT RECEIVED] Alert arrived!');
+      debugPrint('  severity = ${alert.severity}');
+      debugPrint('  app      = ${alert.app}');
+      debugPrint('  child    = ${alert.childName}');
+      debugPrint('═══════════════════════════════════════');
+
+      await _handleRemoteAlert(alert);
+    });
 
     // Listen for connection state changes
     _connectionSub = _networkSync.onConnectionStateChanged.listen((state) {

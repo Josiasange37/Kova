@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/app_mode.dart';
+import '../../local_backend/repositories/alert_repository.dart';
 import '../../local_backend/repositories/child_repository.dart';
+import '../../shared/models/network_alert.dart';
+import '../../shared/services/local_storage.dart';
+import '../../shared/services/network_sync_service.dart';
 import '../theme/kova_theme.dart';
 import 'whatsapp_connection_screen.dart';
 
@@ -106,6 +110,49 @@ class _FinalActiveScreenState extends State<FinalActiveScreen> {
                   MaterialPageRoute(builder: (_) => const WhatsappConnectionScreen()),
                 ),
                 child: const Text("Go to Dashboard"),
+              ),
+              const SizedBox(height: 12),
+              // TEST ALERT BUTTON — TEMPORARY FOR DEBUGGING
+              ElevatedButton(
+                onPressed: () async {
+                  debugPrint('🧪 [TEST] Forcing test alert through pipeline...');
+
+                  // Step 1: Create alert in DB
+                  final alertRepo = AlertRepository();
+                  final alertId = await alertRepo.create(
+                    childId: LocalStorage.getString('child_id') ?? 'test_child',
+                    app: 'com.whatsapp',
+                    type: 'grooming',
+                    severity: 'critical',
+                    scoreText: 0.95,
+                    scoreImage: 0.0,
+                    scoreGrooming: 0.88,
+                  );
+                  debugPrint('✅ [TEST] Alert created in DB: id=$alertId');
+
+                  // Step 2: Push via NetworkSyncService
+                  final networkSync = NetworkSyncService();
+                  debugPrint('🔍 [TEST] LAN connected=${networkSync.isLanConnected}');
+                  debugPrint('🔍 [TEST] pairToken=${networkSync.pairToken}');
+
+                  final alert = NetworkAlertFull(
+                    childId: LocalStorage.getString('child_id') ?? 'test_child',
+                    childName: LocalStorage.getString('child_name') ?? 'Child',
+                    app: 'com.whatsapp',
+                    alertType: 'grooming',
+                    severity: 'critical',
+                    scoreText: 0.95,
+                    scoreGrooming: 0.88,
+                    scoreDelta: 0.5,
+                    timestamp: DateTime.now().toIso8601String(),
+                    contentPreview: 'TEST ALERT — pipeline check',
+                  );
+
+                  await networkSync.pushAlert(alert, alertId.toString());
+                  debugPrint('✅ [TEST] pushAlert() completed');
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                child: const Text('🧪 TEST ALERT', style: TextStyle(color: Colors.white)),
               ),
               const SizedBox(height: 24),
             ],

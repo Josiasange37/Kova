@@ -333,12 +333,7 @@ class KovaForegroundService : Service() {
     // the Flutter engine/MainActivity are dead (background monitoring).
     private fun launchBlockOverlay(packageName: String, reason: String = "App is blocked for your safety") {
         try {
-            val intent = Intent(this, BlockOverlayActivity::class.java).apply {
-                putExtra("blocked_package", packageName)
-                putExtra("reason", reason)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            startActivity(intent)
+            BlockOverlayActivity.start(this, packageName, reason)
             Log.d(TAG, "[OVERLAY PIPELINE] Block overlay launched for $packageName from ForegroundService")
         } catch (e: Exception) {
             Log.e(TAG, "[OVERLAY PIPELINE] Failed to launch overlay from service: ${e.message}")
