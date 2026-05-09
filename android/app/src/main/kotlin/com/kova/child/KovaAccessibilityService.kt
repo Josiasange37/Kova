@@ -5,18 +5,21 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 
@@ -964,56 +967,56 @@ class KovaAccessibilityService : AccessibilityService() {
             try {
                 // If already showing, just update text
                 if (overlayView != null) {
-                    (overlayView?.tag as? android.widget.TextView)?.text = reason
+                    (overlayView?.tag as? TextView)?.text = reason
                     return@post
                 }
 
                 val ctx = this
 
                 // ── Build layout 100% programmatically — no XML needed ──────────
-                val root = android.widget.LinearLayout(ctx).apply {
-                    orientation = android.widget.LinearLayout.VERTICAL
-                    gravity = android.view.Gravity.CENTER
-                    setBackgroundColor(android.graphics.Color.parseColor("#CC1a1a2e"))
+                val root = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    setBackgroundColor(Color.parseColor("#CC1a1a2e"))
                     setPadding(60, 60, 60, 60)
                 }
 
                 // Shield icon emoji as large text (no drawable needed)
-                val icon = android.widget.TextView(ctx).apply {
+                val icon = TextView(ctx).apply {
                     text = "🛡️"
                     textSize = 64f
-                    gravity = android.view.Gravity.CENTER
+                    gravity = Gravity.CENTER
                 }
 
                 // Title
-                val title = android.widget.TextView(ctx).apply {
+                val title = TextView(ctx).apply {
                     text = "KOVA a bloqué ce contenu"
                     textSize = 22f
-                    setTextColor(android.graphics.Color.WHITE)
-                    gravity = android.view.Gravity.CENTER
+                    setTextColor(Color.WHITE)
+                    gravity = Gravity.CENTER
                     setTypeface(null, android.graphics.Typeface.BOLD)
                     setPadding(0, 24, 0, 16)
                 }
 
                 // Reason text — this is what gets updated on refresh
-                val reasonText = android.widget.TextView(ctx).apply {
+                val reasonText = TextView(ctx).apply {
                     text = reason
                     textSize = 16f
-                    setTextColor(android.graphics.Color.parseColor("#FFCCCC"))
-                    gravity = android.view.Gravity.CENTER
+                    setTextColor(Color.parseColor("#FFCCCC"))
+                    gravity = Gravity.CENTER
                     setPadding(0, 0, 0, 48)
                     tag = "reason" // used to find this view for updates
                 }
 
                 // OK Button
-                val okBtn = android.widget.Button(ctx).apply {
+                val okBtn = Button(ctx).apply {
                     text = "OK — Retour à l'accueil"
                     textSize = 16f
-                    setTextColor(android.graphics.Color.WHITE)
-                    setBackgroundColor(android.graphics.Color.parseColor("#E53935"))
-                    val lp = android.widget.LinearLayout.LayoutParams(
-                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
-                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+                    setTextColor(Color.WHITE)
+                    setBackgroundColor(Color.parseColor("#E53935"))
+                    val lp = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
                     )
                     lp.setMargins(0, 0, 0, 16)
                     layoutParams = lp
@@ -1037,24 +1040,24 @@ class KovaAccessibilityService : AccessibilityService() {
                 // Store reasonText as tag on root so we can update it later
                 root.tag = reasonText
 
-                val layoutFlag = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 } else {
                     @Suppress("DEPRECATION")
-                    android.view.WindowManager.LayoutParams.TYPE_PHONE
+                    WindowManager.LayoutParams.TYPE_PHONE
                 }
 
-                val params = android.view.WindowManager.LayoutParams(
-                    android.view.WindowManager.LayoutParams.MATCH_PARENT,
-                    android.view.WindowManager.LayoutParams.MATCH_PARENT,
+                val params = WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT,
                     layoutFlag,
-                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
-                    android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                    android.graphics.PixelFormat.OPAQUE
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                    PixelFormat.OPAQUE
                 )
 
-                val windowManager = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
+                val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
                 overlayView = root
                 windowManager.addView(root, params)
 
@@ -1062,6 +1065,7 @@ class KovaAccessibilityService : AccessibilityService() {
 
             } catch (e: Exception) {
                 Log.e(TAG, "❌ [OVERLAY] Failed to show overlay: ${e.message}")
+                e.printStackTrace()
                 overlayView = null
                 showFallbackNotification(reason)
             }
