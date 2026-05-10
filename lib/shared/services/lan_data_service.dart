@@ -4,8 +4,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:kova/shared/models/network_alert.dart';
 import 'package:kova/shared/services/security_service.dart';
+
+// Native channel for Wi-Fi power management
+const _setupChannel = MethodChannel('com.kova.child/setup');
 
 /// Data about a child profile received over LAN (used by parent)
 class LanChildProfile {
@@ -147,6 +151,15 @@ class LanDataService {
     // Verify pair token via handshake
     _activeConnection = socket;
     _connectionStateController.add(true);
+
+    // Start keepalive heartbeat from server side too.
+    // Without this, the child has no way to detect a broken connection
+    // and will queue alerts into a dead socket silently.
+    startHeartbeat();
+
+    // Acquire WifiLock so radio stays in high-perf mode for the data socket.
+    // This prevents 200-400ms latency spikes between TCP packets.
+    _acquireWifiLock();
   }
 
   void _handleIncomingMessage(String line, Socket socket) {
@@ -258,6 +271,9 @@ class LanDataService {
         startHeartbeat();
         debugPrint('✅ [LAN] TCP socket connected to $ip:$port');
 
+        // Hold WifiLock for the duration of this TCP connection
+        _acquireWifiLock();
+
         String buffer = '';
         _clientSocket!.listen(
           (data) {
@@ -276,12 +292,14 @@ class LanDataService {
             _isClientConnected = false;
             _clientSocket = null;
             _connectionStateController.add(false);
+            _releaseWifiLock();
           },
           onError: (e) {
             print('LAN Client error: $e');
             _isClientConnected = false;
             _clientSocket = null;
             _connectionStateController.add(false);
+            _releaseWifiLock();
           },
         );
 
@@ -341,6 +359,32 @@ class LanDataService {
   void stopHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
+  }
+
+  // ─── Wi-Fi Power Management ────────────────────────────────────────
+  // Keep the Wi-Fi radio in HIGH_PERF mode for the life of the TCP connection.
+  // Same pattern used by KDE Connect to eliminate inter-packet latency.
+
+  Future<void> _acquireWifiLock() async {
+    try {
+      if (Platform.isAndroid) {
+        await _setupChannel.invokeMethod('acquireWifiLock');
+        debugPrint('📡 [LAN] WifiLock acquired — radio in HIGH_PERF mode');
+      }
+    } catch (e) {
+      debugPrint('⚠️ [LAN] Failed to acquire WifiLock: $e');
+    }
+  }
+
+  Future<void> _releaseWifiLock() async {
+    try {
+      if (Platform.isAndroid) {
+        await _setupChannel.invokeMethod('releaseWifiLock');
+        debugPrint('📡 [LAN] WifiLock released');
+      }
+    } catch (e) {
+      debugPrint('⚠️ [LAN] Failed to release WifiLock: $e');
+    }
   }
 
   // ─────────────────────────────────────────────

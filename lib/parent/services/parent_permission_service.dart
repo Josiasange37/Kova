@@ -3,105 +3,187 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// Manages all permissions the parent app needs to function correctly.
-/// Call checkAndRequestAll() on first launch and after onboarding.
+/// All permissions the PARENT device needs to function correctly.
+/// Call [checkAndRequestAll] on first launch and after onboarding.
 class ParentPermissionService {
   static const _channel = MethodChannel('com.kova.child/setup');
 
-  /// Returns true if ALL critical permissions are granted.
-  static Future<bool> checkAndRequestAll(BuildContext context) async {
-    final results = <String, bool>{};
-
-    // 1. Notification permission (Android 13+ / API 33+)
-    if (Platform.isAndroid) {
-      final notifStatus = await Permission.notification.status;
-      if (!notifStatus.isGranted) {
-        final result = await Permission.notification.request();
-        results['notifications'] = result.isGranted;
-      } else {
-        results['notifications'] = true;
-      }
+  // ─── Permission Status Snapshot ──────────────────────────────────────────
+  /// Returns a map of all permission statuses. Used to drive the UI.
+  static Future<Map<String, bool>> getStatus() async {
+    if (!Platform.isAndroid) {
+      return {
+        'notifications': true,
+        'nearbyWifi': true,
+        'battery': true,
+        'exactAlarm': true,
+      };
     }
 
-    // 2. Battery optimization exemption (critical for MIUI — keeps alert polling alive)
+    final notif = await Permission.notification.isGranted;
+    final nearbyWifi = await _isNearbyWifiGranted();
+    final battery = await _isBatteryOptimizationIgnored();
+    final exactAlarm = await _isExactAlarmGranted();
+
+    return {
+      'notifications': notif,
+      'nearbyWifi': nearbyWifi,
+      'battery': battery,
+      'exactAlarm': exactAlarm,
+    };
+  }
+
+  /// True only if every REQUIRED permission is granted.
+  /// Optional permissions (battery, exactAlarm) don't block the app.
+  static Future<bool> allRequiredGranted() async {
+    final s = await getStatus();
+    return (s['notifications'] ?? false) && (s['nearbyWifi'] ?? false);
+  }
+
+  // ─── Individual Request Methods ───────────────────────────────────────────
+
+  /// Request POST_NOTIFICATIONS (Android 13+).
+  static Future<bool> requestNotifications() async {
+    if (!Platform.isAndroid) return true;
+    final result = await Permission.notification.request();
+    return result.isGranted;
+  }
+
+  /// Request NEARBY_WIFI_DEVICES (Android 12+).
+  /// Required for UDP LAN discovery — without it the parent cannot find
+  /// the child on the local network. Silently granted on Android < 12.
+  static Future<bool> requestNearbyWifi() async {
+    if (!Platform.isAndroid) return true;
+    final sdk = await _getSdkVersion();
+    if (sdk < 31) return true; // Not needed below Android 12
+    final result = await Permission.nearbyWifiDevices.request();
+    return result.isGranted;
+  }
+
+  /// Open battery optimization settings (user action required — cannot be
+  /// granted programmatically without prompting via system dialog).
+  static Future<void> requestBatteryOptimization() async {
     try {
-      final isBatteryExempt = await _channel
-          .invokeMethod<bool>('isBatteryOptimizationIgnored') ?? false;
-      if (!isBatteryExempt && context.mounted) {
-        await _showBatteryDialog(context);
-      }
-      results['battery'] = true; // Non-blocking — user can skip
+      await _channel.invokeMethod('requestIgnoreBatteryOptimization');
     } catch (e) {
-      debugPrint('⚠️ Battery check failed: $e');
-      results['battery'] = true;
+      debugPrint('⚠️ Battery optimization request failed: $e');
+    }
+  }
+
+  /// Request SCHEDULE_EXACT_ALARM (Android 12+).
+  static Future<bool> requestExactAlarm() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      final result = await Permission.scheduleExactAlarm.request();
+      return result.isGranted;
+    } catch (e) {
+      debugPrint('⚠️ Exact alarm permission not available: $e');
+      return true; // Not critical
+    }
+  }
+
+  // ─── Convenience: request everything at once ──────────────────────────────
+  static Future<bool> checkAndRequestAll(BuildContext context) async {
+    await requestNotifications();
+    await requestNearbyWifi();
+    await requestExactAlarm();
+
+    final battery = await _isBatteryOptimizationIgnored();
+    if (!battery && context.mounted) {
+      await _showBatteryDialog(context);
     }
 
-    // 3. Exact alarm permission (Android 12+ — needed for scheduled sync)
-    if (Platform.isAndroid) {
-      try {
-        final alarmStatus = await Permission.scheduleExactAlarm.status;
-        if (!alarmStatus.isGranted) {
-          await Permission.scheduleExactAlarm.request();
-        }
-      } catch (e) {
-        debugPrint('⚠️ Alarm permission not available: $e');
-      }
-    }
-
-    final notifGranted = results['notifications'] ?? false;
-
-    if (!notifGranted && context.mounted) {
+    final notif = await Permission.notification.isGranted;
+    if (!notif && context.mounted) {
       await _showNotificationDeniedDialog(context);
     }
 
-    debugPrint('✅ [PARENT PERMISSIONS] notifications=$notifGranted');
-    return notifGranted;
+    return await allRequiredGranted();
   }
 
-  /// Check if notification permission is granted (quick check, no dialog).
+  // ─── Quick checks ─────────────────────────────────────────────────────────
+
   static Future<bool> hasNotificationPermission() async {
     if (!Platform.isAndroid) return true;
     return await Permission.notification.isGranted;
   }
 
-  // ── Dialogs ────────────────────────────────────────────────────────────────
+  // ─── Private helpers ──────────────────────────────────────────────────────
+
+  static Future<bool> _isNearbyWifiGranted() async {
+    try {
+      final sdk = await _getSdkVersion();
+      if (sdk < 31) return true;
+      return await Permission.nearbyWifiDevices.isGranted;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  static Future<bool> _isBatteryOptimizationIgnored() async {
+    try {
+      return await _channel.invokeMethod<bool>('isBatteryOptimizationIgnored') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<bool> _isExactAlarmGranted() async {
+    try {
+      final sdk = await _getSdkVersion();
+      if (sdk < 31) return true;
+      return await Permission.scheduleExactAlarm.isGranted;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  static int? _cachedSdk;
+  static Future<int> _getSdkVersion() async {
+    if (_cachedSdk != null) return _cachedSdk!;
+    try {
+      final sdk = await _channel.invokeMethod<int>('getSdkVersion') ?? 30;
+      _cachedSdk = sdk;
+      return sdk;
+    } catch (_) {
+      _cachedSdk = 30;
+      return 30;
+    }
+  }
+
+  // ─── Dialogs ──────────────────────────────────────────────────────────────
 
   static Future<void> _showBatteryDialog(BuildContext context) async {
     await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
         title: const Row(
           children: [
             Text('🔋 ', style: TextStyle(fontSize: 24)),
-            Text('Optimisation batterie'),
+            Text('Battery Optimization', style: TextStyle(color: Colors.white)),
           ],
         ),
         content: const Text(
-          'Pour recevoir les alertes KOVA même quand l\'écran est éteint, '
-          'désactivez l\'optimisation batterie pour KOVA.\n\n'
-          'Sur MIUI: Paramètres → Applications → KOVA → '
-          'Économie d\'énergie → Aucune restriction',
+          'Disable battery optimization so KOVA keeps receiving alerts '
+          'even when your screen is off.\n\n'
+          'On Xiaomi/MIUI: Settings → Apps → KOVA → '
+          'Energy Saver → No restrictions',
+          style: TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Plus tard'),
+            child: const Text('Later', style: TextStyle(color: Colors.white54)),
           ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              try {
-                await _channel.invokeMethod('requestIgnoreBatteryOptimization');
-              } catch (e) {
-                debugPrint('⚠️ Battery optimization request failed: $e');
-              }
+              await requestBatteryOptimization();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-            child: const Text(
-              'Désactiver',
-              style: TextStyle(color: Colors.white),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+            child: const Text('Disable', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -113,21 +195,23 @@ class ParentPermissionService {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
         title: const Row(
           children: [
             Text('🔔 ', style: TextStyle(fontSize: 24)),
-            Text('Notifications requises'),
+            Text('Notifications Required', style: TextStyle(color: Colors.white)),
           ],
         ),
         content: const Text(
-          'KOVA a besoin des notifications pour vous alerter '
-          'immédiatement quand votre enfant est en danger.\n\n'
-          'Sans cette permission, vous ne recevrez AUCUNE alerte.',
+          'KOVA needs notification permission to alert you immediately '
+          'when your child is in danger.\n\n'
+          'Without this permission, you will receive NO alerts.',
+          style: TextStyle(color: Colors.white70),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Ignorer'),
+            child: const Text('Ignore', style: TextStyle(color: Colors.white54)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -135,10 +219,7 @@ class ParentPermissionService {
               await openAppSettings();
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text(
-              'Ouvrir Paramètres',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('Open Settings', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

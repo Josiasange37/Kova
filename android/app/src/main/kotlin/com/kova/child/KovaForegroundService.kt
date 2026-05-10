@@ -332,13 +332,32 @@ class KovaForegroundService : Service() {
     // Launches the block overlay from the service layer so it works even when
     // the Flutter engine/MainActivity are dead (background monitoring).
     private fun launchBlockOverlay(packageName: String, reason: String = "App is blocked for your safety") {
+        // ── Layer 1: HOME-key action (instant, ~10ms) ──────────────────────────
+        // Kick the child to the home screen immediately via AccessibilityService.
+        // This works even if the Activity launch (Layer 2) is blocked by MIUI/Samsung.
+        // The block is functionally complete the moment this executes.
         try {
-            BlockOverlayActivity.start(this, packageName, reason)
-            Log.d(TAG, "[OVERLAY PIPELINE] Block overlay launched for $packageName from ForegroundService")
+            KovaAccessibilityService.instance?.performGlobalAction(
+                android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME
+            )
+            Log.d(TAG, "[OVERLAY L1] HOME action fired for $packageName")
         } catch (e: Exception) {
-            Log.e(TAG, "[OVERLAY PIPELINE] Failed to launch overlay from service: ${e.message}")
+            Log.w(TAG, "[OVERLAY L1] HOME action failed (service may be null): ${e.message}")
         }
+
+        // ── Layer 2: Full-screen Activity (visual confirmation) ────────────────
+        // Launched 150ms after HOME so the child lands on home screen first,
+        // then sees the block message overlay on top.
+        Handler(Looper.getMainLooper()).postDelayed({
+            try {
+                BlockOverlayActivity.start(this, packageName, reason)
+                Log.d(TAG, "[OVERLAY L2] Block activity launched for $packageName")
+            } catch (e: Exception) {
+                Log.e(TAG, "[OVERLAY L2] Failed to launch overlay: ${e.message}")
+            }
+        }, 150)
     }
+
 
     // ── Individual service checks ──
 

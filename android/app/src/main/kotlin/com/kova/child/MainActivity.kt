@@ -112,12 +112,23 @@ class MainActivity : FlutterActivity() {
         "getDeviceManufacturer" -> {
           result.success(Build.MANUFACTURER ?: "unknown")
         }
+        "getSdkVersion" -> {
+          result.success(Build.VERSION.SDK_INT)
+        }
         "acquireMulticastLock" -> {
           acquireMulticastLock()
           result.success(true)
         }
         "releaseMulticastLock" -> {
           releaseMulticastLock()
+          result.success(true)
+        }
+        "acquireWifiLock" -> {
+          acquireWifiLock()
+          result.success(true)
+        }
+        "releaseWifiLock" -> {
+          releaseWifiLock()
           result.success(true)
         }
         "blockAppViaService" -> {
@@ -489,6 +500,8 @@ class MainActivity : FlutterActivity() {
   }
 
   // ─── Multicast Lock for UDP Discovery ───────────────────────────────────
+  // Prevents Android kernel from dropping incoming UDP broadcast/multicast
+  // packets when the Wi-Fi chip enters Power Save Mode (screen off).
   private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
 
   private fun acquireMulticastLock() {
@@ -515,6 +528,44 @@ class MainActivity : FlutterActivity() {
       multicastLock = null
     } catch (e: Exception) {
       Log.e("KOVA_LAN", "Error releasing MulticastLock: ${e.message}")
+    }
+  }
+
+  // ─── WiFi Lock for TCP Data Socket ──────────────────────────────────────
+  // Keeps the Wi-Fi radio in HIGH_PERF mode while paired.
+  // Without this, the radio enters power-save between TCP packets,
+  // causing 200-400ms latency spikes on the alert delivery socket.
+  // KDE Connect uses this same pattern for their persistent TCP connection.
+  private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
+
+  @Suppress("DEPRECATION") // WIFI_MODE_FULL_HIGH_PERF is deprecated in API 29 but still works
+  private fun acquireWifiLock() {
+    try {
+      val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+      wifiLock = wm.createWifiLock(
+        android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+        "kova_data_socket"
+      ).apply {
+        setReferenceCounted(false)
+        acquire()
+      }
+      Log.d("KOVA_LAN", "WifiLock (HIGH_PERF) acquired — TCP latency minimized")
+    } catch (e: Exception) {
+      Log.e("KOVA_LAN", "Failed to acquire WifiLock: ${e.message}")
+    }
+  }
+
+  private fun releaseWifiLock() {
+    try {
+      wifiLock?.let {
+        if (it.isHeld) {
+          it.release()
+          Log.d("KOVA_LAN", "WifiLock released")
+        }
+      }
+      wifiLock = null
+    } catch (e: Exception) {
+      Log.e("KOVA_LAN", "Error releasing WifiLock: ${e.message}")
     }
   }
 }
