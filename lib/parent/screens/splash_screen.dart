@@ -116,10 +116,10 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     // Check if permissions are granted (for parent mode)
-    final hasNotif = await ParentPermissionService.hasNotificationPermission();
+    final allGranted = await ParentPermissionService.allRequiredGranted();
     final isFirstLaunch = LocalStorage.getBool('parent_permissions_done') != true;
     
-    if ((!hasNotif || isFirstLaunch) && appState.isLoggedIn) {
+    if ((!allGranted || isFirstLaunch) && appState.isLoggedIn) {
       // Show permission screen before dashboard
       if (!mounted) return;
       Navigator.pushReplacement(
