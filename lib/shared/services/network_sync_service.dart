@@ -258,11 +258,11 @@ class NetworkSyncService {
     // fully bound and ready to receive broadcasts. Then retries up to 3x.
     // This eliminates the "needs 2 attempts" bug.
     LanDeviceInfo? localPeer;
-    const maxAttempts = 3;
+    const maxAttempts = 10;
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        // Wait before each attempt: 1.5s first try, 2s second, 2.5s third
-        final delayMs = 1500 * attempt;
+        // Wait before each attempt: 500ms first try, 800ms subsequent
+        final delayMs = attempt == 1 ? 500 : 800;
         print('📡 LAN discovery attempt $attempt/$maxAttempts (delay: ${delayMs}ms)...');
         await Future.delayed(Duration(milliseconds: delayMs));
 
@@ -291,14 +291,7 @@ class NetworkSyncService {
       await LocalStorage.setPairToken(_pairToken);
       _cryptoService = CryptoService(_pairToken);
       
-      // Re-init discovery with the new pairToken (no longer in pairing mode)
-      _lanDiscovery.stop();
-      _lanData.stopServer();
-      
-      _lanDiscovery.setActivePairCode(code);
-      await _lanDiscovery.start(role: 'child');
-
-      // After pairing via UDP discovery, establish TCP data channel
+      // After pairing via UDP discovery, establish TCP data channel IMMEDIATELY
       final connected = await _lanData.connectToParent(localPeer.ipAddress, 18757, _pairToken);
       if (connected) {
         debugPrint('✅ [LAN] TCP data channel established');
@@ -307,6 +300,13 @@ class NetworkSyncService {
         debugPrint('❌ [LAN] TCP connect failed — alerts will use Vercel');
         _updateState(NetworkConnectionState.internet);
       }
+
+      // Re-init discovery with the new pairToken (no longer in pairing mode)
+      _lanDiscovery.stop();
+      _lanData.stopServer();
+      
+      _lanDiscovery.setActivePairCode(code);
+      _lanDiscovery.start(role: 'child'); // run without await
       
       _startSyncLoop();
 

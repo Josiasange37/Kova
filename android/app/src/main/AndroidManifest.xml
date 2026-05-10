@@ -70,6 +70,7 @@
             android:excludeFromRecents="true"
             android:showOnLockScreen="true"
             android:turnScreenOn="true"
+            android:taskAffinity=".block"
             android:showWhenLocked="true" />
             
         <!-- ═══════════════════════════════════════════════ -->

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:kova/shared/models/network_alert.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/shared/services/crypto_service.dart';
@@ -138,6 +139,14 @@ class LanDiscoveryService {
     }
 
     try {
+      if (Platform.isAndroid) {
+        try {
+          await const MethodChannel('com.kova.child/setup').invokeMethod('acquireMulticastLock');
+        } catch (e) {
+          print('Failed to acquire multicast lock: $e');
+        }
+      }
+
       _socket = await RawDatagramSocket.bind(
         InternetAddress.anyIPv4,
         _discoveryPort,
@@ -181,6 +190,14 @@ class LanDiscoveryService {
 
   /// Stop discovery
   void stop() {
+    if (Platform.isAndroid && _isRunning) {
+      try {
+        const MethodChannel('com.kova.child/setup').invokeMethod('releaseMulticastLock');
+      } catch (e) {
+        print('Failed to release multicast lock: $e');
+      }
+    }
+
     _broadcastTimer?.cancel();
     _cleanupTimer?.cancel();
     _socket?.close();

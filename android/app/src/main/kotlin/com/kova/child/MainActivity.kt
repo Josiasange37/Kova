@@ -112,6 +112,14 @@ class MainActivity : FlutterActivity() {
         "getDeviceManufacturer" -> {
           result.success(Build.MANUFACTURER ?: "unknown")
         }
+        "acquireMulticastLock" -> {
+          acquireMulticastLock()
+          result.success(true)
+        }
+        "releaseMulticastLock" -> {
+          releaseMulticastLock()
+          result.success(true)
+        }
         "blockAppViaService" -> {
           // Reliable block via ForegroundService — works even when Flutter is backgrounded
           val pkg = call.argument<String>("pkg")
@@ -446,9 +454,7 @@ class MainActivity : FlutterActivity() {
   /// Show block overlay for an app
   private fun showBlockOverlay(pkg: String) {
     try {
-      // FIX: Use the WindowManager overlay from the AccessibilityService instead of an Activity.
-      // This prevents the "Kova keeps stopping" crash on MIUI when background apps launch Activities.
-      KovaAccessibilityService.instance?.showBlockOverlay(pkg) ?: Log.e("Kova", "AccessibilityService instance is null")
+      BlockOverlayActivity.start(this, pkg, "App is blocked for your safety")
     } catch (e: Exception) {
       e.printStackTrace()
     }
@@ -479,6 +485,36 @@ class MainActivity : FlutterActivity() {
       startForegroundService(intent)
     } else {
       startService(intent)
+    }
+  }
+
+  // ─── Multicast Lock for UDP Discovery ───────────────────────────────────
+  private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
+
+  private fun acquireMulticastLock() {
+    try {
+      val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+      multicastLock = wifiManager.createMulticastLock("kova_discovery").apply {
+        setReferenceCounted(true)
+        acquire()
+      }
+      Log.d("KOVA_LAN", "MulticastLock acquired")
+    } catch (e: Exception) {
+      Log.e("KOVA_LAN", "Failed to acquire MulticastLock: ${e.message}")
+    }
+  }
+
+  private fun releaseMulticastLock() {
+    try {
+      multicastLock?.let {
+        if (it.isHeld) {
+          it.release()
+          Log.d("KOVA_LAN", "MulticastLock released")
+        }
+      }
+      multicastLock = null
+    } catch (e: Exception) {
+      Log.e("KOVA_LAN", "Error releasing MulticastLock: ${e.message}")
     }
   }
 }

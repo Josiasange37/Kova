@@ -382,17 +382,6 @@ class DetectionOrchestrator {
 
     if (severity == 'safe') return;
 
-    // Handle blocking - decoupled from alert pipeline
-    // CRITICAL FIX: Use safer blocking method with delay
-    if (severity == 'critical' || severity == 'high') {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (!_active) return;
-        safeBlockApp(appKey).catchError((e) {
-          debugPrint('⚠️ [CONVERSATION BLOCK] Failed: $e');
-        });
-      });
-    }
-
     // Update score
     final delta = SeverityEngine.scoreDelta(severity);
     await _childRepo.updateScore(_childId!, delta);
@@ -435,17 +424,44 @@ class DetectionOrchestrator {
 
     await _showAlertNotification(appKey, severity, alertId, 'Conversation batch');
 
-    // Push alert to parent via network
-    await _pushAlertToNetwork(
-      severity: severity,
-      app: appKey,
-      alertType: alertType,
-      aiConfidence: batchResult['unsafe'] ?? 0.0,
-      contentPreview: texts.take(3).join(' | '),
-      scoreText: batchResult['unsafe'] ?? 0.0,
-      scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
-      scoreDelta: delta,
-    );
+    // For critical/high: await delivery BEFORE blocking so crash can't kill the alert
+    if (severity == 'critical' || severity == 'high') {
+      await _pushAlertToNetwork(
+        severity: severity,
+        app: appKey,
+        alertType: alertType,
+        aiConfidence: batchResult['unsafe'] ?? 0.0,
+        contentPreview: texts.take(3).join(' | '),
+        scoreText: batchResult['unsafe'] ?? 0.0,
+        scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+        scoreDelta: delta,
+        immediateSync: true,
+      );
+      debugPrint('✅ [ALERT PIPELINE] Alert delivered to parent before blocking action');
+    } else {
+      _pushAlertToNetwork(
+        severity: severity,
+        app: appKey,
+        alertType: alertType,
+        aiConfidence: batchResult['unsafe'] ?? 0.0,
+        contentPreview: texts.take(3).join(' | '),
+        scoreText: batchResult['unsafe'] ?? 0.0,
+        scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+        scoreDelta: delta,
+        immediateSync: false,
+      );
+    }
+
+    // Handle high/critical severity - block AFTER alert is delivered
+    // CRITICAL FIX: Delay the block to avoid race conditions with UI thread
+    if (severity == 'critical' || severity == 'high') {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!_active) return; // Check if still active
+        safeBlockApp(appKey).catchError((e) {
+          debugPrint('⚠️ [CONVERSATION BLOCK] Failed: $e');
+        });
+      });
+    }
 
     if (kDebugMode) debugPrint('🚨 Conversation alert created: $alertId');
   }
