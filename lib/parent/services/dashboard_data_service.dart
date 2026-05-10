@@ -11,6 +11,7 @@ import 'package:kova/shared/models/network_alert.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/shared/services/network_sync_service.dart';
 import 'package:kova/shared/services/notification_service.dart';
+import 'package:kova/parent/services/parent_permission_service.dart';
 
 // Re-export ChildModel for consumers of this service
 export 'package:kova/local_backend/repositories/child_repository.dart' show ChildModel;
@@ -86,6 +87,9 @@ class DashboardDataService extends ChangeNotifier {
   void startListening() {
     // Eagerly load data so alerts can be matched to children immediately
     loadDashboardData();
+    
+    // Start foreground service to keep parent app alive to receive alerts
+    ParentPermissionService.startParentProtectionService();
 
     debugPrint('✅ [PARENT] onAlertReceived subscription active');
 

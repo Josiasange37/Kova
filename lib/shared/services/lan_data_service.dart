@@ -46,6 +46,7 @@ class LanDataService {
   String? _lastPeerIp;
   int? _lastPeerPort;
   String? _lastPairToken;
+  Completer<bool>? _handshakeCompleter;
 
   final _alertReceivedController = StreamController<NetworkAlertFull>.broadcast();
   final _connectionStateController = StreamController<bool>.broadcast();
@@ -99,7 +100,7 @@ class LanDataService {
     _securityService.init();
 
     try {
-      _server = await ServerSocket.bind(InternetAddress.anyIPv4, _port);
+      _server = await ServerSocket.bind(InternetAddress.anyIPv4, _port, shared: true);
       _isServerRunning = true;
       debugPrint('✅ [LAN] Parent TCP server listening on port $_port');
 
@@ -108,7 +109,7 @@ class LanDataService {
            debugPrint('✅ [LAN SERVER] Client connected: ${socket.remoteAddress}');
            _handleIncomingConnection(socket);
         },
-        onError: (e) => print('LAN Server error: $e'),
+        onError: (e) => print('❌ LAN Server error: $e'),
       );
     } catch (e) {
       print('❌ LAN Server start failed: $e');
@@ -163,6 +164,7 @@ class LanDataService {
   }
 
   void _handleIncomingMessage(String line, Socket socket) {
+    debugPrint('📩 [LAN INCOMING] Received message: ${line.length > 50 ? line.substring(0, 50) + '...' : line}');
     try {
       final json = jsonDecode(line) as Map<String, dynamic>;
       final type = json['type'] as String?;
@@ -190,6 +192,9 @@ class LanDataService {
           if (json['publicKey'] != null) {
             _securityService.setPeerPublicKey(json['publicKey'] as String);
             print('✅ Handshake OK: Stored peer public key');
+            if (_handshakeCompleter != null && !_handshakeCompleter!.isCompleted) {
+              _handshakeCompleter!.complete(true);
+            }
           }
           break;
 
@@ -207,6 +212,7 @@ class LanDataService {
           break;
 
         case 'encrypted_alert':
+          debugPrint('📥 [LAN DATA] Received encrypted_alert, attempting RSA decryption...');
           // Decrypt with RSA
           final encryptedData = json['data'] as String? ?? '';
           final decryptedStr = _securityService.decryptPayload(encryptedData);
@@ -215,6 +221,7 @@ class LanDataService {
             try {
               final alertJson = jsonDecode(decryptedStr) as Map<String, dynamic>;
               final alert = NetworkAlertFull.fromJson(alertJson);
+              debugPrint('✅ [LAN DATA] Decrypted alert successfully: ${alert.app} -> ${alert.alertType}');
               _alertReceivedController.add(alert);
             } catch(e) {
               print('❌ JSON parse error after RSA decryption: $e');
@@ -269,7 +276,9 @@ class LanDataService {
         _isClientConnected = true;
         _connectionStateController.add(true);
         startHeartbeat();
-        debugPrint('✅ [LAN] TCP socket connected to $ip:$port');
+        debugPrint('✅ [LAN] TCP socket connected to $ip:$port, waiting for handshake...');
+
+        _handshakeCompleter = Completer<bool>();
 
         // Hold WifiLock for the duration of this TCP connection
         _acquireWifiLock();
@@ -311,7 +320,16 @@ class LanDataService {
           'publicKey': myPublicKey,
         });
 
-        return true;
+        // Wait for handshake_ok
+        try {
+          await _handshakeCompleter!.future.timeout(const Duration(seconds: 3));
+          debugPrint('✅ [LAN] Handshake complete, keys exchanged.');
+          return true;
+        } catch (e) {
+          debugPrint('❌ [LAN] Handshake timed out: $e');
+          _clientSocket?.destroy();
+          throw Exception('Handshake timeout');
+        }
       } catch (e) {
         attempts++;
         debugPrint('⚠️ [LAN] Connect attempt $attempts failed: $e');
@@ -330,10 +348,15 @@ class LanDataService {
     }
     debugPrint('🔁 [LAN] Attempting reconnect to $_lastPeerIp...');
     try {
-      await connectToParent(_lastPeerIp!, _lastPeerPort ?? 18757, _lastPairToken ?? '');
-      debugPrint('✅ [LAN] Reconnected successfully');
+      final success = await connectToParent(_lastPeerIp!, _lastPeerPort ?? 18757, _lastPairToken ?? '');
+      if (success) {
+        debugPrint('✅ [LAN] Reconnected successfully');
+      } else {
+        debugPrint('❌ [LAN] Reconnect failed');
+        _isClientConnected = false;
+      }
     } catch (e) {
-      debugPrint('❌ [LAN] Reconnect failed: $e');
+      debugPrint('❌ [LAN] Reconnect error: $e');
       _isClientConnected = false;
     }
   }
@@ -433,24 +456,35 @@ class LanDataService {
   /// Safe version of sendAlert that returns true only if the socket write succeeded.
   /// Used by NetworkSyncService to decide whether to delete from the pending queue.
   bool sendAlertSafe(NetworkAlertFull alert) {
+    debugPrint('📤 [LAN DATA] sendAlertSafe triggered for ${alert.app}');
     final target = _activeConnection ?? _clientSocket;
-    if (target == null) return false;
+    if (target == null) {
+      debugPrint('❌ [LAN DATA] sendAlertSafe failed: No socket available');
+      return false;
+    }
 
     try {
       // Verify socket is still alive before writing
       target.remoteAddress; // throws if socket is closed
 
+      debugPrint('🔒 [LAN DATA] Encrypting alert payload...');
       final alertJsonStr = jsonEncode(alert.toJson());
       final encryptedAlert = _securityService.encryptPayload(alertJsonStr);
+      
+      if (encryptedAlert.startsWith('ERROR') || encryptedAlert.isEmpty) {
+        debugPrint('❌ [LAN DATA] RSA Encryption failed (missing peer key?)');
+        return false;
+      }
 
       final line = '${jsonEncode({
         'type': 'encrypted_alert',
         'data': encryptedAlert,
       })}\n';
       target.add(utf8.encode(line));
+      debugPrint('✅ [LAN DATA] Alert payload pushed to TCP socket');
       return true;
     } catch (e) {
-      print('LAN sendAlertSafe FAILED (socket dead): $e');
+      print('❌ [LAN DATA] LAN sendAlertSafe FAILED (socket dead): $e');
       // Clean up dead socket state
       if (target == _activeConnection) {
         _activeConnection = null;

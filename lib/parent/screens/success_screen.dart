@@ -215,7 +215,7 @@ class _SuccessScreenState extends State<SuccessScreen>
                   onPressed: () async {
                     await context.read<AppState>().markLoggedIn();
                     if (!context.mounted) return;
-                    context.go(AppRoutes.parentDashboard);
+                    context.go(AppRoutes.parentPermissions);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: KovaColors.primary,

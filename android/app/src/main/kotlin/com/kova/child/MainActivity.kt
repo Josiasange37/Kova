@@ -50,6 +50,10 @@ class MainActivity : FlutterActivity() {
           startForegroundService()
           result.success(true)
         }
+        "startParentProtection" -> {
+          startParentForegroundService()
+          result.success(true)
+        }
         "syncDynamicRules" -> {
           val rulesJson = call.argument<String>("rulesJson")
           if (rulesJson != null) {
@@ -240,6 +244,20 @@ class MainActivity : FlutterActivity() {
   private fun startForegroundService() {
     try {
       val serviceIntent = Intent(this, KovaForegroundService::class.java)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        startForegroundService(serviceIntent)
+      } else {
+        startService(serviceIntent)
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
+
+  /// Start parent foreground service
+  private fun startParentForegroundService() {
+    try {
+      val serviceIntent = Intent(this, KovaParentForegroundService::class.java)
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         startForegroundService(serviceIntent)
       } else {

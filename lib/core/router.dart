@@ -20,6 +20,7 @@ import 'package:kova/parent/screens/child_profile_screen.dart';
 import 'package:kova/parent/screens/monitored_apps_screen.dart' as parent_apps;
 import 'package:kova/parent/screens/whatsapp_connect_screen.dart';
 import 'package:kova/parent/screens/success_screen.dart';
+import 'package:kova/parent/screens/parent_permission_screen.dart';
 import 'package:kova/parent/screens/accessibility_setup_screen.dart'
     as parent_accessibility;
 import 'package:kova/parent/screens/dashboard_screen.dart' as parent_dashboard;
@@ -56,6 +57,7 @@ class AppRoutes {
   static const String parentMonitoredApps = '/parent/monitored-apps';
   static const String parentConnectChild = '/parent/connect-child';
   static const String parentSuccess = '/parent/success';
+  static const String parentPermissions = '/parent/permissions';
   static const String parentAccessibility = '/parent/accessibility';
   static const String parentDashboard = '/parent/dashboard';
   static const String alertHistory = '/parent/alert-history';
@@ -139,6 +141,16 @@ GoRouter buildRouter(AppMode initialMode) {
       GoRoute(
         path: AppRoutes.parentSuccess,
         builder: (context, state) => const SuccessScreen(),
+      ),
+
+      // Parent Permission Screen
+      GoRoute(
+        path: AppRoutes.parentPermissions,
+        builder: (context, state) => ParentPermissionScreen(
+          onComplete: () {
+            context.go(AppRoutes.parentDashboard);
+          },
+        ),
       ),
 
       // Parent Accessibility Setup Screen

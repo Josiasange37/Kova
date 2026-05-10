@@ -9,7 +9,6 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.MotionEvent
-import android.widget.Button
 import android.widget.TextView
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 
@@ -91,20 +90,29 @@ class BlockOverlayActivity : Activity() {
         
         // Get block message
         val appName = getAppName(blockedPackage ?: "Unknown")
-        val message = "$appName is blocked.\n\n$blockReason"
+        val title = "$appName is temporarily unavailable"
         
-        // Set message
-        val messageText = findViewById<TextView>(R.id.block_message)
-        messageText?.text = message
+        // Set title and subtitle
+        val titleText = findViewById<TextView>(R.id.block_title)
+        titleText?.text = title
+
+        val subtitleText = findViewById<TextView>(R.id.block_subtitle)
+        subtitleText?.text = blockReason
         
-        // Setup "OK" button - closes overlay and re-locks
-        val okButton = findViewById<Button>(R.id.block_ok_button)
-        okButton?.setOnClickListener {
-            finishBlock()
+        // Try to load the actual app icon
+        val appIconView = findViewById<android.widget.ImageView>(R.id.app_icon)
+        try {
+            if (blockedPackage != null) {
+                val icon = packageManager.getApplicationIcon(blockedPackage!!)
+                appIconView?.setImageDrawable(icon)
+                appIconView?.clearColorFilter() // Remove the tint if we load the actual icon
+            }
+        } catch (e: Exception) {
+            // Keep the default tinted icon if loading fails
         }
         
         // Setup "Report" button - for user reporting
-        val reportButton = findViewById<Button>(R.id.block_report_button)
+        val reportButton = findViewById<android.view.View>(R.id.block_report_button)
         reportButton?.setOnClickListener {
             reportToParent()
         }

@@ -101,6 +101,15 @@ class ParentPermissionService {
     return await allRequiredGranted();
   }
 
+  /// Start parent foreground protection service (persistence)
+  static Future<void> startParentProtectionService() async {
+    try {
+      await _channel.invokeMethod<void>('startParentProtection');
+    } catch (e) {
+      debugPrint('Error starting parent protection service: $e');
+    }
+  }
+
   // ─── Quick checks ─────────────────────────────────────────────────────────
 
   static Future<bool> hasNotificationPermission() async {

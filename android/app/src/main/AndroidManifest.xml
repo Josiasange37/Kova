@@ -150,6 +150,16 @@
                 android:value="child_safety_monitoring" />
         </service>
         
+        <service
+            android:name=".KovaParentForegroundService"
+            android:exported="true"
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="parent_alert_monitoring" />
+        </service>
+        
         <!-- ═══════════════════════════════════════════════ -->
         <!-- LAN DISCOVERY SERVICE (WiFi multicast UDP) -->
         <!-- ═══════════════════════════════════════════════ -->

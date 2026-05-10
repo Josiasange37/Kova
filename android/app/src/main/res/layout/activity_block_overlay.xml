@@ -1,64 +1,180 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:background="#FF3B30"
-    android:padding="24dp">
+    android:fillViewport="true"
+    android:background="#F9F9F8">
 
-    <!-- Block Icon -->
-    <ImageView
-        android:layout_width="80dp"
-        android:layout_height="80dp"
-        android:layout_marginBottom="24dp"
-        android:src="@drawable/ic_launcher_foreground"
-        android:contentDescription="@string/app_name"
-        android:scaleType="centerInside"
-        android:tint="@android:color/white" />
-
-    <!-- Block Title -->
-    <TextView
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="ACCESS BLOCKED"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:textColor="@android:color/white"
-        android:gravity="center"
-        android:layout_marginBottom="16dp" />
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="32dp">
 
-    <!-- Block Message -->
-    <TextView
-        android:id="@+id/block_message"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="This app is blocked for your safety."
-        android:textSize="16sp"
-        android:textColor="@android:color/white"
-        android:gravity="center"
-        android:layout_marginBottom="40dp"
-        android:lineSpacingMultiplier="1.4" />
+        <!-- Top spacer -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
 
-    <!-- OK Button -->
-    <Button
-        android:id="@+id/block_ok_button"
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:text="OK"
-        android:textSize="16sp"
-        android:textColor="@android:color/white"
-        android:background="@drawable/button_background"
-        android:layout_marginBottom="12dp" />
+        <!-- App Icon container (rounded square) -->
+        <FrameLayout
+            android:layout_width="88dp"
+            android:layout_height="88dp"
+            android:background="@drawable/bg_app_icon">
 
-    <!-- Report Button -->
-    <Button
-        android:id="@+id/block_report_button"
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:text="Report to Parent"
-        android:textSize="16sp"
-        android:textColor="#FF3B30"
-        android:background="@drawable/button_background_light" />
+            <ImageView
+                android:id="@+id/app_icon"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_launcher_foreground"
+                android:tint="#B0B3C0" />
+        </FrameLayout>
 
-</LinearLayout>
+        <View
+            android:layout_width="0dp"
+            android:layout_height="28dp" />
+
+        <!-- Lock Icon container (circle) -->
+        <FrameLayout
+            android:layout_width="88dp"
+            android:layout_height="88dp"
+            android:background="@drawable/bg_lock_icon">
+
+            <ImageView
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_lock"
+                android:tint="#B0B3C0" />
+        </FrameLayout>
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="36dp" />
+
+        <!-- Title: "[App] is temporarily unavailable" -->
+        <TextView
+            android:id="@+id/block_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="TikTok is temporarily unavailable"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#19202E"
+            android:gravity="center" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="8dp" />
+
+        <!-- Subtitle / reason -->
+        <TextView
+            android:id="@+id/block_subtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="This content is not suitable."
+            android:textSize="15sp"
+            android:textColor="#666D7D"
+            android:gravity="center" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="36dp" />
+
+        <!-- Countdown timer -->
+        <TextView
+            android:id="@+id/block_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="18 : 37"
+            android:textSize="52sp"
+            android:textColor="#19202E"
+            android:includeFontPadding="false"
+            android:letterSpacing="0.08" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="6dp" />
+
+        <!-- "Available in" label -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Available in"
+            android:textSize="14sp"
+            android:textColor="#666D7D" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="24dp" />
+
+        <!-- Progress bar -->
+        <ProgressBar
+            android:id="@+id/block_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="8dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:max="100"
+            android:progress="10"
+            android:progressDrawable="@drawable/custom_progress_bar" />
+
+        <!-- Bottom spacer -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- "Notify my parent" button -->
+        <LinearLayout
+            android:id="@+id/block_report_button"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/bg_button_outline"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_send"
+                android:tint="#3B4657" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:text="Notify my parent"
+                android:textColor="#3B4657"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="14dp" />
+
+        <!-- "Returns automatically at X" -->
+        <TextView
+            android:id="@+id/block_return_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Returns automatically at 10:40 PM"
+            android:textSize="12sp"
+            android:textColor="#858D9C"
+            android:gravity="center" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="24dp" />
+
+    </LinearLayout>
+</ScrollView>

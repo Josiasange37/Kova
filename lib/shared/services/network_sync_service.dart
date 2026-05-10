@@ -125,9 +125,15 @@ class NetworkSyncService {
         final lastParentInfo = LocalStorage.getLastChildPeer(); // We'll just use what we have
         if (lastParentInfo != null) {
           try {
+            debugPrint('🔄 [NETWORK SYNC] Found last parent info in storage, attempting LAN connect...');
             final device = LanDeviceInfo.fromJson(lastParentInfo, lastParentInfo['ip'] ?? '');
-            await _lanData.connectToParent(device.ipAddress, device.port, _pairToken);
-            print('🔁 LAN reconnected after reboot');
+            final connected = await _lanData.connectToParent(device.ipAddress, device.port, _pairToken);
+            if (connected) {
+              debugPrint('✅ [NETWORK SYNC] Reconnected to parent via LAN');
+              _updateState(NetworkConnectionState.lan);
+            } else {
+              debugPrint('⚠️ [NETWORK SYNC] Failed to reconnect to parent via LAN on startup');
+            }
           } catch (e) {
             print('⚠️ LAN reconnect failed, will use Vercel: $e');
           }
@@ -290,6 +296,9 @@ class NetworkSyncService {
       _pairToken = const Uuid().v4();
       await LocalStorage.setPairToken(_pairToken);
       _cryptoService = CryptoService(_pairToken);
+      
+      // Save parent peer info so we can reconnect on restart!
+      await LocalStorage.setLastChildPeer(localPeer.toJson());
       
       // After pairing via UDP discovery, establish TCP data channel IMMEDIATELY
       final connected = await _lanData.connectToParent(localPeer.ipAddress, 18757, _pairToken);
@@ -501,6 +510,11 @@ class NetworkSyncService {
       }
     } else {
       debugPrint('❌ [PUSH ALERT] LAN still down after reconnect attempt');
+    }
+
+    if (delivered && itemId != null) {
+      await _pendingSyncRepo.deleteList([itemId]);
+      return;
     }
 
     // ── Vercel relay fallback ──────────────────────────────
