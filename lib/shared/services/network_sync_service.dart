@@ -46,6 +46,11 @@ class NetworkSyncService {
   bool _isSyncing = false;
   int _consecutiveFailures = 0;
 
+  // Reconnect cooldown: prevents stampede when multiple alerts fire while LAN is down
+  DateTime? _lastReconnectAttempt;
+  Completer<bool>? _activeReconnect;
+  static const _reconnectCooldown = Duration(seconds: 15);
+
   // Streams for UI
   final _connectionStateController =
       StreamController<NetworkConnectionState>.broadcast();
@@ -484,20 +489,37 @@ class NetworkSyncService {
 
     bool delivered = false;
 
-    // If socket dropped, reconnect before giving up on LAN
+    // ── Debounced reconnect: share a single attempt across concurrent alerts ──
     if (!_lanData.isConnected || !_lanData.isSocketHealthy) {
-      debugPrint('🔁 [PUSH ALERT] LAN down — attempting reconnect...');
-      try {
-        await _lanData.attemptReconnect();
-        await Future.delayed(const Duration(milliseconds: 500));
-        debugPrint('  After reconnect: connected=${_lanData.isConnected}');
-      } catch (e) {
-        debugPrint('⚠️ [PUSH ALERT] Reconnect failed: $e');
+      final now = DateTime.now();
+      final cooldownExpired = _lastReconnectAttempt == null ||
+          now.difference(_lastReconnectAttempt!) > _reconnectCooldown;
+
+      if (cooldownExpired) {
+        // Only one reconnect at a time — others wait on the same Completer
+        if (_activeReconnect == null || _activeReconnect!.isCompleted) {
+          _activeReconnect = Completer<bool>();
+          _lastReconnectAttempt = now;
+          debugPrint('🔁 [PUSH ALERT] LAN down — starting reconnect...');
+          try {
+            await _lanData.attemptReconnect();
+            await Future.delayed(const Duration(milliseconds: 300));
+            _activeReconnect!.complete(_lanData.isConnected);
+          } catch (e) {
+            debugPrint('⚠️ [PUSH ALERT] Reconnect failed: $e');
+            _activeReconnect!.complete(false);
+          }
+        } else {
+          debugPrint('🔁 [PUSH ALERT] Waiting on existing reconnect...');
+          await _activeReconnect!.future;
+        }
+      } else {
+        debugPrint('⏳ [PUSH ALERT] Reconnect cooldown active, skipping...');
       }
     }
 
     // Try LAN
-    if (_lanData.isConnected) {
+    if (_lanData.isConnected && _lanData.isSocketHealthy) {
       debugPrint('📡 [PUSH ALERT] Sending via LAN...');
       try {
         final success = _lanData.sendAlertSafe(alert);
@@ -509,7 +531,7 @@ class NetworkSyncService {
         debugPrint('❌ [PUSH ALERT] LAN exception: $e');
       }
     } else {
-      debugPrint('❌ [PUSH ALERT] LAN still down after reconnect attempt');
+      debugPrint('❌ [PUSH ALERT] LAN unavailable');
     }
 
     if (delivered && itemId != null) {
@@ -767,7 +789,11 @@ class NetworkSyncService {
 
     try {
       final items = await _pendingSyncRepo.getAll();
-      if (items.isEmpty) return;
+      if (items.isEmpty) {
+        _isSyncing = false;
+        _syncStartedAt = null;
+        return;
+      }
 
       // Process at most 10 items per cycle to avoid blocking the pipeline
       final batch = items.take(10).toList();
@@ -932,16 +958,20 @@ class NetworkSyncService {
   void _handleDeviceFound(LanDeviceInfo device) {
     print('🔍 Paired device found on LAN: ${device.ipAddress}');
 
-    // If child, connect to parent's TCP server
+    // If child, connect to parent's TCP server — only set state AFTER TCP connects
     if (_role == 'child') {
       _lanData.connectToParent(device.ipAddress, device.port, _pairToken).then((connected) {
         if (connected) {
           _updateState(NetworkConnectionState.lan);
+        } else {
+          debugPrint('⚠️ [DEVICE FOUND] TCP handshake failed to ${device.ipAddress} — staying on current state');
         }
       });
+      // DON'T set state to LAN here — wait for TCP to actually connect
+    } else {
+      // Parent side: we're running the TCP server, so discovery = ready
+      _updateState(NetworkConnectionState.lan);
     }
-
-    _updateState(NetworkConnectionState.lan);
   }
 
   void _updateState(NetworkConnectionState newState) {

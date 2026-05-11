@@ -155,6 +155,56 @@ class MainActivity : FlutterActivity() {
             result.error("INVALID_PKG", "Package name required", null)
           }
         }
+        // ── Deep-link settings openers for parent permission screen ──
+        "openNotificationSettings" -> {
+          try {
+            val intent = Intent().apply {
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+              } else {
+                action = "android.settings.APP_NOTIFICATION_SETTINGS"
+                putExtra("app_package", packageName)
+                putExtra("app_uid", applicationInfo.uid)
+              }
+            }
+            startActivity(intent)
+          } catch (e: Exception) {
+            // Fallback: generic app settings
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+              data = android.net.Uri.parse("package:$packageName")
+            })
+          }
+          result.success(true)
+        }
+        "openExactAlarmSettings" -> {
+          try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+              val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                data = android.net.Uri.parse("package:$packageName")
+              }
+              startActivity(intent)
+            } else {
+              // Pre-Android 12: open general app settings
+              startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = android.net.Uri.parse("package:$packageName")
+              })
+            }
+          } catch (e: Exception) {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+              data = android.net.Uri.parse("package:$packageName")
+            })
+          }
+          result.success(true)
+        }
+        "openBatterySettings" -> {
+          try {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+          } catch (e: Exception) {
+            startActivity(Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS))
+          }
+          result.success(true)
+        }
         else -> result.notImplemented()
       }
     }
