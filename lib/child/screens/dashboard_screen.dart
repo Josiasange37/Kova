@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/app_mode.dart';
+import 'package:kova/core/constants.dart';
 import 'package:kova/core/router.dart';
+import 'package:kova/child/services/detection_orchestrator.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
 import 'package:kova/local_backend/database/database_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
+import 'package:kova/shared/services/network_sync_service.dart';
+import 'package:kova/shared/models/network_alert.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
-import 'package:kova/child/services/detection_orchestrator.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -20,16 +24,20 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final _childRepository = ChildRepository();
   final _alertRepository = AlertRepository();
+  final _networkSync = NetworkSyncService();
 
   ChildModel? _child;
   List<AlertModel> _recentAlerts = [];
   bool _isLoading = true;
   StreamSubscription<AlertModel>? _alertSub;
+  StreamSubscription<NetworkAlertSummary>? _networkAlertSub;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    
+    // Listen for local alerts from detection orchestrator
     _alertSub = DetectionOrchestrator.instance.onNewAlert.listen((alert) {
       if (mounted) {
         setState(() {
@@ -37,11 +45,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
       }
     });
+    
+    // Listen for parent-initiated block/unblock commands
+    _networkAlertSub = _networkSync.onAlertReceived.listen((alert) {
+      if (alert.alertType == 'parent_block') {
+        debugPrint('🚫 [CHILD] Received parent block command for ${alert.app}');
+        DetectionOrchestrator.instance.safeBlockApp(alert.app);
+      } else if (alert.alertType == 'parent_unblock') {
+        debugPrint('🔓 [CHILD] Received parent unblock command for ${alert.app}');
+        DetectionOrchestrator.instance.unblockApp(alert.app);
+      }
+    });
   }
 
   @override
   void dispose() {
     _alertSub?.cancel();
+    _networkAlertSub?.cancel();
     super.dispose();
   }
 

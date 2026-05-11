@@ -5,10 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
 import 'package:kova/shared/services/local_storage.dart';
+import 'package:kova/shared/services/network_sync_service.dart';
+import 'package:uuid/uuid.dart';
 
 class AppControlService extends ChangeNotifier {
   final _childRepo = ChildRepository();
   final _alertRepo = AlertRepository();
+  final _networkSync = NetworkSyncService();
 
   List<ChildModel> _children = [];
   final Map<String, AppControlData> _appData = {};
@@ -127,6 +130,62 @@ class AppControlService extends ChangeNotifier {
 
   // Refresh data
   Future<void> refresh() => loadAppControls();
+
+  /// Block an app on the child device
+  Future<void> blockApp(String appKey) async {
+    try {
+      debugPrint('🚫 [APP_CONTROL] Sending block command for $appKey');
+      
+      // Create a special alert to trigger blocking on child device
+      await _networkSync.pushAlert(NetworkAlertFull(
+        id: const Uuid().v4(),
+        childId: _children.isNotEmpty ? _children.first.id : 'unknown',
+        app: appKey,
+        alertType: 'parent_block',
+        severity: 'critical',
+        aiConfidence: 1.0,
+        contentPreview: 'Parent blocked this app',
+        scoreText: 1.0,
+        scoreImage: 0.0,
+        scoreGrooming: 0.0,
+        scoreDelta: -10,
+        timestamp: DateTime.now().toIso8601String(),
+      ));
+      
+      debugPrint('✅ [APP_CONTROL] Block command sent for $appKey');
+    } catch (e) {
+      debugPrint('❌ [APP_CONTROL] Failed to block app $appKey: $e');
+      rethrow;
+    }
+  }
+
+  /// Unblock an app on the child device
+  Future<void> unblockApp(String appKey) async {
+    try {
+      debugPrint('🔓 [APP_CONTROL] Sending unblock command for $appKey');
+      
+      // Create a special alert to trigger unblocking on child device
+      await _networkSync.pushAlert(NetworkAlertFull(
+        id: const Uuid().v4(),
+        childId: _children.isNotEmpty ? _children.first.id : 'unknown',
+        app: appKey,
+        alertType: 'parent_unblock',
+        severity: 'safe',
+        aiConfidence: 0.0,
+        contentPreview: 'Parent unblocked this app',
+        scoreText: 0.0,
+        scoreImage: 0.0,
+        scoreGrooming: 0.0,
+        scoreDelta: 0,
+        timestamp: DateTime.now().toIso8601String(),
+      ));
+      
+      debugPrint('✅ [APP_CONTROL] Unblock command sent for $appKey');
+    } catch (e) {
+      debugPrint('❌ [APP_CONTROL] Failed to unblock app $appKey: $e');
+      rethrow;
+    }
+  }
 }
 
 // Data class for app control info
