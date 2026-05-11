@@ -17,7 +17,7 @@ const dashboardRoutes = require('./routes/dashboard');
 const alertsRoutes = require('./routes/alerts');
 const appsRoutes = require('./routes/apps');
 const settingsRoutes = require('./routes/settings');
-const relayRoutes = require('./routes/relay');
+const { alertRouter, historyRouter, ackRouter, childRouter } = require('./routes/relay');
 
 // Socket
 const initSocket = require('./socket');
@@ -59,10 +59,10 @@ app.use('/api/settings', settingsRoutes);
 
 // ── Relay Routes (for Flutter app LAN fallback) ──
 app.use('/api/pair', pairingRoutes); // alias for /api/pairing
-app.use('/api/alert', relayRoutes);
-app.use('/api/history', relayRoutes);
-app.use('/api/ack', relayRoutes);
-app.use('/api/child', relayRoutes);
+app.use('/api/alert', alertRouter);
+app.use('/api/history', historyRouter);
+app.use('/api/ack', ackRouter);
+app.use('/api/child', childRouter);
 
 // ── Serve Frontend (only if build exists locally) ──
 const fs = require('fs');
