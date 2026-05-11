@@ -182,36 +182,18 @@ class NetworkSyncService {
     // Listen for LAN device discovery
     _deviceFoundSub = _lanDiscovery.onDeviceFound.listen(_handleDeviceFound);
 
-    // If parent, start LAN server immediately and poll Railway relay
-    if (role == 'parent') {
+    // If child, start LAN server to accept parent connections
+    if (role == 'child') {
       final serverStarted = await _lanData.startServer(_pairToken);
       if (serverStarted) {
-        debugPrint('✅ [NETWORK SYNC] Parent LAN server started successfully');
+        debugPrint('✅ [NETWORK SYNC] Child LAN server started successfully on port 18757');
       } else {
-        debugPrint('❌ [NETWORK SYNC] Parent LAN server failed to start - alerts will use Railway only');
+        debugPrint('❌ [NETWORK SYNC] Child LAN server failed to start - alerts will use Railway only');
       }
-      _startPolling();
-    } else {
       _startSyncLoop();
-      // If child, try to reconnect to last known parent on LAN
-      if (_pairToken.isNotEmpty) {
-        final lastParentInfo = LocalStorage.getLastChildPeer(); // We'll just use what we have
-        if (lastParentInfo != null) {
-          try {
-            debugPrint('🔄 [NETWORK SYNC] Found last parent info in storage, attempting LAN connect...');
-            final device = LanDeviceInfo.fromJson(lastParentInfo, lastParentInfo['ip'] ?? '');
-            final connected = await _lanData.connectToParent(device.ipAddress, device.port, _pairToken);
-            if (connected) {
-              debugPrint('✅ [NETWORK SYNC] Reconnected to parent via LAN');
-              _updateState(NetworkConnectionState.lan);
-            } else {
-              debugPrint('⚠️ [NETWORK SYNC] Failed to reconnect to parent via LAN on startup');
-            }
-          } catch (e) {
-            print('⚠️ LAN reconnect failed, will use Railway: $e');
-          }
-        }
-      }
+    } else {
+      // Parent: poll Railway relay and connect to child's TCP server when discovered
+      _startPolling();
     }
 
     // NOTE: LAN alert listener is already attached above (before early-return block)
@@ -573,70 +555,47 @@ class NetworkSyncService {
 
     bool delivered = false;
 
-    // ── Debounced reconnect: share a single attempt across concurrent alerts ──
-    if (!_lanData.isConnected || !_lanData.isSocketHealthy) {
+    // ── Child: ensure server is running, wait for parent to connect ──
+    if (_role == 'child' && (!_lanData.isConnected || !_lanData.isSocketHealthy)) {
+      // Child runs server - ensure it's running and wait for parent connection
+      await _ensureChildServerRunning();
+      if (!_lanData.isConnected) {
+        debugPrint('⏳ [PUSH ALERT] Child server running, waiting for parent to connect...');
+      }
+    }
+
+    // ── Parent: debounced reconnect to child's server ──
+    if (_role == 'parent' && (!_lanData.isConnected || !_lanData.isSocketHealthy)) {
       final now = DateTime.now();
       final cooldownExpired = _lastReconnectAttempt == null ||
           now.difference(_lastReconnectAttempt!) > _reconnectCooldown;
 
       if (cooldownExpired) {
-        // Only one reconnect at a time — others wait on the same Completer
         if (_activeReconnect == null || _activeReconnect!.isCompleted) {
           _activeReconnect = Completer<bool>();
           _lastReconnectAttempt = now;
-          debugPrint('🔁 [PUSH ALERT] LAN down — starting reconnect...');
+          debugPrint('🔁 [PUSH ALERT] Parent reconnecting to child server...');
           try {
-            // First, try to rediscover parent via LAN discovery
-            final discoveredParent = _lanDiscovery.pairedPeer;
-            if (discoveredParent != null) {
-              debugPrint('🔍 [PUSH ALERT] Found parent via discovery: ${discoveredParent.ipAddress}:${discoveredParent.port}');
+            // Parent: connect to discovered child
+            final discoveredChild = _lanDiscovery.pairedPeer;
+            if (discoveredChild != null) {
+              debugPrint('🔍 [PUSH ALERT] Found child via discovery: ${discoveredChild.ipAddress}:${discoveredChild.port}');
               final connected = await _lanData.connectToParent(
-                discoveredParent.ipAddress, 
-                discoveredParent.port, 
+                discoveredChild.ipAddress,
+                discoveredChild.port,
                 _pairToken
               );
               if (connected) {
-                debugPrint('✅ [PUSH ALERT] Connected to discovered parent');
+                debugPrint('✅ [PUSH ALERT] Connected to child server');
                 _lanConsecutiveRefusals = 0;
                 _activeReconnect!.complete(true);
-                return;
+              } else {
+                _activeReconnect!.complete(false);
               }
-            }
-            
-            // Fallback: try last known IP
-            await _lanData.attemptReconnect();
-            await Future.delayed(const Duration(milliseconds: 300));
-            if (_lanData.isConnected) {
-              _lanConsecutiveRefusals = 0; // Reset on success
-              debugPrint('✅ [PUSH ALERT] Reconnected via last known IP');
             } else {
-              _lanConsecutiveRefusals++;
-              // Bug Fix #3: Clear stale IP after N consecutive failures
-              if (_lanConsecutiveRefusals >= _lanStaleIpThreshold) {
-                debugPrint('🗑️ [PUSH ALERT] Stale LAN IP detected ($_lanConsecutiveRefusals failures) — clearing peer info');
-                await LocalStorage.clearLastChildPeer();
-                _lanConsecutiveRefusals = 0;
-                // After clearing, wait for discovery to find parent again
-                debugPrint('⏳ [PUSH ALERT] Waiting for LAN discovery to find parent...');
-                await Future.delayed(const Duration(seconds: 2));
-                // Try discovery one more time
-                final newParent = _lanDiscovery.pairedPeer;
-                if (newParent != null) {
-                  debugPrint('🔍 [PUSH ALERT] Found new parent after discovery: ${newParent.ipAddress}');
-                  final connected = await _lanData.connectToParent(
-                    newParent.ipAddress,
-                    newParent.port,
-                    _pairToken
-                  );
-                  if (connected) {
-                    debugPrint('✅ [PUSH ALERT] Connected to newly discovered parent');
-                    _activeReconnect!.complete(true);
-                    return;
-                  }
-                }
-              }
+              debugPrint('⚠️ [PUSH ALERT] Child not found via discovery');
+              _activeReconnect!.complete(false);
             }
-            _activeReconnect!.complete(_lanData.isConnected);
           } catch (e) {
             _lanConsecutiveRefusals++;
             debugPrint('⚠️ [PUSH ALERT] Reconnect failed: $e');
@@ -1172,39 +1131,39 @@ class NetworkSyncService {
       _updateState(NetworkConnectionState.none);
     }
 
-    // ── Bug Fix: Parent server lifecycle ───────────────────────────────────────
-    // If we're parent and WiFi just came back, ensure server is running
-    if (_role == 'parent' && hasWifi) {
+    // ── Bug Fix: Child server lifecycle ───────────────────────────────────────
+    // If we're child and WiFi just came back, ensure server is running
+    if (_role == 'child' && hasWifi) {
       // Fire-and-forget is intentional here — don't block connectivity updates
-      _ensureParentServerRunning().catchError((e) {
-        debugPrint('⚠️ [PARENT] Server health check error: $e');
+      _ensureChildServerRunning().catchError((e) {
+        debugPrint('⚠️ [CHILD] Server health check error: $e');
       });
     }
   }
 
-  /// Ensure parent LAN server is running (restarts if needed)
-  Future<void> _ensureParentServerRunning() async {
-    if (_role != 'parent') return;
-    
+  /// Ensure child LAN server is running (restarts if needed)
+  Future<void> _ensureChildServerRunning() async {
+    if (_role != 'child') return;
+
     try {
       // Check if server is actually accepting connections
       final isHealthy = await _lanData.isServerHealthy();
       if (!isHealthy) {
-        debugPrint('🔌 [PARENT] Server unhealthy, restarting...');
+        debugPrint('🔌 [CHILD] Server unhealthy, restarting...');
         await _lanData.stopServer();
         await Future.delayed(const Duration(milliseconds: 500));
         await _lanData.startServer(_pairToken);
-        debugPrint('✅ [PARENT] Server restarted successfully');
+        debugPrint('✅ [CHILD] Server restarted successfully');
       }
     } catch (e) {
-      debugPrint('⚠️ [PARENT] Server health check failed: $e');
+      debugPrint('⚠️ [CHILD] Server health check failed: $e');
       // Force restart
       try {
         await _lanData.stopServer();
         await Future.delayed(const Duration(milliseconds: 500));
         await _lanData.startServer(_pairToken);
       } catch (e2) {
-        debugPrint('❌ [PARENT] Server restart failed: $e2');
+        debugPrint('❌ [CHILD] Server restart failed: $e2');
       }
     }
   }
@@ -1212,8 +1171,8 @@ class NetworkSyncService {
   void _handleDeviceFound(LanDeviceInfo device) {
     print('🔍 Paired device found on LAN: ${device.ipAddress}');
 
-    // If child, connect to parent's TCP server — only set state AFTER TCP connects
-    if (_role == 'child') {
+    // If parent, connect to child's TCP server — only set state AFTER TCP connects
+    if (_role == 'parent') {
       _lanData.connectToParent(device.ipAddress, device.port, _pairToken).then((connected) {
         if (connected) {
           // ── Bug Fix: Reset circuit breaker on successful LAN connect ────────
@@ -1232,7 +1191,7 @@ class NetworkSyncService {
       });
       // DON'T set state to LAN here — wait for TCP to actually connect
     } else {
-      // Parent side: we're running the TCP server, so discovery = ready
+      // Child side: we're running the TCP server, so discovery = ready
       _updateState(NetworkConnectionState.lan);
     }
   }
