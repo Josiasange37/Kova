@@ -5,6 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
+    "start:railway": "npm run db:init && npm start",
     "dev": "nodemon src/index.js",
     "test": "jest --forceExit --detectOpenHandles",
     "db:init": "node src/db/init.js",

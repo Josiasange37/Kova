@@ -1036,6 +1036,42 @@ class NetworkSyncService {
     } else {
       _updateState(NetworkConnectionState.none);
     }
+
+    // ── Bug Fix: Parent server lifecycle ───────────────────────────────────────
+    // If we're parent and WiFi just came back, ensure server is running
+    if (_role == 'parent' && hasWifi) {
+      // Fire-and-forget is intentional here — don't block connectivity updates
+      _ensureParentServerRunning().catchError((e) {
+        debugPrint('⚠️ [PARENT] Server health check error: $e');
+      });
+    }
+  }
+
+  /// Ensure parent LAN server is running (restarts if needed)
+  Future<void> _ensureParentServerRunning() async {
+    if (_role != 'parent') return;
+    
+    try {
+      // Check if server is actually accepting connections
+      final isHealthy = await _lanData.isServerHealthy();
+      if (!isHealthy) {
+        debugPrint('🔌 [PARENT] Server unhealthy, restarting...');
+        await _lanData.stopServer();
+        await Future.delayed(const Duration(milliseconds: 500));
+        await _lanData.startServer(_pairToken);
+        debugPrint('✅ [PARENT] Server restarted successfully');
+      }
+    } catch (e) {
+      debugPrint('⚠️ [PARENT] Server health check failed: $e');
+      // Force restart
+      try {
+        await _lanData.stopServer();
+        await Future.delayed(const Duration(milliseconds: 500));
+        await _lanData.startServer(_pairToken);
+      } catch (e2) {
+        debugPrint('❌ [PARENT] Server restart failed: $e2');
+      }
+    }
   }
 
   void _handleDeviceFound(LanDeviceInfo device) {
@@ -1045,6 +1081,15 @@ class NetworkSyncService {
     if (_role == 'child') {
       _lanData.connectToParent(device.ipAddress, device.port, _pairToken).then((connected) {
         if (connected) {
+          // ── Bug Fix: Reset circuit breaker on successful LAN connect ────────
+          // If we got LAN working, we don't need the relay - close the circuit breaker
+          if (_relayCircuitOpenedAt != null) {
+            debugPrint('🔌 [RELAY] LAN connected — closing circuit breaker early');
+            _relayCircuitOpenedAt = null;
+            _relayConsecutive404s = 0;
+          }
+          // Reset stale IP counter on successful connection
+          _lanConsecutiveRefusals = 0;
           _updateState(NetworkConnectionState.lan);
         } else {
           debugPrint('⚠️ [DEVICE FOUND] TCP handshake failed to ${device.ipAddress} — staying on current state');

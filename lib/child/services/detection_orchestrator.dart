@@ -282,7 +282,8 @@ class DetectionOrchestrator {
     // Show notification
     await _showAlertNotification(appKey, severity, alertId, text);
 
-    // For critical/high: await delivery BEFORE blocking so crash can't kill the alert
+    // For critical only: await delivery BEFORE blocking so crash can't kill the alert
+    // HIGH severity also gets immediate sync but no blocking overlay
     if (severity == 'critical' || severity == 'high') {
       await _pushAlertToNetwork(
         severity: severity,
@@ -310,9 +311,9 @@ class DetectionOrchestrator {
       );
     }
 
-    // Handle high/critical severity - block AFTER alert is delivered
-    // CRITICAL FIX: Delay the block to avoid race conditions with UI thread
-    if (severity == 'critical' || severity == 'high') {
+    // Handle CRITICAL severity only - block AFTER alert is delivered
+    // User wants overlay ONLY for optimum danger (critical), not high/medium/low
+    if (severity == 'critical') {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (!_active) return; // Check if still active
         try {
@@ -452,9 +453,9 @@ class DetectionOrchestrator {
       );
     }
 
-    // Handle high/critical severity - block AFTER alert is delivered
-    // CRITICAL FIX: Delay the block to avoid race conditions with UI thread
-    if (severity == 'critical' || severity == 'high') {
+    // Handle CRITICAL severity only - block AFTER alert is delivered
+    // User wants overlay ONLY for optimum danger (critical), not high/medium/low
+    if (severity == 'critical') {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (!_active) return; // Check if still active
         safeBlockApp(appKey).catchError((e) {

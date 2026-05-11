@@ -182,8 +182,22 @@ class ParentPermissionService {
     try {
       final sdk = await _getSdkVersion();
       if (sdk < 31) return true;
-      return await Permission.nearbyWifiDevices.isGranted;
-    } catch (_) {
+      
+      // ── Bug Fix: Check multiple permission sources ─────────────────────────
+      // Some Android skins (MIUI, OneUI) may grant nearby devices via bluetooth
+      // instead of the dedicated nearbyWifiDevices permission
+      final nearbyWifi = await Permission.nearbyWifiDevices.isGranted;
+      final bluetoothScan = await Permission.bluetoothScan.isGranted;
+      final bluetoothConnect = await Permission.bluetoothConnect.isGranted;
+      final location = await Permission.location.isGranted;
+      
+      // Return true if ANY of the related permissions are granted
+      // This handles OEM-specific permission groupings
+      return nearbyWifi || bluetoothScan || bluetoothConnect || location;
+    } catch (e) {
+      debugPrint('⚠️ Nearby WiFi permission check error: $e');
+      // On error, assume granted to avoid blocking the user
+      // The actual LAN functionality will fail gracefully if truly denied
       return true;
     }
   }

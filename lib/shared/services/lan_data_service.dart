@@ -116,6 +116,41 @@ class LanDataService {
     }
   }
 
+  /// Stop the TCP server
+  Future<void> stopServer() async {
+    if (!_isServerRunning) return;
+    debugPrint('🔌 [LAN] Stopping server...');
+    
+    try {
+      _server?.close();
+      _server = null;
+      _isServerRunning = false;
+      _activeConnection?.close();
+      _activeConnection = null;
+      _heartbeatTimer?.cancel();
+      _releaseWifiLock();
+      debugPrint('✅ [LAN] Server stopped');
+    } catch (e) {
+      debugPrint('⚠️ [LAN] Error stopping server: $e');
+    }
+  }
+
+  /// Check if server is healthy (running and accepting connections)
+  /// This is used by the parent to verify the server is actually working
+  Future<bool> isServerHealthy() async {
+    if (!_isServerRunning || _server == null) return false;
+    
+    try {
+      // Try to connect to ourselves on localhost
+      final testSocket = await Socket.connect('127.0.0.1', _port, timeout: const Duration(seconds: 2));
+      testSocket.destroy();
+      return true;
+    } catch (e) {
+      debugPrint('⚠️ [LAN] Server health check failed: $e');
+      return false;
+    }
+  }
+
   void _handleIncomingConnection(Socket socket) {
     print('🔌 Parent connected from ${socket.remoteAddress.address}');
 
