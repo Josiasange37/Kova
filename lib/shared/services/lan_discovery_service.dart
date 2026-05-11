@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:kova/shared/models/network_alert.dart';
 import 'package:kova/shared/services/local_storage.dart';
