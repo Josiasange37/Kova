@@ -51,6 +51,24 @@ class NetworkSyncService {
   Completer<bool>? _activeReconnect;
   static const _reconnectCooldown = Duration(seconds: 15);
 
+  // ── Bug Fix: Relay circuit breaker ─────────────────────────────────────────
+  // After N consecutive 404 (DEPLOYMENT_NOT_FOUND) responses, stop hitting the
+  // relay for _relayCircuitCooldown to avoid log spam and battery drain.
+  int _relayConsecutive404s = 0;
+  DateTime? _relayCircuitOpenedAt;
+  static const _relayCircuitThreshold = 3;
+  static const _relayCircuitCooldown = Duration(minutes: 5);
+
+  // ── Bug Fix: Alert deduplication ───────────────────────────────────────────
+  // Prevents the same (app+alertType) from being pushed multiple times within
+  // a 10-second window. Key = "app:alertType", value = last push timestamp.
+  final Map<String, DateTime> _alertDedupCache = {};
+  static const _alertDedupWindow = Duration(seconds: 10);
+
+  // ── Bug Fix: Stale LAN IP detection ───────────────────────────────────────
+  int _lanConsecutiveRefusals = 0;
+  static const _lanStaleIpThreshold = 3;
+
   // Streams for UI
   final _connectionStateController =
       StreamController<NetworkConnectionState>.broadcast();
@@ -485,6 +503,22 @@ class NetworkSyncService {
   // ─────────────────────────────────────────────
 
   Future<void> pushAlert(NetworkAlertFull alert, [String? itemId]) async {
+    // ── Bug Fix #4: Alert deduplication ──────────────────────────────────────
+    // Skip if the same (app+alertType) was already pushed within 10 seconds.
+    // This prevents the 4x-in-1-second flood seen in MIUI logs.
+    if (itemId == null) {
+      final dedupKey = '${alert.app}:${alert.alertType}';
+      final now = DateTime.now();
+      final lastPush = _alertDedupCache[dedupKey];
+      if (lastPush != null && now.difference(lastPush) < _alertDedupWindow) {
+        debugPrint('🔇 [PUSH ALERT] Dedup: skipping duplicate $dedupKey (${now.difference(lastPush).inMilliseconds}ms ago)');
+        return;
+      }
+      _alertDedupCache[dedupKey] = now;
+      // Prune old entries to prevent memory leak
+      _alertDedupCache.removeWhere((_, ts) => now.difference(ts) > const Duration(minutes: 2));
+    }
+
     debugPrint('📤 [PUSH ALERT] severity=${alert.severity}');
 
     bool delivered = false;
@@ -504,8 +538,20 @@ class NetworkSyncService {
           try {
             await _lanData.attemptReconnect();
             await Future.delayed(const Duration(milliseconds: 300));
+            if (_lanData.isConnected) {
+              _lanConsecutiveRefusals = 0; // Reset on success
+            } else {
+              _lanConsecutiveRefusals++;
+              // Bug Fix #3: Clear stale IP after N consecutive failures
+              if (_lanConsecutiveRefusals >= _lanStaleIpThreshold) {
+                debugPrint('🗑️ [PUSH ALERT] Stale LAN IP detected ($_lanConsecutiveRefusals failures) — clearing peer info');
+                await LocalStorage.clearLastChildPeer();
+                _lanConsecutiveRefusals = 0;
+              }
+            }
             _activeReconnect!.complete(_lanData.isConnected);
           } catch (e) {
+            _lanConsecutiveRefusals++;
             debugPrint('⚠️ [PUSH ALERT] Reconnect failed: $e');
             _activeReconnect!.complete(false);
           }
@@ -577,16 +623,30 @@ class NetworkSyncService {
   /// Push alert summary to Vercel relay
   /// Returns true if the relay accepted the alert (HTTP 201)
   Future<bool> _pushAlertToRelay(NetworkAlertSummary alert, [String? itemId]) async {
-    print('📤 [ALERT PIPELINE] _pushAlertToRelay() START');
+    // ── Bug Fix #2: Relay circuit breaker ────────────────────────────────────
+    // If we've seen N consecutive 404 (DEPLOYMENT_NOT_FOUND) responses, stop
+    // hitting the relay for 5 minutes to avoid log spam and battery drain.
+    if (_relayCircuitOpenedAt != null) {
+      final elapsed = DateTime.now().difference(_relayCircuitOpenedAt!);
+      if (elapsed < _relayCircuitCooldown) {
+        debugPrint('🔌 [RELAY] Circuit breaker OPEN — skipping relay (${_relayCircuitCooldown.inMinutes - elapsed.inMinutes}min remaining)');
+        return false;
+      } else {
+        // Cooldown expired, try again
+        debugPrint('🔌 [RELAY] Circuit breaker CLOSED — retrying relay');
+        _relayCircuitOpenedAt = null;
+        _relayConsecutive404s = 0;
+      }
+    }
+
+    debugPrint('📤 [ALERT PIPELINE] _pushAlertToRelay() START');
     if (_pairToken.isEmpty) {
-      print('❌ [ALERT PIPELINE] _pushAlertToRelay: _pairToken is EMPTY - aborting');
+      debugPrint('❌ [ALERT PIPELINE] _pushAlertToRelay: _pairToken is EMPTY - aborting');
       return false;
     }
     _cryptoService ??= CryptoService(_pairToken);
 
     try {
-      // Explicitly construct a Summary object so that we don't accidentally serialize
-      // a NetworkAlertFull object due to Dart's dynamic method dispatch on overridden toJson()
       final summary = NetworkAlertSummary(
         severity: alert.severity,
         app: alert.app,
@@ -597,10 +657,10 @@ class NetworkSyncService {
 
       final jsonStr = jsonEncode(summary.toJson());
       final encrypted = _cryptoService!.encryptPayload(jsonStr);
-      print('📤 [ALERT PIPELINE] Encrypting alert for relay: ${summary.app} - ${summary.alertType}');
+      debugPrint('📤 [ALERT PIPELINE] Encrypting alert for relay: ${summary.app} - ${summary.alertType}');
 
       final url = Uri.parse('$_relayBaseUrl/api/alert/push');
-      print('🌐 [RELAY] POST $url');
+      debugPrint('🌐 [RELAY] POST $url');
 
       final response = await http.post(
         url,
@@ -615,21 +675,30 @@ class NetworkSyncService {
         }),
       ).timeout(const Duration(seconds: 10));
 
-      print('🌐 [RELAY] Response: ${response.statusCode} — ${response.body}');
+      debugPrint('🌐 [RELAY] Response: ${response.statusCode}');
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        print('✅ [RELAY] Alert delivered successfully');
+        debugPrint('✅ [RELAY] Alert delivered successfully');
+        _relayConsecutive404s = 0; // Reset on success
         return true;
+      } else if (response.statusCode == 404 && response.body.contains('DEPLOYMENT_NOT_FOUND')) {
+        // Specific Vercel deployment error — trip circuit breaker
+        _relayConsecutive404s++;
+        debugPrint('⚠️ [RELAY] DEPLOYMENT_NOT_FOUND ($_relayConsecutive404s/$_relayCircuitThreshold)');
+        if (_relayConsecutive404s >= _relayCircuitThreshold) {
+          _relayCircuitOpenedAt = DateTime.now();
+          debugPrint('🔌 [RELAY] Circuit breaker OPENED — pausing relay for ${_relayCircuitCooldown.inMinutes} minutes');
+        }
+        return false;
       } else {
-        print('❌ [RELAY] Server error: ${response.statusCode} ${response.body}');
+        debugPrint('❌ [RELAY] Server error: ${response.statusCode}');
         return false;
       }
     } on TimeoutException {
-      print('❌ [RELAY] Timeout — Vercel not responding');
+      debugPrint('❌ [RELAY] Timeout — Vercel not responding');
       return false;
-    } catch (e, stackTrace) {
-      print('❌ [RELAY] Exception: $e');
-      print('❌ [ALERT PIPELINE] Stack trace: $stackTrace');
+    } catch (e) {
+      debugPrint('❌ [RELAY] Exception: $e');
       return false;
     }
   }
@@ -877,8 +946,13 @@ class NetworkSyncService {
   Future<void> _pollAlerts() async {
     if (_pairToken.isEmpty) return;
 
-    // REMOVED: "Skip polling if LAN" — LAN can silently fail (dead socket).
-    // Always poll relay as a backup channel to ensure alert delivery.
+    // Circuit breaker: skip polling if relay is known dead
+    if (_relayCircuitOpenedAt != null) {
+      final elapsed = DateTime.now().difference(_relayCircuitOpenedAt!);
+      if (elapsed < _relayCircuitCooldown) return;
+      _relayCircuitOpenedAt = null;
+      _relayConsecutive404s = 0;
+    }
 
     try {
       final response = await http.get(
@@ -889,6 +963,7 @@ class NetworkSyncService {
       );
 
       if (response.statusCode == 200) {
+        _relayConsecutive404s = 0; // Reset on success
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final alerts = data['alerts'] as List<dynamic>? ?? [];
 
@@ -920,6 +995,14 @@ class NetworkSyncService {
         }
         
         _consecutiveFailures = 0;
+      } else if (response.statusCode == 404 && response.body.contains('DEPLOYMENT_NOT_FOUND')) {
+        // Specific Vercel deployment error — trip circuit breaker
+        _relayConsecutive404s++;
+        debugPrint('⚠️ [RELAY] POLL DEPLOYMENT_NOT_FOUND ($_relayConsecutive404s/$_relayCircuitThreshold)');
+        if (_relayConsecutive404s >= _relayCircuitThreshold) {
+          _relayCircuitOpenedAt = DateTime.now();
+          debugPrint('🔌 [RELAY] Circuit breaker OPENED — pausing polling for ${_relayCircuitCooldown.inMinutes} minutes');
+        }
       }
     } catch (e) {
       _consecutiveFailures++;

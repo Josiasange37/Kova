@@ -55,6 +55,9 @@ class LocalStorage {
     return null;
   }
 
+  /// Clear stale peer info when LAN reconnect fails repeatedly
+  static Future<void> clearLastChildPeer() => _prefs.remove('last_child_peer');
+
   /// --- Parent Settings ---
 
   static Future<void> setNotificationsEnabled(bool enabled) =>

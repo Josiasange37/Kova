@@ -269,7 +269,7 @@ GoRouter buildRouter(AppMode initialMode) {
 String _getInitialRoute(AppMode mode) {
   return switch (mode) {
     AppMode.notConfigured => AppRoutes.splash,
-    AppMode.parent => AppRoutes.parentDashboard,
+    AppMode.parent => AppRoutes.splash, // Always go through splash for permission check
     AppMode.child => AppRoutes.childDashboard,
   };
 }

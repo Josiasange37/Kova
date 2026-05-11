@@ -10,6 +10,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -26,8 +27,11 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
  *
  * Runs continuously to:
  * - Keep KOVA alive even when app is closed (START_STICKY)
+ * - Hold PARTIAL_WAKE_LOCK + WIFI_LOCK so the process isn't frozen
  * - Periodic health-check watchdog: verifies accessibility, notification
  *   listener, keyboard, and device admin are all still active
+ * - Overlay watchdog: detects if BlockOverlayActivity was killed while a
+ *   block is still active, and re-launches it automatically
  * - Sends tamper alerts to the parent if any service is disabled
  * - Survives process kill via self-restart in onDestroy + onTaskRemoved
  */
@@ -38,21 +42,23 @@ class KovaForegroundService : Service() {
         const val NOTIFICATION_ID = 1001
         const val ACTION_REMOTE_UNLOCK = "com.kova.ACTION_REMOTE_UNLOCK"
         const val ACTION_BLOCK_APP = "com.kova.ACTION_BLOCK_APP"
+        const val ACTION_RELAUNCH_OVERLAY = "com.kova.ACTION_RELAUNCH_OVERLAY"
         const val EXTRA_UNLOCK_PACKAGE = "unlock_package"
         const val EXTRA_BLOCK_PACKAGE = "block_package"
         const val EXTRA_BLOCK_REASON = "block_reason"
 
-        // ─── Watchdog reduced to 10 seconds ──────────────────────────────────
-        // 30s was too wide — child had 30s of unmonitored activity after disabling services.
-        // 10s battery impact is negligible since checkServiceHealth() does no network I/O.
+        // ─── Watchdog every 10 seconds ──────────────────────────────────
+        // Checks service health + overlay persistence
         private const val WATCHDOG_INTERVAL_MS = 10_000L
+
+        // ─── Overlay re-launch check every 2 seconds ────────────────────
+        // Faster loop specifically for detecting killed overlays
+        private const val OVERLAY_CHECK_INTERVAL_MS = 2_000L
+
         private const val PREFS_NAME = "com.example.kova"
     }
 
     // ─── Remote Unlock Receiver ───────────────────────────────────────────────
-    // Handles unlock commands sent via FCM/WebSocket even when Flutter engine is dead.
-    // This is the correct layer for unlock — not MainActivity MethodChannel which
-    // requires an active Flutter engine and fails on backgrounded/low-RAM devices.
     private val remoteUnlockReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == ACTION_REMOTE_UNLOCK) {
@@ -65,6 +71,10 @@ class KovaForegroundService : Service() {
     private var isRunning = false
     private val handler = Handler(Looper.getMainLooper())
 
+    // ── WakeLock & WifiLock: prevent CPU/WiFi sleep ──
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
+
     // ── Track previous states to only alert on transitions ──
     private var prevAccessibility = false
     private var prevNotifListener = false
@@ -72,7 +82,7 @@ class KovaForegroundService : Service() {
     private var prevDeviceAdmin = false
 
     // ─────────────────────────────────────────────
-    // Watchdog runnable — checks all services every 30s
+    // Service health watchdog — checks all services every 10s
     // ─────────────────────────────────────────────
 
     private val watchdogRunnable = object : Runnable {
@@ -87,54 +97,84 @@ class KovaForegroundService : Service() {
     }
 
     // ─────────────────────────────────────────────
+    // Overlay persistence watchdog — checks every 2s
+    // Re-launches BlockOverlayActivity if it was killed
+    // while a block is still active (hasn't expired)
+    // ─────────────────────────────────────────────
+
+    private val overlayWatchdogRunnable = object : Runnable {
+        override fun run() {
+            try {
+                checkOverlayPersistence()
+            } catch (e: Exception) {
+                Log.e(TAG, "Overlay watchdog error: ${e.message}")
+            }
+            handler.postDelayed(this, OVERLAY_CHECK_INTERVAL_MS)
+        }
+    }
+
+    // ─────────────────────────────────────────────
     // Lifecycle
     // ─────────────────────────────────────────────
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "✅ Foreground service created")
+        Log.d(TAG, "Foreground service created")
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildForegroundNotification())
+
+        // Acquire WakeLock to prevent CPU sleep
+        acquireWakeLock()
+
+        // Acquire WifiLock to keep network alive
+        acquireWifiLock()
 
         // Register remote unlock receiver
         registerReceiver(
             remoteUnlockReceiver,
             IntentFilter(ACTION_REMOTE_UNLOCK),
-            // Android 13+ requires RECEIVER_NOT_EXPORTED for internal broadcasts
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
                 RECEIVER_NOT_EXPORTED else 0
         )
 
         checkSafeMode()
+
+        // Start both watchdogs
         handler.post(watchdogRunnable)
+        handler.postDelayed(overlayWatchdogRunnable, 3000) // Offset from main watchdog
     }
 
-    // ─── Android 13+ Background Survival ─────────────────────────────────────
-    // START_STICKY ensures the OS restarts the service after killing it.
-    // On Android 13+ the OS is more aggressive about killing background services.
-    // The foreground notification + BOOT_COMPLETED receiver together keep KOVA alive.
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "✅ Foreground service started")
+        Log.d(TAG, "Foreground service started (action=${intent?.action})")
 
-        // Handle block app action
-        if (intent?.action == ACTION_BLOCK_APP) {
-            val pkg = intent.getStringExtra(EXTRA_BLOCK_PACKAGE)
-            val reason = intent.getStringExtra(EXTRA_BLOCK_REASON) ?: "App is blocked for your safety"
-            if (pkg != null) {
-                Log.d(TAG, "[OVERLAY PIPELINE] Service launching block overlay for: $pkg")
-                launchBlockOverlay(pkg, reason)
+        when (intent?.action) {
+            ACTION_BLOCK_APP -> {
+                val pkg = intent.getStringExtra(EXTRA_BLOCK_PACKAGE)
+                val reason = intent.getStringExtra(EXTRA_BLOCK_REASON) ?: "App is blocked for your safety"
+                if (pkg != null) {
+                    Log.d(TAG, "[OVERLAY PIPELINE] Service launching block overlay for: $pkg")
+                    launchBlockOverlay(pkg, reason)
+                }
             }
-        }
-
-        // Handle remote unlock action
-        if (intent?.action == ACTION_REMOTE_UNLOCK) {
-            val pkg = intent.getStringExtra(EXTRA_UNLOCK_PACKAGE)
-            handleRemoteUnlock(pkg)
+            ACTION_REMOTE_UNLOCK -> {
+                val pkg = intent.getStringExtra(EXTRA_UNLOCK_PACKAGE)
+                handleRemoteUnlock(pkg)
+            }
+            ACTION_RELAUNCH_OVERLAY -> {
+                Log.d(TAG, "[OVERLAY] Relaunch requested by BlockOverlayActivity.onStop()")
+                // Check if block is still active and re-launch
+                checkOverlayPersistence()
+            }
         }
 
         // Re-post watchdog in case the service was restarted mid-cycle
         handler.removeCallbacks(watchdogRunnable)
         handler.post(watchdogRunnable)
+
+        // Ensure overlay watchdog is running
+        handler.removeCallbacks(overlayWatchdogRunnable)
+        handler.postDelayed(overlayWatchdogRunnable, 1000)
+
         return START_STICKY
     }
 
@@ -142,9 +182,18 @@ class KovaForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.w(TAG, "⚠️ Foreground service destroyed — scheduling restart")
+        Log.w(TAG, "Foreground service destroyed — scheduling restart")
         handler.removeCallbacks(watchdogRunnable)
-        unregisterReceiver(remoteUnlockReceiver)
+        handler.removeCallbacks(overlayWatchdogRunnable)
+
+        releaseWakeLock()
+        releaseWifiLock()
+
+        try {
+            unregisterReceiver(remoteUnlockReceiver)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering receiver: ${e.message}")
+        }
 
         try {
             val restartIntent = Intent(applicationContext, KovaForegroundService::class.java)
@@ -159,7 +208,6 @@ class KovaForegroundService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Reschedule restart when app is swiped from recents
         val restartIntent = Intent(applicationContext, KovaForegroundService::class.java)
         restartIntent.setPackage(packageName)
         val pendingIntent = PendingIntent.getService(
@@ -180,7 +228,72 @@ class KovaForegroundService : Service() {
         super.onTaskRemoved(rootIntent)
     }
 
-    // ─── Notification Channel (required Android 8+) ───────────────────────────
+    // ─────────────────────────────────────────────
+    // WakeLock & WifiLock — prevent background kill
+    // ─────────────────────────────────────────────
+
+    private fun acquireWakeLock() {
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "kova:foreground_service_wakelock"
+            ).apply {
+                acquire() // Held indefinitely while service is alive
+            }
+            Log.d(TAG, "WakeLock acquired")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire WakeLock: ${e.message}")
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "WakeLock released")
+                }
+            }
+            wakeLock = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing WakeLock: ${e.message}")
+        }
+    }
+
+    private fun acquireWifiLock() {
+        try {
+            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            wifiLock = wifiManager.createWifiLock(
+                WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+                "kova:wifi_lock"
+            ).apply {
+                acquire()
+            }
+            Log.d(TAG, "WifiLock acquired")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire WifiLock: ${e.message}")
+        }
+    }
+
+    private fun releaseWifiLock() {
+        try {
+            wifiLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "WifiLock released")
+                }
+            }
+            wifiLock = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing WifiLock: ${e.message}")
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Notification Channel (required Android 8+)
+    // ─────────────────────────────────────────────
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -207,6 +320,29 @@ class KovaForegroundService : Service() {
     }
 
     // ─────────────────────────────────────────────
+    // Overlay Persistence Watchdog
+    // ─────────────────────────────────────────────
+
+    /**
+     * Check if BlockOverlayActivity was killed while a block is still active.
+     * If so, re-launch it. This is the critical fix for the MIUI/HyperOS
+     * process killing issue — the Activity can be killed, but this Service
+     * (protected by foreground notification + WakeLock) will detect and
+     * re-launch it within 2 seconds.
+     */
+    private fun checkOverlayPersistence() {
+        val activeBlock = BlockOverlayActivity.getActiveBlock(this) ?: return
+
+        val (pkg, reason, expiry) = activeBlock
+
+        // Block is still active but overlay is NOT showing
+        if (!BlockOverlayActivity.isOverlayActive) {
+            Log.w(TAG, "[OVERLAY WATCHDOG] Block active for $pkg but overlay is dead — re-launching!")
+            launchBlockOverlay(pkg, reason)
+        }
+    }
+
+    // ─────────────────────────────────────────────
     // Watchdog — service health checks
     // ─────────────────────────────────────────────
 
@@ -223,27 +359,24 @@ class KovaForegroundService : Service() {
         // ── Alert on state transitions (was OK → now disabled) ──
 
         if (prevAccessibility && !accOk) {
-            Log.w(TAG, "🛡️ TAMPER: Accessibility service was disabled!")
+            Log.w(TAG, "TAMPER: Accessibility service was disabled!")
             sendTamperAlert("accessibility_disabled", "Accessibility service was disabled")
-            // Show high-priority local notification to child device to re-enable (DIRECTIVE 3)
             showReEnableAccessibilityNotification()
         }
         if (prevNotifListener && !notifOk) {
-            Log.w(TAG, "🛡️ TAMPER: Notification listener was disabled!")
+            Log.w(TAG, "TAMPER: Notification listener was disabled!")
             sendTamperAlert("notification_listener_disabled", "Notification listener was disabled")
         }
         if (prevKeyboard && !kbOk) {
-            Log.w(TAG, "🛡️ TAMPER: KOVA keyboard was disabled!")
+            Log.w(TAG, "TAMPER: KOVA keyboard was disabled!")
             sendTamperAlert("keyboard_disabled", "KOVA keyboard was disabled or switched")
         }
         if (prevDeviceAdmin && !adminOk) {
-            Log.w(TAG, "🛡️ TAMPER: Device admin was deactivated!")
+            Log.w(TAG, "TAMPER: Device admin was deactivated!")
             sendTamperAlert("device_admin_disabled", "Device admin was deactivated")
         }
 
         // ─── ADB / USB Debugging Detection ───────────────────────────────────
-        // ADB uninstall bypasses all AccessibilityService-based anti-uninstall logic.
-        // Alert parent immediately if USB debugging is turned on.
         val adbEnabled = Settings.Global.getInt(
             contentResolver, Settings.Global.ADB_ENABLED, 0
         ) == 1
@@ -257,14 +390,11 @@ class KovaForegroundService : Service() {
         prevKeyboard = kbOk
         prevDeviceAdmin = adminOk
 
-        Log.d(TAG, "🩺 Watchdog: acc=$accOk notif=$notifOk kb=$kbOk admin=$adminOk adb=$adbEnabled")
+        Log.d(TAG, "Watchdog: acc=$accOk notif=$notifOk kb=$kbOk admin=$adminOk adb=$adbEnabled")
     }
 
     // ─── Safe Mode Detection ──────────────────────────────────────────────────
-    // Safe Mode disables all third-party services including AccessibilityService,
-    // making KOVA completely blind. Detect and alert parent immediately on boot.
     private fun checkSafeMode() {
-        // Safe mode flag is set in system properties on boot
         val safeMode = packageManager.isSafeMode
 
         if (safeMode) {
@@ -272,7 +402,6 @@ class KovaForegroundService : Service() {
                 "safe_mode_boot",
                 "Device was booted in Safe Mode — all KOVA protections are disabled"
             )
-            // Schedule a persistent notification so it's visible on screen
             showSafeModeWarningNotification()
         }
     }
@@ -280,7 +409,7 @@ class KovaForegroundService : Service() {
     private fun showSafeModeWarningNotification() {
         val nm = getSystemService(NotificationManager::class.java)
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("⚠️ KOVA Protection Disabled")
+            .setContentTitle("KOVA Protection Disabled")
             .setContentText("Device is in Safe Mode. Child protections are inactive.")
             .setSmallIcon(R.drawable.ic_kova_notification)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -289,12 +418,10 @@ class KovaForegroundService : Service() {
         nm.notify(1002, notification)
     }
 
-    /// Show notification when accessibility service is disabled (EMUI / Huawei workaround)
-    /// Tapping notification opens accessibility settings to re-enable (DIRECTIVE 3)
+    /// Show notification when accessibility service is disabled
     private fun showReEnableAccessibilityNotification() {
         Log.d(TAG, "[WATCHDOG] Showing re-enable accessibility notification")
 
-        // Create intent to open accessibility settings
         val settingsIntent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -304,7 +431,7 @@ class KovaForegroundService : Service() {
 
         val nm = getSystemService(NotificationManager::class.java)
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("🛡️ KOVA needs your attention")
+            .setContentTitle("KOVA needs your attention")
             .setContentText("Tap to re-enable protection — accessibility service was turned off")
             .setSmallIcon(R.drawable.ic_kova_notification)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -319,8 +446,10 @@ class KovaForegroundService : Service() {
     }
 
     // ─── Remote Unlock Handler ─────────────────────────────────────────────────
-    // Public method called by MainActivity or broadcast receiver to handle unlock
     fun handleRemoteUnlock(packageName: String?) {
+        // Clear persisted block state first
+        BlockOverlayActivity.clearBlockState(this)
+
         // Broadcast to BlockOverlayActivity (if it's open) via LocalBroadcast
         val unlockIntent = Intent("com.kova.HIDE_OVERLAY").apply {
             if (packageName != null) putExtra("package", packageName)
@@ -333,9 +462,6 @@ class KovaForegroundService : Service() {
     // the Flutter engine/MainActivity are dead (background monitoring).
     private fun launchBlockOverlay(packageName: String, reason: String = "App is blocked for your safety") {
         // ── Layer 1: HOME-key action (instant, ~10ms) ──────────────────────────
-        // Kick the child to the home screen immediately via AccessibilityService.
-        // This works even if the Activity launch (Layer 2) is blocked by MIUI/Samsung.
-        // The block is functionally complete the moment this executes.
         try {
             KovaAccessibilityService.instance?.performGlobalAction(
                 android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME
@@ -346,8 +472,6 @@ class KovaForegroundService : Service() {
         }
 
         // ── Layer 2: Full-screen Activity (visual confirmation) ────────────────
-        // Launched 150ms after HOME so the child lands on home screen first,
-        // then sees the block message overlay on top.
         Handler(Looper.getMainLooper()).postDelayed({
             try {
                 BlockOverlayActivity.start(this, packageName, reason)

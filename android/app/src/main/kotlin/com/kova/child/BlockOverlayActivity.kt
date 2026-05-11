@@ -10,7 +10,9 @@ import android.os.Build
 import android.os.Bundle
 import android.os.CountDownTimer
 import android.util.Log
+import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -25,33 +27,39 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
  * - Parent triggers emergency block
  *
  * Features:
- * - Cannot be dismissed by back button or touch
- * - Floating on top of all apps
- * - Shows the ACTUAL blocked app's icon at the top
- * - Working 20-second countdown timer with progress bar
- * - ONLY closes when: (1) countdown timer finishes, or (2) parent sends dismiss via ping
- * - "Notify my parent" button to report content
+ * - Cannot be dismissed by back button, touch, or recents swipe
+ * - 60-second countdown timer with smooth progress bar
+ * - Persists block state to SharedPreferences so KovaForegroundService
+ *   watchdog can re-launch this overlay if the OS kills it
+ * - ONLY closes when: (1) countdown timer finishes, or (2) parent dismiss
+ * - Shows the actual blocked app's icon dynamically
  */
 class BlockOverlayActivity : Activity() {
     companion object {
         private const val TAG = "BlockOverlayActivity"
         const val ACTION_HIDE_OVERLAY = "com.kova.HIDE_OVERLAY"
+        private const val PREFS_NAME = "com.example.kova"
 
-        // Countdown duration in seconds
-        const val COUNTDOWN_SECONDS = 20
+        // ── Countdown duration: 60 seconds ──
+        const val COUNTDOWN_SECONDS = 60
 
-        // Debounce: prevent infinite relaunch loop from onPause
+        // ── Debounce: prevent infinite relaunch loop ──
         @Volatile
         private var lastLaunchTimestamp: Long = 0L
-        private const val RELAUNCH_DEBOUNCE_MS = 2000L
+        private const val RELAUNCH_DEBOUNCE_MS = 1500L
 
         @Volatile
         private var currentlyBlockedPackage: String? = null
 
-        // Track if overlay is currently active — prevents new launches while showing
+        // Track if overlay is currently showing — prevents new launches while active
         @Volatile
-        private var isOverlayActive: Boolean = false
+        var isOverlayActive: Boolean = false
+            private set
 
+        /**
+         * Launch or re-launch the block overlay.
+         * Safe to call multiple times — debounce prevents infinite loops.
+         */
         fun start(context: Context, packageName: String, reason: String?) {
             val now = System.currentTimeMillis()
 
@@ -71,12 +79,66 @@ class BlockOverlayActivity : Activity() {
             lastLaunchTimestamp = now
             currentlyBlockedPackage = packageName
 
+            // Persist block state so the ForegroundService watchdog can detect and re-launch
+            persistBlockState(context, packageName, reason ?: "App is blocked for your safety")
+
             val intent = Intent(context, BlockOverlayActivity::class.java).apply {
                 putExtra("blocked_package", packageName)
                 putExtra("reason", reason ?: "App is blocked for your safety")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_NO_ANIMATION
+                )
             }
             context.startActivity(intent)
+        }
+
+        /**
+         * Save block state to SharedPreferences.
+         * The ForegroundService watchdog reads this to re-launch the overlay
+         * if the OS kills this Activity while the block is still active.
+         */
+        fun persistBlockState(context: Context, pkg: String, reason: String) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            prefs.edit()
+                .putString("active_block_package", pkg)
+                .putString("active_block_reason", reason)
+                .putLong("active_block_expiry", System.currentTimeMillis() + (COUNTDOWN_SECONDS * 1000L))
+                .apply()
+        }
+
+        /**
+         * Clear block state — called when block is legitimately finished.
+         */
+        fun clearBlockState(context: Context) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            prefs.edit()
+                .remove("active_block_package")
+                .remove("active_block_reason")
+                .remove("active_block_expiry")
+                .apply()
+        }
+
+        /**
+         * Check if there's a currently active block that hasn't expired.
+         * Used by the ForegroundService watchdog to decide whether to re-launch.
+         */
+        fun getActiveBlock(context: Context): Triple<String, String, Long>? {
+            val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            val pkg = prefs.getString("active_block_package", null) ?: return null
+            val reason = prefs.getString("active_block_reason", "App is blocked for your safety") ?: "App is blocked for your safety"
+            val expiry = prefs.getLong("active_block_expiry", 0L)
+            val now = System.currentTimeMillis()
+
+            if (now >= expiry) {
+                // Block has expired — clean up
+                clearBlockState(context)
+                return null
+            }
+
+            return Triple(pkg, reason, expiry)
         }
     }
 
@@ -85,6 +147,7 @@ class BlockOverlayActivity : Activity() {
     private var countdownTimer: CountDownTimer? = null
     private var timerFinished = false
     private var parentDismissed = false
+    private var remainingMs: Long = COUNTDOWN_SECONDS * 1000L
 
     private val hideReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -100,11 +163,37 @@ class BlockOverlayActivity : Activity() {
         super.onCreate(savedInstanceState)
         isOverlayActive = true
 
+        // Make the overlay appear over the lock screen
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        }
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+        )
+
         // Get block parameters
         blockedPackage = intent.getStringExtra("blocked_package")
         blockReason = intent.getStringExtra("reason") ?: "App is blocked for your safety"
 
-        Log.d(TAG, "Block overlay shown for: $blockedPackage")
+        // Calculate remaining time from persisted expiry
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val expiry = prefs.getLong("active_block_expiry", 0L)
+        val now = System.currentTimeMillis()
+        if (expiry > now) {
+            remainingMs = expiry - now
+        } else {
+            remainingMs = COUNTDOWN_SECONDS * 1000L
+            // Re-persist since this is a fresh launch
+            if (blockedPackage != null) {
+                persistBlockState(this, blockedPackage!!, blockReason!!)
+            }
+        }
+
+        Log.d(TAG, "Block overlay shown for: $blockedPackage (remaining: ${remainingMs / 1000}s)")
 
         // Set up UI
         setupUI()
@@ -120,15 +209,28 @@ class BlockOverlayActivity : Activity() {
         LocalBroadcastManager.getInstance(this).registerReceiver(hideReceiver, filter)
     }
 
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        // Activity is already showing — just update if needed
+        Log.d(TAG, "onNewIntent: overlay already active")
+    }
+
     override fun onDestroy() {
         super.onDestroy()
-        isOverlayActive = false
         countdownTimer?.cancel()
         countdownTimer = null
+        isOverlayActive = false
+
         try {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(hideReceiver)
         } catch (e: Exception) {
             Log.e(TAG, "Error unregistering receiver: ${e.message}")
+        }
+
+        // If the overlay was destroyed but the block hasn't legitimately finished,
+        // the ForegroundService watchdog will detect and re-launch it.
+        if (!timerFinished && !parentDismissed) {
+            Log.w(TAG, "Overlay destroyed prematurely — watchdog will re-launch")
         }
     }
 
@@ -138,7 +240,7 @@ class BlockOverlayActivity : Activity() {
     private fun setupUI() {
         setContentView(R.layout.activity_block_overlay)
 
-        // Get block message
+        // Get app name
         val appName = getAppName(blockedPackage ?: "Unknown")
         val title = "$appName is temporarily unavailable"
 
@@ -159,7 +261,6 @@ class BlockOverlayActivity : Activity() {
             }
         } catch (e: PackageManager.NameNotFoundException) {
             Log.w(TAG, "Could not load icon for $blockedPackage — using default")
-            // Keep the default icon if package icon can't be loaded
         } catch (e: Exception) {
             Log.e(TAG, "Error loading app icon: ${e.message}")
         }
@@ -170,25 +271,26 @@ class BlockOverlayActivity : Activity() {
             reportToParent()
         }
 
-        // Initialize timer display
+        // Initialize timer display with remaining time
+        val remainingSeconds = remainingMs / 1000
         val timerText = findViewById<TextView>(R.id.block_time)
-        timerText?.text = formatTime(COUNTDOWN_SECONDS.toLong())
+        timerText?.text = formatTime(remainingSeconds)
 
         // Initialize progress bar
+        val totalMs = COUNTDOWN_SECONDS * 1000
         val progressBar = findViewById<ProgressBar>(R.id.block_progress)
-        progressBar?.max = COUNTDOWN_SECONDS * 1000
-        progressBar?.progress = COUNTDOWN_SECONDS * 1000
+        progressBar?.max = totalMs
+        progressBar?.progress = remainingMs.toInt().coerceAtMost(totalMs)
 
-        // Set the "Available in" label
-        // (Already set in XML, but update return text)
+        // Set the "Available in" label with actual time
         val returnText = findViewById<TextView>(R.id.block_return_text)
-        val unblockTimeMs = System.currentTimeMillis() + (COUNTDOWN_SECONDS * 1000L)
+        val unblockTimeMs = System.currentTimeMillis() + remainingMs
         val sdf = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
         returnText?.text = "Returns automatically at ${sdf.format(java.util.Date(unblockTimeMs))}"
     }
 
     /**
-     * Start the 20-second countdown timer.
+     * Start the countdown timer using remaining time.
      * The overlay ONLY closes when this timer finishes or parent sends a dismiss.
      */
     private fun startCountdownTimer() {
@@ -196,15 +298,12 @@ class BlockOverlayActivity : Activity() {
         val progressBar = findViewById<ProgressBar>(R.id.block_progress)
 
         countdownTimer = object : CountDownTimer(
-            COUNTDOWN_SECONDS * 1000L,
+            remainingMs,
             50L  // Update every 50ms for smooth progress bar
         ) {
             override fun onTick(millisUntilFinished: Long) {
-                // Update the countdown display (MM : SS format)
                 val seconds = (millisUntilFinished / 1000L)
                 timerText?.text = formatTime(seconds)
-
-                // Update the progress bar (smooth animation)
                 progressBar?.progress = millisUntilFinished.toInt()
             }
 
@@ -213,13 +312,11 @@ class BlockOverlayActivity : Activity() {
                 timerFinished = true
                 timerText?.text = formatTime(0)
                 progressBar?.progress = 0
-
-                // Timer finished — close the overlay
                 finishBlock()
             }
         }.start()
 
-        Log.d(TAG, "Countdown timer started: ${COUNTDOWN_SECONDS}s")
+        Log.d(TAG, "Countdown timer started: ${remainingMs / 1000}s remaining")
     }
 
     /**
@@ -245,7 +342,10 @@ class BlockOverlayActivity : Activity() {
         currentlyBlockedPackage = null
         isOverlayActive = false
 
-        // Kill the blocked app
+        // Clear persisted block state — block is legitimately finished
+        clearBlockState(this)
+
+        // Kill the blocked app's background processes
         if (blockedPackage != null) {
             try {
                 val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
@@ -266,14 +366,12 @@ class BlockOverlayActivity : Activity() {
     private fun reportToParent() {
         Log.d(TAG, "Reporting to parent: $blockedPackage")
 
-        // Send broadcast to Flutter
         val intent = Intent("com.kova.user_report").apply {
             putExtra("package", blockedPackage)
             putExtra("reason", blockReason)
         }
         sendBroadcast(intent)
 
-        // Show confirmation
         showToast("Report sent to parent")
 
         // DON'T close the overlay — child must wait for timer or parent dismiss
@@ -303,35 +401,44 @@ class BlockOverlayActivity : Activity() {
      */
     private fun logBlockEvent() {
         try {
-            val prefs = getSharedPreferences("com.example.kova", MODE_PRIVATE)
+            val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             val eventLog = (prefs.getStringSet("block_events", mutableSetOf()) ?: mutableSetOf()).toMutableSet()
             eventLog.add("${System.currentTimeMillis()}: $blockedPackage - $blockReason")
             prefs.edit().putStringSet("block_events", eventLog).apply()
-
             Log.d(TAG, "Block event logged")
         } catch (e: Exception) {
             Log.e(TAG, "Error logging block event: ${e.message}")
         }
     }
 
-    /**
-     * Prevent back button from dismissing — overlay stays until timer or parent dismiss
-     */
+    // ─────────────────────────────────────────────
+    // Input Blocking — prevent ALL escape routes
+    // ─────────────────────────────────────────────
+
+    /** Prevent back button from dismissing */
     override fun onBackPressed() {
         Log.d(TAG, "Back button pressed — blocked (timer still running)")
         // Do nothing — block stays
     }
 
-    /**
-     * Prevent touch outside from dismissing
-     */
+    /** Block all key events (Home is handled by taskAffinity + excludeFromRecents) */
+    override fun dispatchKeyEvent(event: KeyEvent?): Boolean {
+        if (event?.keyCode == KeyEvent.KEYCODE_BACK ||
+            event?.keyCode == KeyEvent.KEYCODE_HOME ||
+            event?.keyCode == KeyEvent.KEYCODE_APP_SWITCH) {
+            return true // Consume — don't propagate
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    /** Prevent touch outside from dismissing */
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         return true // Consume touch event
     }
 
     /**
-     * Re-show block overlay if swiped away from recents, with debounce.
-     * The overlay MUST persist until timer finishes or parent dismisses.
+     * Re-show block overlay if swiped away from recents.
+     * Uses the ForegroundService as a more reliable launcher than self-relaunch.
      */
     override fun onPause() {
         super.onPause()
@@ -339,12 +446,33 @@ class BlockOverlayActivity : Activity() {
         // Don't relaunch if timer has finished or parent dismissed
         if (timerFinished || parentDismissed) return
 
-        val now = System.currentTimeMillis()
-        if (blockedPackage != null &&
-            currentlyBlockedPackage == blockedPackage &&
-            now - lastLaunchTimestamp > RELAUNCH_DEBOUNCE_MS) {
-            Log.d(TAG, "onPause: re-showing block for $blockedPackage (timer still active)")
-            start(this, blockedPackage!!, blockReason)
+        Log.w(TAG, "onPause: overlay was paused while block active — service will re-launch")
+        // The ForegroundService watchdog will detect that the overlay is not active
+        // but the block state is still persisted, and will re-launch it.
+    }
+
+    /**
+     * If the activity is stopped (user went home or recents),
+     * ask the ForegroundService to re-launch immediately.
+     */
+    override fun onStop() {
+        super.onStop()
+
+        if (timerFinished || parentDismissed) return
+
+        Log.w(TAG, "onStop: overlay stopped — requesting immediate re-launch via service")
+        // Trigger the service to re-launch the overlay
+        try {
+            val relaunchIntent = Intent(this, KovaForegroundService::class.java).apply {
+                action = "com.kova.ACTION_RELAUNCH_OVERLAY"
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(relaunchIntent)
+            } else {
+                startService(relaunchIntent)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to request overlay relaunch: ${e.message}")
         }
     }
 }

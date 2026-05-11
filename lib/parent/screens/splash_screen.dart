@@ -116,27 +116,34 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     // Check if permissions are granted (for parent mode)
+    final appMode = LocalStorage.getAppMode();
     final allGranted = await ParentPermissionService.allRequiredGranted();
-    final isFirstLaunch = LocalStorage.getBool('parent_permissions_done') != true;
+    final permissionsDone = LocalStorage.getBool('parent_permissions_done') == true;
     
-    if ((!allGranted || isFirstLaunch) && appState.isLoggedIn) {
-      // Show permission screen before dashboard
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ParentPermissionScreen(
-            onComplete: () async {
-              await LocalStorage.setBool('parent_permissions_done', true);
-              if (context.mounted) {
-                context.go(AppRoutes.parentDashboard);
-              }
-            },
+    if (appMode == 'parent') {
+      if (!allGranted || !permissionsDone) {
+        // Show permission screen before dashboard
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ParentPermissionScreen(
+              onComplete: () async {
+                await LocalStorage.setBool('parent_permissions_done', true);
+                if (context.mounted) {
+                  context.go(AppRoutes.parentDashboard);
+                }
+              },
+            ),
           ),
-        ),
-      );
+        );
+      } else {
+        // All permissions granted — go straight to dashboard
+        if (!mounted) return;
+        context.go(AppRoutes.parentDashboard);
+      }
     } else {
-      // Route based on login state
+      // Not configured or child mode — go to role selection
       final route = appState.isLoggedIn
           ? AppRoutes.parentDashboard
           : AppRoutes.roleSelection;
