@@ -40,8 +40,8 @@ class BlockOverlayActivity : Activity() {
         const val ACTION_HIDE_OVERLAY = "com.kova.HIDE_OVERLAY"
         private const val PREFS_NAME = "com.example.kova"
 
-        // ── Countdown duration: 60 seconds ──
-        const val COUNTDOWN_SECONDS = 60
+        // ── Countdown duration: 20 minutes (1200 seconds) ──
+        const val COUNTDOWN_SECONDS = 1200
 
         // ── Debounce: prevent infinite relaunch loop ──
         @Volatile
