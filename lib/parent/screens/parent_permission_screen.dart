@@ -50,14 +50,27 @@ class _ParentPermissionScreenState extends State<ParentPermissionScreen>
   }
 
   Future<void> _refresh() async {
+    debugPrint('🔄 [PERMISSIONS] Refreshing permission status...');
     final s = await ParentPermissionService.getStatus();
+    debugPrint('📊 [PERMISSIONS] Status: notifications=${s['notifications']}, nearbyWifi=${s['nearbyWifi']}, battery=${s['battery']}, exactAlarm=${s['exactAlarm']}');
+    
     if (!mounted) return;
     setState(() => _status = s);
 
     // Auto-advance if all required permissions are already granted
-    if ((_status['notifications'] ?? false) && (_status['nearbyWifi'] ?? false)) {
+    final notificationsGranted = _status['notifications'] ?? false;
+    final nearbyWifiGranted = _status['nearbyWifi'] ?? false;
+    final allRequired = notificationsGranted && nearbyWifiGranted;
+    
+    debugPrint('🔍 [PERMISSIONS] allRequired=$allRequired (notifications=$notificationsGranted, nearbyWifi=$nearbyWifiGranted)');
+    
+    if (allRequired) {
+      debugPrint('✅ [PERMISSIONS] All required permissions granted - auto-advancing...');
       await Future.delayed(const Duration(milliseconds: 400));
-      if (mounted) widget.onComplete();
+      if (mounted) {
+        debugPrint('🚀 [PERMISSIONS] Calling onComplete from auto-advance');
+        widget.onComplete();
+      }
     }
   }
 
@@ -238,13 +251,20 @@ class _ParentPermissionScreenState extends State<ParentPermissionScreen>
                 SizedBox(
                   width: double.infinity,
                   height: 52,
-                  child: OutlinedButton(
-                    onPressed: widget.onComplete,
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: KovaColors.primary),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      debugPrint('✅ [PERMISSIONS] Continue button pressed - calling onComplete');
+                      if (mounted) {
+                        widget.onComplete();
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: KovaColors.primary,
+                      foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(KovaRadius.pill),
                       ),
+                      elevation: 2,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -252,14 +272,14 @@ class _ParentPermissionScreenState extends State<ParentPermissionScreen>
                         Text(
                           'Continue',
                           style: GoogleFonts.nunito(
-                            color: KovaColors.primary,
+                            color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(width: 6),
                         const Icon(Icons.arrow_forward_rounded,
-                            color: KovaColors.primary, size: 20),
+                            color: Colors.white, size: 20),
                       ],
                     ),
                   ),

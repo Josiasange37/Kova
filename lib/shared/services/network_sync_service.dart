@@ -26,8 +26,8 @@ class NetworkSyncService {
   factory NetworkSyncService() => _instance;
   NetworkSyncService._();
 
-  // Vercel relay base URL — update after deployment
-  static const String _relayBaseUrl = 'https://kova-relay.vercel.app';
+  // Railway relay base URL — update after deployment
+  static const String _relayBaseUrl = 'https://kova-production-3f1f.up.railway.app';
 
   final _lanDiscovery = LanDiscoveryService();
   final _lanData = LanDataService();
