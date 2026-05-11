@@ -58,14 +58,24 @@ class ParentPermissionService {
     return false;
   }
 
-  /// Request NEARBY_WIFI_DEVICES (Android 12+).
-  /// If denied, opens the app permission settings.
+  /// Request NEARBY_WIFI_DEVICES and Bluetooth (Android 12+).
+  /// Some tablets/OS skins require both to show the "Nearby devices" permission group.
   static Future<bool> requestNearbyWifi() async {
     if (!Platform.isAndroid) return true;
     final sdk = await _getSdkVersion();
     if (sdk < 31) return true; // Not needed below Android 12
-    final result = await Permission.nearbyWifiDevices.request();
-    if (result.isGranted) return true;
+    
+    // Request all "Nearby devices" permissions together to satisfy strict OS skins
+    final statuses = await [
+      Permission.nearbyWifiDevices,
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+    ].request();
+    
+    if (statuses[Permission.nearbyWifiDevices] == PermissionStatus.granted ||
+        statuses[Permission.bluetoothScan] == PermissionStatus.granted) {
+      return true;
+    }
 
     // Denied — open the app's permission settings so user can find "Nearby devices"
     await openAppSettings();

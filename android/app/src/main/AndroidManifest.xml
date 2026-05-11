@@ -36,6 +36,11 @@
     
     <!-- Android 12+: required for peer-to-peer Wi-Fi / LAN discovery -->
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+    
+    <!-- Android 12+: Some tablets/OS skins require Bluetooth permissions for the 'Nearby devices' category to register the app -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
 
     <!-- Overlay on lock screen (Android 14+ requires explicit declaration) -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
