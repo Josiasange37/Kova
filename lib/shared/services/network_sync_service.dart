@@ -143,6 +143,23 @@ class NetworkSyncService {
       _alertReceivedController.add(alert);
     });
 
+    // ─── UDP Alert Listener (KDE Connect-style fallback) ──────────────────────
+    // Listens for UDP alert packets when TCP connection fails
+    _lanDiscovery.onUdpAlertReceived.listen((udpAlert) {
+      try {
+        final alertData = udpAlert['alert'] as Map<String, dynamic>?;
+        if (alertData == null) return;
+
+        debugPrint('📨 [NETWORK SYNC] UDP alert received from ${udpAlert['deviceId']}');
+
+        // Convert to NetworkAlertSummary and broadcast to UI
+        final alert = NetworkAlertSummary.fromJson(alertData);
+        _alertReceivedController.add(alert);
+      } catch (e) {
+        debugPrint('⚠️ [NETWORK SYNC] Failed to process UDP alert: $e');
+      }
+    });
+
     // Allow starting without a pair token during initial pairing.
     // LAN discovery will run in pairingMode, and relay calls are skipped.
     if (_pairToken.isEmpty) {
@@ -653,6 +670,26 @@ class NetworkSyncService {
     if (delivered && itemId != null) {
       await _pendingSyncRepo.deleteList([itemId]);
       return;
+    }
+
+    // ── UDP fallback (KDE Connect-style) ──────────────────────────────
+    // When TCP fails but we can see the peer via discovery, try UDP
+    if (!delivered) {
+      final peer = _lanDiscovery.pairedPeer;
+      if (peer != null) {
+        debugPrint('📡 [PUSH ALERT] TCP LAN failed, trying UDP fallback...');
+        try {
+          final udpSuccess = await _lanDiscovery.sendAlertViaUdp(peer, alert.toJson());
+          if (udpSuccess) {
+            // UDP is best-effort, consider it "delivered" for queuing purposes
+            // but we won't delete from queue since UDP has no ACK
+            debugPrint('📤 [PUSH ALERT] UDP sent (best-effort, no guarantee)');
+            // Don't mark as fully delivered - let it queue for TCP/Railway retry
+          }
+        } catch (e) {
+          debugPrint('⚠️ [PUSH ALERT] UDP fallback failed: $e');
+        }
+      }
     }
 
     // ── Railway relay fallback ──────────────────────────────

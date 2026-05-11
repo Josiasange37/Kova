@@ -27,6 +27,9 @@ class LanDiscoveryService {
   final _discoveredDevices = <String, LanDeviceInfo>{};
   final _deviceFoundController = StreamController<LanDeviceInfo>.broadcast();
   final _deviceLostController = StreamController<String>.broadcast();
+  // ─── UDP Data Transfer (KDE Connect-style fallback) ──────────────────────
+  final _udpAlertReceivedController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get onUdpAlertReceived => _udpAlertReceivedController.stream;
 
   // ─── Reactive Pairing Callback ─────────────────────────────────────────
   // When in pairing mode and a peer with matching pairCode is discovered,
@@ -247,6 +250,12 @@ class LanDiscoveryService {
       final data = utf8.decode(datagram.data);
       final json = jsonDecode(data) as Map<String, dynamic>;
 
+      // ─── UDP Alert Data Packet (KDE Connect-style fallback) ─────────────────
+      if (json['type'] == 'kova_alert_udp') {
+        _handleUdpAlertPacket(json, datagram);
+        return;
+      }
+
       if (json['type'] != 'kova_discovery') return;
       if (json['deviceId'] == _deviceId) return; // Ignore our own broadcasts
 
@@ -277,6 +286,65 @@ class LanDiscoveryService {
     }
   }
 
+  /// Handle UDP alert packet (fallback when TCP fails)
+  void _handleUdpAlertPacket(Map<String, dynamic> json, Datagram datagram) {
+    try {
+      final expectedRole = _role == 'parent' ? 'child' : 'parent';
+      if (json['role'] != expectedRole) return;
+
+      // Verify pair token if available
+      final token = json['pairToken'] as String? ?? '';
+      if (_pairToken.isNotEmpty && token != _pairToken) {
+        debugPrint('⚠️ [UDP ALERT] Ignoring packet with wrong token from ${datagram.address.address}');
+        return;
+      }
+
+      debugPrint('📨 [UDP ALERT] Received alert from ${datagram.address.address}');
+      _udpAlertReceivedController.add(json);
+    } catch (e) {
+      debugPrint('⚠️ [UDP ALERT] Failed to process packet: $e');
+    }
+  }
+
+  /// Send alert via UDP (KDE Connect-style fallback when TCP fails)
+  /// Returns true if packet was sent (best-effort, no guarantee of delivery)
+  Future<bool> sendAlertViaUdp(LanDeviceInfo peer, Map<String, dynamic> alertData) async {
+    if (_socket == null) {
+      debugPrint('❌ [UDP ALERT] Cannot send - discovery socket not running');
+      return false;
+    }
+
+    try {
+      final packet = jsonEncode({
+        'type': 'kova_alert_udp',
+        'role': _role,
+        'pairToken': _pairToken,
+        'deviceId': _deviceId,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'alert': alertData,
+      });
+
+      final data = utf8.encode(packet);
+
+      // UDP packets should be small (< 1400 bytes to avoid fragmentation)
+      if (data.length > 1400) {
+        debugPrint('⚠️ [UDP ALERT] Packet too large (${data.length} bytes), may be fragmented');
+      }
+
+      _socket!.send(
+        data,
+        InternetAddress(peer.ipAddress),
+        _discoveryPort, // Send to discovery port (peer is listening there)
+      );
+
+      debugPrint('📤 [UDP ALERT] Sent ${data.length} bytes to ${peer.ipAddress}:$_discoveryPort');
+      return true;
+    } catch (e) {
+      debugPrint('❌ [UDP ALERT] Send failed: $e');
+      return false;
+    }
+  }
+
   /// Remove devices that haven't been seen recently
   void _cleanupStale() {
     final now = DateTime.now();
@@ -299,5 +367,6 @@ class LanDiscoveryService {
     stop();
     _deviceFoundController.close();
     _deviceLostController.close();
+    _udpAlertReceivedController.close();
   }
 }
