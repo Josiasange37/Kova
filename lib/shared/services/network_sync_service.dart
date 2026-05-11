@@ -26,8 +26,34 @@ class NetworkSyncService {
   factory NetworkSyncService() => _instance;
   NetworkSyncService._();
 
-  // Railway relay base URL — update after deployment
-  static const String _relayBaseUrl = 'https://kova-production-3f1f.up.railway.app';
+  // ── Configurable relay URL ─────────────────────────────────────────────────
+  // Default: Railway deployment. Can be overridden to local server for demo.
+  // Set via: LocalStorage.setString('relay_url', 'http://192.168.x.x:3000')
+  static const String _defaultRelayUrl = 'https://kova-production-3f1f.up.railway.app';
+  
+  /// Get the current relay base URL (configurable via settings)
+  String get _relayBaseUrl {
+    final custom = LocalStorage.getString('relay_url');
+    return custom.isNotEmpty ? custom : _defaultRelayUrl;
+  }
+
+  /// Set a custom relay URL (e.g., local server for demo)
+  static Future<void> setRelayUrl(String url) async {
+    await LocalStorage.setString('relay_url', url);
+    debugPrint('🌐 Relay URL set to: $url');
+  }
+
+  /// Get the current relay URL
+  static String getRelayUrl() {
+    final custom = LocalStorage.getString('relay_url');
+    return custom.isNotEmpty ? custom : _defaultRelayUrl;
+  }
+  
+  /// Reset relay URL to default
+  static Future<void> resetRelayUrl() async {
+    await LocalStorage.remove('relay_url');
+    debugPrint('🌐 Relay URL reset to default');
+  }
 
   final _lanDiscovery = LanDiscoveryService();
   final _lanData = LanDataService();
@@ -971,21 +997,44 @@ class NetworkSyncService {
 
         for (final alertJson in alerts) {
           final map = alertJson as Map<String, dynamic>;
+          
+          // ── Handle BOTH encrypted and unencrypted (test) alerts ──
+          final isTestAlert = map['isTestAlert'] == true;
           final encryptedData = map['encryptedData'] as String? ?? '';
           final iv = map['iv'] as String? ?? '';
 
-          final decryptedStr = _cryptoService!.decryptPayload(encryptedData, iv);
-          if (decryptedStr.isNotEmpty) {
+          if (isTestAlert || (encryptedData.isEmpty && map['app'] != null)) {
+            // Unencrypted test alert — parse directly
             try {
-              final summaryJson = jsonDecode(decryptedStr) as Map<String, dynamic>;
-              final alert = NetworkAlertSummary.fromJson(summaryJson);
+              final alert = NetworkAlertSummary(
+                severity: map['severity'] as String? ?? 'high',
+                app: map['app'] as String? ?? 'Test',
+                alertType: map['alertType'] as String? ?? 'test_alert',
+                childName: map['childName'] as String? ?? 'Child',
+                timestamp: map['timestamp'] != null
+                    ? DateTime.tryParse(map['timestamp'] as String) ?? DateTime.now()
+                    : DateTime.now(),
+              );
               _alertReceivedController.add(alert);
-              
-              if (map['id'] != null) {
-                _pushAcks([map['id'] as String]);
-              }
+              debugPrint('🧪 [POLL] Test alert received: ${alert.app} - ${alert.severity}');
             } catch (e) {
-              print('❌ Failed to parse decrypted Vercel alert: $e');
+              print('❌ Failed to parse test alert: $e');
+            }
+          } else if (encryptedData.isNotEmpty) {
+            // Encrypted real alert — decrypt first
+            final decryptedStr = _cryptoService!.decryptPayload(encryptedData, iv);
+            if (decryptedStr.isNotEmpty) {
+              try {
+                final summaryJson = jsonDecode(decryptedStr) as Map<String, dynamic>;
+                final alert = NetworkAlertSummary.fromJson(summaryJson);
+                _alertReceivedController.add(alert);
+                
+                if (map['id'] != null) {
+                  _pushAcks([map['id'] as String]);
+                }
+              } catch (e) {
+                print('❌ Failed to parse decrypted relay alert: $e');
+              }
             }
           }
         }
@@ -1267,6 +1316,69 @@ class NetworkSyncService {
       print('❌ Child profile sync error: $e');
       return false;
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // Test Alert (for presentation / demo)
+  // ─────────────────────────────────────────────
+
+  /// Send a test alert via the relay server (no encryption needed).
+  /// Works from BOTH child and parent side — useful for demo videos.
+  Future<bool> sendTestAlert({
+    String app = 'WhatsApp',
+    String severity = 'high',
+    String alertType = 'suspicious_content',
+    String? childName,
+  }) async {
+    if (_pairToken.isEmpty) {
+      debugPrint('❌ [TEST ALERT] No pair token — cannot send test alert');
+      return false;
+    }
+
+    final name = childName ?? LocalStorage.getString('child_name', 'Child');
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_relayBaseUrl/api/alert/test'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_pairToken',
+        },
+        body: jsonEncode({
+          'app': app,
+          'severity': severity,
+          'alertType': alertType,
+          'childName': name,
+        }),
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 201) {
+        debugPrint('🧪 [TEST ALERT] Sent: $app - $severity via relay');
+        return true;
+      } else {
+        debugPrint('❌ [TEST ALERT] Server returned: ${response.statusCode} ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('❌ [TEST ALERT] Error: $e');
+      return false;
+    }
+  }
+
+  /// Check server health (useful for settings screen)
+  Future<Map<String, dynamic>?> checkServerHealth() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_relayBaseUrl/api/health'),
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('❌ Server health check failed: $e');
+    }
+    return null;
   }
 
   void dispose() {

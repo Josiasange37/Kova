@@ -188,7 +188,7 @@ class DashboardDataService extends ChangeNotifier {
 
         final body = 'Activité suspecte détectée sur $app. Vérifiez maintenant.';
 
-        await NotificationService.showAlert(title, body);
+        await NotificationService.showAlert(title, body, alertId: alertId);
         debugPrint('🔔 [PARENT] Notification shown: $title');
       } catch (e) {
         debugPrint('❌ [PARENT] Failed to show notification: $e');

@@ -1,9 +1,14 @@
 // shared/services/notification_service.dart — Local push notifications
+import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
+
+  // Stream controller to broadcast notification clicks
+  static final _onNotificationClick = StreamController<String?>.broadcast();
+  static Stream<String?> get onNotificationClick => _onNotificationClick.stream;
 
   /// Initialize local notifications
   static Future<void> init() async {
@@ -22,7 +27,27 @@ class NotificationService {
       linux: linuxSettings,
     );
 
-    await _notificationsPlugin.initialize(initSettings);
+    await _notificationsPlugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: (response) {
+        // Broadcast the payload when notification is tapped
+        _onNotificationClick.add(response.payload);
+      },
+    );
+  }
+
+  /// Check if the app was launched via a notification tap (Cold Start)
+  static Future<void> checkForLaunchNotification() async {
+    final details = await _notificationsPlugin.getNotificationAppLaunchDetails();
+    if (details != null && details.didNotificationLaunchApp) {
+      final response = details.notificationResponse;
+      if (response != null && response.payload != null) {
+        // Delay slightly to ensure listeners are registered
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _onNotificationClick.add(response.payload);
+        });
+      }
+    }
   }
 
   /// Show an alert notification
@@ -55,11 +80,16 @@ class NotificationService {
       title,
       body,
       details,
+      payload: alertId, // Pass the alertId as payload
     );
   }
 
   /// Show a critical alert with high priority
-  static Future<void> showCriticalAlert(String title, String body) async {
+  static Future<void> showCriticalAlert(
+    String title,
+    String body, {
+    String? alertId,
+  }) async {
     const androidDetails = AndroidNotificationDetails(
       'kova_critical',
       'KOVA Critical Alerts',
@@ -81,10 +111,11 @@ class NotificationService {
     );
 
     await _notificationsPlugin.show(
-      DateTime.now().millisecond,
+      alertId?.hashCode ?? DateTime.now().millisecond,
       title,
       body,
       details,
+      payload: alertId,
     );
   }
 

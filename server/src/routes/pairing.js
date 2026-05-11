@@ -232,7 +232,8 @@ router.get('/status', async (req, res) => {
     res.json({
       code,
       status: entry.status,
-      claimed: !!entry.childDeviceId,
+      paired: !!entry.childDeviceId,      // Flutter client checks this field
+      claimed: !!entry.childDeviceId,     // Keep for backwards compat
       pairToken: entry.pairToken,
       childDeviceId: entry.childDeviceId
     });

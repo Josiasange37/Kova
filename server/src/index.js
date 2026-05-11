@@ -9,18 +9,42 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const { Server } = require('socket.io');
 
-// Routes
-const authRoutes = require('./routes/auth');
-const childrenRoutes = require('./routes/children');
+// Relay Routes (in-memory, no DB required)
 const pairingRoutes = require('./routes/pairing');
-const dashboardRoutes = require('./routes/dashboard');
-const alertsRoutes = require('./routes/alerts');
-const appsRoutes = require('./routes/apps');
-const settingsRoutes = require('./routes/settings');
 const { alertRouter, historyRouter, ackRouter, childRouter } = require('./routes/relay');
 
+// DB-dependent routes — loaded conditionally
+let authRoutes, childrenRoutes, dashboardRoutes, alertsRoutes, appsRoutes, settingsRoutes;
+let dbAvailable = false;
+
+try {
+  const pool = require('./db/pool');
+  // Test if DB is actually reachable (non-blocking)
+  pool.query('SELECT 1').then(() => {
+    dbAvailable = true;
+    console.log('✅ PostgreSQL connected');
+  }).catch((err) => {
+    console.warn('⚠️  PostgreSQL not available — running in RELAY-ONLY mode');
+    console.warn('   (Pairing, alerts relay, and history relay still work)');
+  });
+  
+  authRoutes = require('./routes/auth');
+  childrenRoutes = require('./routes/children');
+  dashboardRoutes = require('./routes/dashboard');
+  alertsRoutes = require('./routes/alerts');
+  appsRoutes = require('./routes/apps');
+  settingsRoutes = require('./routes/settings');
+} catch (err) {
+  console.warn('⚠️  DB modules failed to load — running in RELAY-ONLY mode');
+}
+
 // Socket
-const initSocket = require('./socket');
+let initSocket;
+try {
+  initSocket = require('./socket');
+} catch (err) {
+  console.warn('⚠️  Socket module failed to load');
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -44,21 +68,22 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     service: 'kova-server',
+    mode: dbAvailable ? 'full' : 'relay-only',
     timestamp: new Date().toISOString(),
   });
 });
 
-// ── API Routes ──
-app.use('/api/auth', authRoutes);
-app.use('/api/children', childrenRoutes);
-app.use('/api/pairing', pairingRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/alerts', alertsRoutes);
-app.use('/api/apps', appsRoutes);
-app.use('/api/settings', settingsRoutes);
+// ── DB-dependent API Routes (only if DB available) ──
+if (authRoutes) app.use('/api/auth', authRoutes);
+if (childrenRoutes) app.use('/api/children', childrenRoutes);
+if (dashboardRoutes) app.use('/api/dashboard', dashboardRoutes);
+if (alertsRoutes) app.use('/api/alerts', alertsRoutes);
+if (appsRoutes) app.use('/api/apps', appsRoutes);
+if (settingsRoutes) app.use('/api/settings', settingsRoutes);
 
-// ── Relay Routes (for Flutter app LAN fallback) ──
-app.use('/api/pair', pairingRoutes); // alias for /api/pairing
+// ── Relay Routes (always available — in-memory, no DB needed) ──
+app.use('/api/pair', pairingRoutes);
+app.use('/api/pairing', pairingRoutes); // alias
 app.use('/api/alert', alertRouter);
 app.use('/api/history', historyRouter);
 app.use('/api/ack', ackRouter);
@@ -82,19 +107,20 @@ app.get('/', (req, res) => {
   res.json({
     service: 'KOVA Backend API',
     status: 'online',
+    mode: dbAvailable ? 'full' : 'relay-only',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     endpoints: {
       health: '/api/health',
-      auth: '/api/auth',
-      children: '/api/children',
-      pairing: '/api/pairing',
-      dashboard: '/api/dashboard',
-      alerts: '/api/alerts',
-      apps: '/api/apps',
-      settings: '/api/settings',
+      pair_register: 'POST /api/pair/register',
+      pair_claim: 'POST /api/pair/claim',
+      pair_status: 'GET /api/pair/status?code=XXX',
+      alert_push: 'POST /api/alert/push',
+      alert_poll: 'GET /api/alert/poll',
+      alert_test: 'POST /api/alert/test',
+      alert_debug: 'GET /api/alert/debug/status',
     },
-    documentation: 'This is the KOVA child protection API. The Flutter app connects to these endpoints.',
+    documentation: 'KOVA child protection API. Relay mode works without PostgreSQL.',
   });
 });
 
@@ -120,16 +146,26 @@ module.exports = app;
 
 // Only start the server if running locally (not on Vercel/Serverless)
 if (require.main === module) {
-  initSocket(io);
-  server.listen(PORT, () => {
+  if (initSocket) {
+    try {
+      initSocket(io);
+    } catch (err) {
+      console.warn('⚠️  Socket initialization failed (DB may be unavailable):', err.message);
+    }
+  }
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`
-╔══════════════════════════════════════════╗
-║       🛡️  KOVA Server Running            ║
-║                                          ║
-║  REST API:  http://localhost:${PORT}/api    ║
-║  Socket.io: ws://localhost:${PORT}          ║
-║  Health:    http://localhost:${PORT}/api/health ║
-╚══════════════════════════════════════════╝
+╔══════════════════════════════════════════════╗
+║       🛡️  KOVA Server Running                ║
+║                                              ║
+║  Mode:      ${dbAvailable ? 'FULL (with DB)     ' : 'RELAY-ONLY (no DB)'}    ║
+║  REST API:  http://0.0.0.0:${PORT}/api          ║
+║  Socket.io: ws://0.0.0.0:${PORT}                ║
+║  Health:    http://0.0.0.0:${PORT}/api/health    ║
+║                                              ║
+║  📱 Flutter clients: use your local IP       ║
+║     e.g. http://192.168.x.x:${PORT}             ║
+╚══════════════════════════════════════════════╝
     `);
   });
 }

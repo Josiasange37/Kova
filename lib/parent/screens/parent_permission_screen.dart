@@ -60,7 +60,7 @@ class _ParentPermissionScreenState extends State<ParentPermissionScreen>
     // Auto-advance if all required permissions are already granted
     final notificationsGranted = _status['notifications'] ?? false;
     final nearbyWifiGranted = _status['nearbyWifi'] ?? false;
-    final allRequired = notificationsGranted && nearbyWifiGranted;
+    final allRequired = notificationsGranted;
     
     debugPrint('🔍 [PERMISSIONS] allRequired=$allRequired (notifications=$notificationsGranted, nearbyWifi=$nearbyWifiGranted)');
     
@@ -98,7 +98,7 @@ class _ParentPermissionScreenState extends State<ParentPermissionScreen>
   }
 
   bool get _allRequiredGranted =>
-      (_status['notifications'] ?? false) && (_status['nearbyWifi'] ?? false);
+      (_status['notifications'] ?? false);
 
   int get _grantedCount =>
       _status.values.where((v) => v).length;

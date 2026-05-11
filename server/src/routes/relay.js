@@ -22,12 +22,12 @@ alertRouter.post('/push', (req, res) => {
   if (!alertStore.has(token)) alertStore.set(token, []);
   
   const alerts = alertStore.get(token);
-  alerts.push({ ...alert, timestamp: Date.now(), id: Date.now().toString() });
+  alerts.push({ ...alert, timestamp: Date.now(), id: alert.id || Date.now().toString() });
   
   if (alerts.length > MAX_STORED_ALERTS) alerts.shift();
   
-  console.log(`🚨 Alert relayed: ${alert.app || 'unknown'} - ${alert.alertType || 'alert'}`);
-  res.status(201).json({ success: true });
+  console.log(`🚨 Alert relayed: ${alert.app || alert.alertType || 'unknown'} (token: ${token.substring(0, 8)}...)`);
+  res.status(201).json({ success: true, alertCount: alerts.length });
 });
 
 alertRouter.get('/poll', (req, res) => {
@@ -35,7 +35,58 @@ alertRouter.get('/poll', (req, res) => {
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
   const alerts = alertStore.get(token) || [];
+  
+  // CRITICAL FIX: Clear alerts after poll to prevent duplicate notifications
+  // The parent will receive each alert exactly once.
+  if (alerts.length > 0) {
+    alertStore.set(token, []);
+    console.log(`📬 Delivered ${alerts.length} alert(s) to parent (token: ${token.substring(0, 8)}...)`);
+  }
+  
   res.json({ alerts });
+});
+
+// ── Test Alert Endpoint (for demo / presentation video) ──────────────────
+alertRouter.post('/test', (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.status(401).json({ error: 'Missing token' });
+
+  const { app, severity, alertType, childName } = req.body;
+  
+  if (!alertStore.has(token)) alertStore.set(token, []);
+  
+  const testAlert = {
+    // Store as plain JSON (no encryption) for test alerts
+    app: app || 'WhatsApp',
+    severity: severity || 'high',
+    alertType: alertType || 'suspicious_content',
+    childName: childName || 'Test Child',
+    timestamp: new Date().toISOString(),
+    id: Date.now().toString(),
+    isTestAlert: true,
+  };
+  
+  alertStore.get(token).push(testAlert);
+  
+  console.log(`🧪 TEST alert pushed: ${testAlert.app} - ${testAlert.severity} (token: ${token.substring(0, 8)}...)`);
+  res.status(201).json({ success: true, alert: testAlert });
+});
+
+// ── List all tokens with pending alerts (debug endpoint) ──────────────────
+alertRouter.get('/debug/status', (req, res) => {
+  const status = {};
+  for (const [token, alerts] of alertStore.entries()) {
+    status[token.substring(0, 8) + '...'] = {
+      pendingAlerts: alerts.length,
+      latestApp: alerts.length > 0 ? alerts[alerts.length - 1].app || 'N/A' : 'none',
+    };
+  }
+  res.json({ 
+    totalTokens: alertStore.size,
+    tokens: status,
+    historyTokens: historyStore.size,
+    profiles: childProfiles.size,
+  });
 });
 
 // ── History Router ────────────────────────────────────────────────────────
@@ -62,6 +113,12 @@ historyRouter.get('/poll', (req, res) => {
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
   const history = historyStore.get(token) || [];
+  
+  // Clear after poll to prevent duplicates
+  if (history.length > 0) {
+    historyStore.set(token, []);
+  }
+  
   res.json({ history });
 });
 
@@ -86,6 +143,12 @@ ackRouter.get('/poll', (req, res) => {
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
   const acks = ackStore.get(token) || [];
+  
+  // Clear after poll
+  if (acks.length > 0) {
+    ackStore.set(token, []);
+  }
+  
   res.json({ acks });
 });
 

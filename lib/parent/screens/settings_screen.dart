@@ -9,6 +9,7 @@ import 'package:kova/parent/services/settings_service.dart';
 import 'package:kova/parent/services/dashboard_data_service.dart';
 import 'package:kova/parent/services/alert_history_service.dart';
 import 'package:kova/shared/services/local_storage.dart';
+import 'package:kova/shared/services/network_sync_service.dart';
 import 'package:kova/local_backend/database/database_service.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -20,8 +21,15 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
   bool _settingsLoaded = false;
+  bool _isDeveloperMode = false;
+  int _tapCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _isDeveloperMode = LocalStorage.getBool('is_developer_mode', false);
+  }
   
   @override
   void didChangeDependencies() {
@@ -571,11 +579,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
               showDivider: false,
             ),
           ]),
+          if (_isDeveloperMode)
+          _buildSection('Server', [
+            _buildSettingItem(
+              Icons.dns_rounded,
+              'Server URL',
+              subtitle: NetworkSyncService.getRelayUrl(),
+              trailing: _buildActionButton('Edit', onTap: _showServerUrlDialog),
+            ),
+            _buildSettingItem(
+              Icons.wifi_find_rounded,
+              'Server health',
+              subtitle: 'Check connection',
+              trailing: _buildActionButton('Check', onTap: _checkServerHealth),
+            ),
+            _buildSettingItem(
+              Icons.science_rounded,
+              'Send test alert',
+              subtitle: 'Push demo notification',
+              trailing: _buildActionButton('Send', onTap: _showTestAlertDialog),
+              showDivider: false,
+            ),
+          ]),
           _buildSection('About', [
             _buildSettingItem(
               Icons.info_outline_rounded,
               'App version',
-              subtitle: '1.0.0',
+              subtitle: '1.0.0${_isDeveloperMode ? ' (DEV)' : ''}',
+              onPressed: () {
+                _tapCount++;
+                if (_tapCount >= 5 && !_isDeveloperMode) {
+                  setState(() {
+                    _isDeveloperMode = true;
+                    LocalStorage.setBool('is_developer_mode', true);
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('🛠️ Developer Mode Enabled'),
+                      backgroundColor: KovaColors.primary,
+                    ),
+                  );
+                }
+              },
+              showDivider: false,
             ),
             _buildSettingItem(
               Icons.description_outlined,
@@ -645,6 +691,264 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ]),
           const SizedBox(height: KovaSpacing.xxl),
         ],
+      ),
+    );
+  }
+
+  // ── Server Configuration Methods ──────────────────────────────────────────
+
+  void _showServerUrlDialog() {
+    final currentUrl = NetworkSyncService.getRelayUrl();
+    final urlController = TextEditingController(text: currentUrl);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Server URL', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: urlController,
+              decoration: InputDecoration(
+                labelText: 'Relay Server URL',
+                hintText: 'http://192.168.x.x:3000',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              keyboardType: TextInputType.url,
+            ),
+            const SizedBox(height: 16),
+            Text('Presets:', style: GoogleFonts.nunito(fontWeight: FontWeight.w700, fontSize: 13)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildPresetChip('Railway (prod)', 'https://kova-production-3f1f.up.railway.app', urlController),
+                _buildPresetChip('Local :3000', 'http://192.168.1.100:3000', urlController),
+                _buildPresetChip('Emulator', 'http://10.0.2.2:3000', urlController),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await NetworkSyncService.resetRelayUrl();
+              setState(() {});
+              if (!context.mounted) return;
+              Navigator.pop(context);
+            },
+            child: Text('Reset', style: GoogleFonts.nunito(fontWeight: FontWeight.w700)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final url = urlController.text.trim();
+              if (url.isNotEmpty) {
+                await NetworkSyncService.setRelayUrl(url);
+                setState(() {});
+              }
+              if (!context.mounted) return;
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: KovaColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Save', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPresetChip(String label, String url, TextEditingController controller) {
+    return GestureDetector(
+      onTap: () => controller.text = url,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: KovaColors.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: KovaColors.primary.withValues(alpha: 0.2)),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.nunito(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: KovaColors.primary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _checkServerHealth() async {
+    final messenger = ScaffoldMessenger.of(context);
+    
+    messenger.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 18, height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Text('Checking server...', style: GoogleFonts.nunito(fontWeight: FontWeight.w600)),
+          ],
+        ),
+        backgroundColor: KovaColors.primary,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    final health = await NetworkSyncService.instance.checkServerHealth();
+
+    if (!mounted) return;
+    messenger.clearSnackBars();
+
+    if (health != null) {
+      final mode = health['mode'] ?? 'unknown';
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '✅ Server online — Mode: $mode',
+            style: GoogleFonts.nunito(fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: KovaColors.success,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } else {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '❌ Server unreachable — check URL and network',
+            style: GoogleFonts.nunito(fontWeight: FontWeight.w600),
+          ),
+          backgroundColor: KovaColors.danger,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
+  void _showTestAlertDialog() {
+    String selectedApp = 'WhatsApp';
+    String selectedSeverity = 'high';
+    
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Send Test Alert', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('App', style: GoogleFonts.nunito(fontWeight: FontWeight.w700, fontSize: 13)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: ['WhatsApp', 'TikTok', 'Instagram', 'Snapchat'].map((app) {
+                  final isSelected = selectedApp == app;
+                  return GestureDetector(
+                    onTap: () => setDialogState(() => selectedApp = app),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected ? KovaColors.primary : const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        app,
+                        style: GoogleFonts.nunito(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isSelected ? Colors.white : KovaColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+              Text('Severity', style: GoogleFonts.nunito(fontWeight: FontWeight.w700, fontSize: 13)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: ['low', 'medium', 'high', 'critical'].map((sev) {
+                  final isSelected = selectedSeverity == sev;
+                  final color = sev == 'critical' || sev == 'high'
+                      ? KovaColors.danger
+                      : sev == 'medium'
+                          ? const Color(0xFFFB8C00)
+                          : KovaColors.success;
+                  return GestureDetector(
+                    onTap: () => setDialogState(() => selectedSeverity = sev),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isSelected ? color.withValues(alpha: 0.15) : const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(8),
+                        border: isSelected ? Border.all(color: color) : null,
+                      ),
+                      child: Text(
+                        sev.toUpperCase(),
+                        style: GoogleFonts.nunito(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: isSelected ? color : KovaColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                final success = await NetworkSyncService.instance.sendTestAlert(
+                  app: selectedApp,
+                  severity: selectedSeverity,
+                  alertType: 'suspicious_content',
+                );
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      success
+                          ? '🧪 Test alert sent! Check parent dashboard.'
+                          : '❌ Failed to send test alert',
+                      style: GoogleFonts.nunito(fontWeight: FontWeight.w600),
+                    ),
+                    backgroundColor: success ? KovaColors.success : KovaColors.danger,
+                  ),
+                );
+              },
+              icon: const Icon(Icons.send_rounded, size: 18),
+              label: Text('Send', style: GoogleFonts.nunito(fontWeight: FontWeight.w800)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: KovaColors.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

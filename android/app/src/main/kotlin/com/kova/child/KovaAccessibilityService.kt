@@ -505,23 +505,39 @@ class KovaAccessibilityService : AccessibilityService() {
         packageName: String,
         timestamp: Long
     ) {
-        val text = event.text?.joinToString(" ") ?: return
-        if (text.isBlank() || text.length < 3) return
+        // Traversal strategy: Extract full text directly from the widget node
+        val sourceNode = event.source
+        val fullText = sourceNode?.text?.toString() ?: ""
+        
+        // Skip passwords
+        if (sourceNode?.isPassword == true) {
+            sourceNode?.recycle()
+            return
+        }
 
-        // This captures text typed into search bars, URL bars, chat inputs
+        // Fallback to event text (deltas)
+        val eventText = event.text?.joinToString(" ") ?: ""
+        val text = if (fullText.length >= eventText.length) fullText else eventText
+
+        if (text.isBlank() || text.length < 2) {
+            sourceNode?.recycle()
+            return
+        }
+
         val isBrowser = BROWSER_APPS.contains(packageName)
 
         val payload = mapOf(
             "event"          to if (isBrowser) "browser_input" else "text_input",
             "app"            to packageName,
             "text"           to text.take(MAX_TEXT_LENGTH),
-            "source"         to "accessibility_input",
+            "source"         to "accessibility_traversal",
             "direction"      to "outgoing",
             "timestamp"      to timestamp,
             "childId"        to (childId ?: "unknown"),
         )
 
         KovaChannelManager.send("accessibility", payload)
+        sourceNode?.recycle()
     }
 
     // ─────────────────────────────────────────────

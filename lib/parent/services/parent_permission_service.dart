@@ -60,24 +60,26 @@ class ParentPermissionService {
 
   /// Request NEARBY_WIFI_DEVICES and Bluetooth (Android 12+).
   /// Some tablets/OS skins require both to show the "Nearby devices" permission group.
-  static Future<bool> requestNearbyWifi() async {
-    if (!Platform.isAndroid) return true;
-    final sdk = await _getSdkVersion();
-    if (sdk < 31) return true; // Not needed below Android 12
+    // Android 13+ (API 33+) requires NEARBY_WIFI_DEVICES
+    if (sdk >= 33) {
+      final status = await Permission.nearbyWifiDevices.request();
+      if (status.isGranted) return true;
+    } 
     
-    // Request all "Nearby devices" permissions together to satisfy strict OS skins
-    final statuses = await [
-      Permission.nearbyWifiDevices,
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-    ].request();
-    
-    if (statuses[Permission.nearbyWifiDevices] == PermissionStatus.granted ||
-        statuses[Permission.bluetoothScan] == PermissionStatus.granted) {
-      return true;
+    // Android 12 (API 31/32) requires Bluetooth permissions for "Nearby devices"
+    if (sdk >= 31) {
+      final bluetoothStatuses = await [
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+      ].request();
+      
+      if (bluetoothStatuses[Permission.bluetoothScan] == PermissionStatus.granted ||
+          bluetoothStatuses[Permission.bluetoothConnect] == PermissionStatus.granted) {
+        return true;
+      }
     }
 
-    // Denied — open the app's permission settings so user can find "Nearby devices"
+    // Older Androids or denied — open app settings as fallback
     await openAppSettings();
     return false;
   }
@@ -181,24 +183,27 @@ class ParentPermissionService {
   static Future<bool> _isNearbyWifiGranted() async {
     try {
       final sdk = await _getSdkVersion();
-      if (sdk < 31) return true;
       
-      // ── Bug Fix: Check multiple permission sources ─────────────────────────
-      // Some Android skins (MIUI, OneUI) may grant nearby devices via bluetooth
-      // instead of the dedicated nearbyWifiDevices permission
-      final nearbyWifi = await Permission.nearbyWifiDevices.isGranted;
-      final bluetoothScan = await Permission.bluetoothScan.isGranted;
-      final bluetoothConnect = await Permission.bluetoothConnect.isGranted;
-      final location = await Permission.location.isGranted;
+      // Android 13+ check
+      if (sdk >= 33) {
+        if (await Permission.nearbyWifiDevices.isGranted) return true;
+      }
       
-      // Return true if ANY of the related permissions are granted
-      // This handles OEM-specific permission groupings
-      return nearbyWifi || bluetoothScan || bluetoothConnect || location;
+      // Android 12+ check (Bluetooth)
+      if (sdk >= 31) {
+        if (await Permission.bluetoothScan.isGranted || 
+            await Permission.bluetoothConnect.isGranted) return true;
+      }
+      
+      // Fallback: Check location (required for LAN discovery on Android 11 and below)
+      // Also used as a fallback on some OS skins
+      if (await Permission.location.isGranted || 
+          await Permission.locationWhenInUse.isGranted) return true;
+          
+      return false;
     } catch (e) {
       debugPrint('⚠️ Nearby WiFi permission check error: $e');
-      // On error, assume granted to avoid blocking the user
-      // The actual LAN functionality will fail gracefully if truly denied
-      return true;
+      return true; // Don't block user on error
     }
   }
 

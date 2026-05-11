@@ -16,6 +16,7 @@ import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/shared/services/notification_service.dart';
 import 'package:kova/shared/services/network_sync_service.dart';
 import 'package:kova/local_backend/database/database_service.dart';
+import 'package:kova/local_backend/repositories/alert_repository.dart';
 import 'package:kova/child/services/detection_orchestrator.dart';
 
 // App state
@@ -109,6 +110,9 @@ Future<void> main() async {
 
     debugPrint('Running app...');
     runApp(KovaApp(initialMode: appMode));
+    
+    // Check for launch notification after app starts
+    NotificationService.checkForLaunchNotification();
   } catch (e, stackTrace) {
     debugPrint('ERROR during initialization: $e');
     debugPrint('Stack trace: $stackTrace');
@@ -174,6 +178,27 @@ class _KovaAppState extends State<KovaApp> {
   void initState() {
     super.initState();
     _router = buildRouter(widget.initialMode);
+    
+    // Listen for notification clicks (Deep Linking)
+    NotificationService.onNotificationClick.listen((alertId) async {
+      if (alertId != null) {
+        debugPrint('🔗 [NOTIFICATION] Deep link triggered for alertId: $alertId');
+        
+        // Wait a small delay to ensure router is fully initialized if app just launched
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        try {
+          final alert = await AlertRepository().getById(alertId);
+          if (alert != null) {
+            _router.push(AppRoutes.alertDetail, extra: alert);
+          } else {
+            debugPrint('⚠️ [NOTIFICATION] Alert not found in DB: $alertId');
+          }
+        } catch (e) {
+          debugPrint('❌ [NOTIFICATION] Deep link navigation failed: $e');
+        }
+      }
+    });
   }
 
   @override
