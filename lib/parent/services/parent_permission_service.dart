@@ -60,6 +60,11 @@ class ParentPermissionService {
 
   /// Request NEARBY_WIFI_DEVICES and Bluetooth (Android 12+).
   /// Some tablets/OS skins require both to show the "Nearby devices" permission group.
+  static Future<bool> requestNearbyWifi() async {
+    if (!Platform.isAndroid) return true;
+    
+    final sdk = await _getSdkVersion();
+    
     // Android 13+ (API 33+) requires NEARBY_WIFI_DEVICES
     if (sdk >= 33) {
       final status = await Permission.nearbyWifiDevices.request();

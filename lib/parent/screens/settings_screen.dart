@@ -21,6 +21,7 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
+class _SettingsScreenState extends State<SettingsScreen> {
   bool _settingsLoaded = false;
   bool _isDeveloperMode = false;
   int _tapCount = 0;
