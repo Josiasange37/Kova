@@ -171,7 +171,7 @@ class _ParentPermissionScreenState extends State<ParentPermissionScreen>
                 description:
                     'Discover the child device on your local network (LAN). '
                     'Without this, KOVA falls back to a slower internet relay.',
-                required: true,
+                required: false, // Made optional because some Android OS versions hide it
                 granted: _status['nearbyWifi'] ?? false,
                 onGrant: _checkingIndividual ? null : () => _grantIndividual('nearbyWifi'),
               ),

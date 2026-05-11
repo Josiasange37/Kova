@@ -36,11 +36,10 @@ class ParentPermissionService {
     };
   }
 
-  /// True only if every REQUIRED permission is granted.
-  /// Optional permissions (battery, exactAlarm) don't block the app.
   static Future<bool> allRequiredGranted() async {
     final s = await getStatus();
-    return (s['notifications'] ?? false) && (s['nearbyWifi'] ?? false);
+    // Nearby Wi-Fi is optional (falls back to relay if denied/hidden by OS)
+    return (s['notifications'] ?? false);
   }
 
   // ─── Individual Request Methods ───────────────────────────────────────────
