@@ -16,39 +16,50 @@ class SeverityEngine {
     final ctxRisk = (contextScores['grooming_risk'] as num?)?.toDouble() ?? 0.0;
     final escalation = contextScores['escalation'] as bool? ?? false;
 
-    // CRITICAL (stricter)
-    if (sexual > 0.4 ||
-        grooming > 0.5 ||
-        violence > 0.5 ||
-        unsafe > 0.6 ||
-        ctxRisk > 0.6 ||
-        (escalation && ctxRisk > 0.4)) {
+    // CRITICAL (much stricter - only for extreme cases)
+    // Requires BOTH high text score AND context risk, or extremely high single score
+    if ((sexual > 0.7 && ctxRisk > 0.3) ||
+        sexual > 0.85 ||
+        (grooming > 0.6 && ctxRisk > 0.4) ||
+        grooming > 0.8 ||
+        (violence > 0.7 && ctxRisk > 0.3) ||
+        violence > 0.85 ||
+        unsafe > 0.8 ||
+        (ctxRisk > 0.7 && (sexual > 0.3 || grooming > 0.4 || violence > 0.3)) ||
+        (escalation && ctxRisk > 0.6)) {
       return 'critical';
     }
 
-    // HIGH (stricter)
-    if (sexual > 0.2 ||
-        grooming > 0.3 ||
-        violence > 0.3 ||
-        unsafeSubstances > 0.4 ||
-        personalInfo > 0.5 ||
-        ctxRisk > 0.3 ||
-        unsafe > 0.4) {
+    // HIGH (requires stronger evidence)
+    if ((sexual > 0.4 && ctxRisk > 0.2) ||
+        sexual > 0.5 ||
+        (grooming > 0.4 && ctxRisk > 0.25) ||
+        grooming > 0.55 ||
+        (violence > 0.4 && ctxRisk > 0.2) ||
+        violence > 0.5 ||
+        unsafeSubstances > 0.5 ||
+        personalInfo > 0.6 ||
+        (ctxRisk > 0.45 && (sexual > 0.2 || grooming > 0.25 || violence > 0.2)) ||
+        unsafe > 0.55) {
       return 'high';
     }
 
     // MEDIUM
-    if (grooming > 0.15 ||
-        violence > 0.15 ||
-        unsafeSubstances > 0.2 ||
-        personalInfo > 0.3 ||
-        ctxRisk > 0.2 ||
-        unsafe > 0.25) {
+    if ((grooming > 0.25 && ctxRisk > 0.15) ||
+        grooming > 0.35 ||
+        (violence > 0.25 && ctxRisk > 0.15) ||
+        violence > 0.35 ||
+        unsafeSubstances > 0.35 ||
+        personalInfo > 0.4 ||
+        (ctxRisk > 0.3 && (sexual > 0.15 || grooming > 0.2 || violence > 0.15)) ||
+        unsafe > 0.4) {
       return 'medium';
     }
 
-    // LOW
-    if (unsafe > 0.1 || ctxRisk > 0.1) {
+    // LOW (minor concerns only)
+    if ((unsafe > 0.25 && ctxRisk > 0.1) ||
+        (grooming > 0.15 && ctxRisk > 0.15) ||
+        ctxRisk > 0.25) {
       return 'low';
     }
 

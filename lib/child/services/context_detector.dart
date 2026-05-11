@@ -80,50 +80,52 @@ class ContextDetector {
     final hasTrustBuilding = _hasTrustBuilding(fullText);
     final hasPersonalInfo = _hasPersonalInfoRequest(fullText);
 
+    // Individual pattern risks (reduced to prevent false positives)
     if (hasPhotoRequest) {
-      risk += 0.25;
+      risk += 0.10;  // Was 0.25 - reduced
       indicators.add('photo_request');
     }
     if (hasSecrecy) {
-      risk += 0.35;
+      risk += 0.15;  // Was 0.35 - reduced significantly
       indicators.add('secrecy_request');
     }
     if (hasIsolation) {
-      risk += 0.20;
+      risk += 0.10;  // Was 0.20 - reduced
       indicators.add('isolation_tactic');
     }
     if (hasMeeting) {
-      risk += 0.30;
+      risk += 0.15;  // Was 0.30 - reduced
       indicators.add('meeting_request');
     }
     if (hasTrustBuilding) {
-      risk += 0.15;
+      risk += 0.08;  // Was 0.15 - reduced
       indicators.add('trust_building');
     }
     if (hasPersonalInfo) {
-      risk += 0.20;
+      risk += 0.10;  // Was 0.20 - reduced
       indicators.add('personal_info_request');
     }
 
     // Pattern 2: Combination detection (most dangerous)
     String pattern = 'none';
     
+    // Combination risks (reduced - only truly dangerous combos get high risk)
     if (hasPhotoRequest && hasSecrecy) {
-      risk += 0.35; // Critical combination
+      risk += 0.20; // Was 0.35 - reduced
       pattern = 'grooming_photo_secrecy';
-      indicators.add('CRITICAL_COMBO: photo + secrecy');
+      indicators.add('COMBO: photo + secrecy');
     } else if (hasSecrecy && hasMeeting) {
-      risk += 0.30;
+      risk += 0.18; // Was 0.30 - reduced
       pattern = 'grooming_secrecy_meeting';
-      indicators.add('HIGH_RISK: secrecy + meeting');
+      indicators.add('COMBO: secrecy + meeting');
     } else if (hasPhotoRequest && hasMeeting) {
-      risk += 0.25;
+      risk += 0.15; // Was 0.25 - reduced
       pattern = 'photo_meeting';
-      indicators.add('HIGH_RISK: photo + meeting');
+      indicators.add('COMBO: photo + meeting');
     } else if (hasSecrecy && hasIsolation) {
-      risk += 0.25;
+      risk += 0.15; // Was 0.25 - reduced
       pattern = 'isolation_grooming';
-      indicators.add('isolation_secrecy_pattern');
+      indicators.add('COMBO: isolation + secrecy');
     } else if (hasPhotoRequest) {
       pattern = 'photo_request';
     } else if (hasSecrecy) {

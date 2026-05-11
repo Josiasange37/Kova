@@ -335,9 +335,18 @@ class KovaForegroundService : Service() {
 
         val (pkg, reason, expiry) = activeBlock
 
-        // Block is still active but overlay is NOT showing
+        // CRITICAL FIX: Only relaunch if user is actually in the blocked app
+        // If they switched to another app, don't force them back to the overlay
+        val currentApp = KovaAccessibilityService.currentForegroundPackage
+        if (currentApp != pkg) {
+            // User switched away from blocked app - don't relaunch overlay
+            // The block timer will continue counting down, but user can use other apps
+            return
+        }
+
+        // Block is still active AND user is in blocked app, but overlay is NOT showing
         if (!BlockOverlayActivity.isOverlayActive) {
-            Log.w(TAG, "[OVERLAY WATCHDOG] Block active for $pkg but overlay is dead — re-launching!")
+            Log.w(TAG, "[OVERLAY WATCHDOG] Block active for $pkg, user in app, overlay dead — re-launching!")
             launchBlockOverlay(pkg, reason)
         }
     }

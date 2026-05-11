@@ -219,9 +219,11 @@ class DetectionOrchestrator {
       contextScores: contextResult,
     );
 
-    if (kDebugMode) {
-      debugPrint('🔍 [$app] dir=$direction severity=$severity text=${textScores['unsafe']?.toStringAsFixed(2)} ctx=${contextResult['grooming_risk']?.toStringAsFixed(2)}');
-    }
+    // Always log detection details (not just in debug mode)
+    debugPrint('🔍 [$app] dir=$direction severity=$severity text=${textScores['unsafe']?.toStringAsFixed(2)} ctx=${contextResult['grooming_risk']?.toStringAsFixed(2)}');
+    debugPrint('   └─ sexual=${textScores['sexual']?.toStringAsFixed(2)} grooming=${textScores['grooming']?.toStringAsFixed(2)} violence=${textScores['violence']?.toStringAsFixed(2)}');
+    debugPrint('   └─ ctxPattern=${contextResult['pattern']} indicators=${contextResult['indicators']}');
+    debugPrint('   └─ contentPreview: "${text.length > 50 ? '${text.substring(0, 50)}...' : text}"');
 
     // Skip safe content
     if (severity == 'safe') return;

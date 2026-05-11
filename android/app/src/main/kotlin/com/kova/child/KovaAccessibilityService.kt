@@ -64,6 +64,11 @@ class KovaAccessibilityService : AccessibilityService() {
         var instance: KovaAccessibilityService? = null
             private set
 
+        // Current foreground app tracking (for overlay watchdog)
+        @Volatile
+        var currentForegroundPackage: String = ""
+            private set
+
         // ═══════════════════════════════════════════
         // ALL monitored apps — messaging + social + browsers
         // ═══════════════════════════════════════════
@@ -272,6 +277,7 @@ class KovaAccessibilityService : AccessibilityService() {
         if (packageName != currentForegroundApp || className != currentWindowClass) {
             currentForegroundApp = packageName
             currentWindowClass = className
+            currentForegroundPackage = packageName  // Update companion for watchdog access
 
             val isMonitored = isAppMonitored(packageName)
             val isBrowser = BROWSER_APPS.contains(packageName)
