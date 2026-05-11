@@ -4,6 +4,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' show min;
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
@@ -166,7 +167,12 @@ class NetworkSyncService {
 
     // If parent, start LAN server immediately and poll Railway relay
     if (role == 'parent') {
-      await _lanData.startServer(_pairToken);
+      final serverStarted = await _lanData.startServer(_pairToken);
+      if (serverStarted) {
+        debugPrint('✅ [NETWORK SYNC] Parent LAN server started successfully');
+      } else {
+        debugPrint('❌ [NETWORK SYNC] Parent LAN server failed to start - alerts will use Railway only');
+      }
       _startPolling();
     } else {
       _startSyncLoop();
@@ -746,17 +752,21 @@ class NetworkSyncService {
         debugPrint('✅ [RELAY] Alert delivered successfully');
         _relayConsecutive404s = 0; // Reset on success
         return true;
-      } else if (response.statusCode == 404 && response.body.contains('DEPLOYMENT_NOT_FOUND')) {
-        // Specific Railway deployment error — trip circuit breaker
+      } else if (response.statusCode == 404) {
+        // 404 = Server is up but endpoint not found OR Railway deployment not found
         _relayConsecutive404s++;
-        debugPrint('⚠️ [RELAY] DEPLOYMENT_NOT_FOUND ($_relayConsecutive404s/$_relayCircuitThreshold)');
+        final bodyPreview = response.body.length > 100 ? '${response.body.substring(0, 100)}...' : response.body;
+        debugPrint('⚠️ [RELAY] 404 Not Found ($_relayConsecutive404s/$_relayCircuitThreshold)');
+        debugPrint('   └─ Response: $bodyPreview');
+        debugPrint('   └─ URL: $_relayBaseUrl/api/alert/push');
         if (_relayConsecutive404s >= _relayCircuitThreshold) {
           _relayCircuitOpenedAt = DateTime.now();
-          debugPrint('🔌 [RELAY] Circuit breaker OPENED — pausing relay for ${_relayCircuitCooldown.inMinutes} minutes');
+          debugPrint('🔌 [RELAY] Circuit breaker OPENED — server may be down or not deployed');
         }
         return false;
       } else {
         debugPrint('❌ [RELAY] Server error: ${response.statusCode}');
+        debugPrint('   └─ Response: ${response.body.substring(0, min(100, response.body.length))}');
         return false;
       }
     } on TimeoutException {

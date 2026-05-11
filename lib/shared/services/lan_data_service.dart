@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show min;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -92,8 +93,11 @@ class LanDataService {
   }
 
   /// Start TCP server to accept parent connections
-  Future<void> startServer([String pairToken = '']) async {
-    if (_isServerRunning) return;
+  Future<bool> startServer([String pairToken = '']) async {
+    if (_isServerRunning) {
+      debugPrint('🔌 [LAN] Server already running on port $_port');
+      return true;
+    }
     if (pairToken.isNotEmpty) {
       _pairToken = pairToken;
     }
@@ -102,17 +106,30 @@ class LanDataService {
     try {
       _server = await ServerSocket.bind(InternetAddress.anyIPv4, _port, shared: true);
       _isServerRunning = true;
-      debugPrint('✅ [LAN] Parent TCP server listening on port $_port');
+      debugPrint('✅ [LAN SERVER] TCP server listening on 0.0.0.0:$_port (all interfaces)');
+      debugPrint('   └─ Pair token: ${_pairToken.substring(0, min(8, _pairToken.length))}...');
 
       _server!.listen(
         (socket) {
-           debugPrint('✅ [LAN SERVER] Client connected: ${socket.remoteAddress}');
+           debugPrint('✅ [LAN SERVER] Client connected from ${socket.remoteAddress.address}:${socket.remotePort}');
            _handleIncomingConnection(socket);
         },
-        onError: (e) => print('❌ LAN Server error: $e'),
+        onError: (e) {
+          debugPrint('❌ [LAN SERVER] Error: $e');
+          _isServerRunning = false;
+        },
+        onDone: () {
+          debugPrint('🔌 [LAN SERVER] Server socket closed');
+          _isServerRunning = false;
+        },
       );
+      return true;
+    } on SocketException catch (e) {
+      debugPrint('❌ [LAN SERVER] Socket error: ${e.message} (port $_port may be in use)');
+      return false;
     } catch (e) {
-      print('❌ LAN Server start failed: $e');
+      debugPrint('❌ [LAN SERVER] Start failed: $e');
+      return false;
     }
   }
 
