@@ -81,6 +81,13 @@ class DashboardDataService extends ChangeNotifier {
     return avgScore.toInt();
   }
 
+  double get avgAiScore {
+    if (_alerts == null || _alerts!.isEmpty) return 0.0;
+    final totalScore = _alerts!.fold<double>(0.0, (sum, alert) => 
+        sum + (alert.scoreText + alert.scoreImage + alert.scoreGrooming) / 3);
+    return (totalScore / _alerts!.length * 100);
+  }
+
   bool get hasAlerts => alertCount > 0;
 
   /// Initialize and start listening for remote alerts

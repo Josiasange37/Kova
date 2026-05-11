@@ -125,7 +125,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         final children = service.children ?? [];
         final activeChild = service.activeChild;
         final hasAlerts = service.hasAlerts;
-        final safetyScore = service.safetyScore;
+        final avgAiScore = service.avgAiScore;
         final alertCount = service.alertCount;
         final parentName = (service.parentName?.isNotEmpty ?? false)
             ? service.parentName!
@@ -212,7 +212,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     child: _buildChildCard(
                       child: activeChild!,
                       hasAlerts: hasAlerts,
-                      safetyScore: safetyScore,
+                      safetyScore: avgAiScore.toInt(),
                       alertCount: alertCount,
                     ),
                   ),
@@ -238,7 +238,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                         child: _buildChildCard(
                           child: child,
                           hasAlerts: childHasAlerts,
-                          safetyScore: child.score,
+                          safetyScore: childAlerts.isEmpty ? 0 : 
+                            ((childAlerts.map((a) => (a.scoreText + a.scoreImage + a.scoreGrooming) / 3).reduce((a, b) => a + b) / childAlerts.length) * 100).toInt(),
                           alertCount: childAlertCount,
                         ),
                       ),
@@ -487,7 +488,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 ),
               ),
               Text(
-                '/100',
+                ' AI Score',
                 style: GoogleFonts.nunito(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,

@@ -178,7 +178,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen>
 
     // Calculate stats from filtered alerts
     final totalAlerts = filteredAlerts.length;
-    final blocksCount = filteredAlerts.where((a) => a.resolved).length;
+    final blocksCount = filteredAlerts.where((a) => a.severity == 'critical').length;
     final avgScore = totalAlerts == 0
         ? 0
         : ((filteredAlerts
