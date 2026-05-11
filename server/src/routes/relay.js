@@ -15,7 +15,7 @@ const MAX_STORED_HISTORY = 50;
 // ── Alert Relay ────────────────────────────────────────────────────────────
 
 // POST /api/alert/push - Child pushes alert to relay
-router.post('/alert/push', (req, res) => {
+router.post('/push', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
@@ -33,7 +33,7 @@ router.post('/alert/push', (req, res) => {
 });
 
 // GET /api/alert/poll - Parent polls for alerts
-router.get('/alert/poll', (req, res) => {
+router.get('/poll', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
@@ -44,7 +44,7 @@ router.get('/alert/poll', (req, res) => {
 // ── History Relay ─────────────────────────────────────────────────────────
 
 // POST /api/history/push - Parent pushes history to relay
-router.post('/history/push', (req, res) => {
+router.post('/push', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
@@ -61,7 +61,7 @@ router.post('/history/push', (req, res) => {
 });
 
 // GET /api/history/poll - Child polls for history
-router.get('/history/poll', (req, res) => {
+router.get('/poll', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
@@ -72,7 +72,7 @@ router.get('/history/poll', (req, res) => {
 // ── Acknowledgment Relay ─────────────────────────────────────────────────
 
 // POST /api/ack/push - Child pushes ack to relay
-router.post('/ack/push', (req, res) => {
+router.post('/push', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
@@ -86,7 +86,7 @@ router.post('/ack/push', (req, res) => {
 });
 
 // GET /api/ack/poll - Parent polls for acks
-router.get('/ack/poll', (req, res) => {
+router.get('/poll', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
@@ -97,7 +97,7 @@ router.get('/ack/poll', (req, res) => {
 // ── Child Profile Relay ───────────────────────────────────────────────────
 
 // POST /api/child/register - Child registers profile
-router.post('/child/register', (req, res) => {
+router.post('/register', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
@@ -109,7 +109,7 @@ router.post('/child/register', (req, res) => {
 });
 
 // GET /api/child/profile - Parent gets child profile
-router.get('/child/profile', (req, res) => {
+router.get('/profile', (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Missing token' });
 
