@@ -1,5 +1,5 @@
 // shared/services/network_sync_service.dart — Central network coordinator
-// Manages both LAN (direct TCP) and Internet (Vercel relay) channels.
+// Manages both LAN (direct TCP) and Internet (Railway relay) channels.
 // Priority: LAN > Internet. Falls back automatically.
 
 import 'dart:async';
@@ -105,7 +105,7 @@ class NetworkSyncService {
       StreamController<WebHistory>.broadcast();
 
   // ─── Pairing Complete Stream ──────────────────────────────────────────────
-  // Fires immediately when pairing succeeds (LAN or Vercel). Both parent and
+  // Fires immediately when pairing succeeds (LAN or Railway). Both parent and
   // child subscribe to this to navigate simultaneously instead of polling.
   final _pairingCompleteController = StreamController<Map<String, dynamic>>.broadcast();
 
@@ -164,7 +164,7 @@ class NetworkSyncService {
     // Listen for LAN device discovery
     _deviceFoundSub = _lanDiscovery.onDeviceFound.listen(_handleDeviceFound);
 
-    // If parent, start LAN server immediately and poll Vercel relay
+    // If parent, start LAN server immediately and poll Railway relay
     if (role == 'parent') {
       await _lanData.startServer(_pairToken);
       _startPolling();
@@ -185,7 +185,7 @@ class NetworkSyncService {
               debugPrint('⚠️ [NETWORK SYNC] Failed to reconnect to parent via LAN on startup');
             }
           } catch (e) {
-            print('⚠️ LAN reconnect failed, will use Vercel: $e');
+            print('⚠️ LAN reconnect failed, will use Railway: $e');
           }
         }
       }
@@ -250,10 +250,10 @@ class NetworkSyncService {
   }
 
   // ─────────────────────────────────────────────
-  // Pairing (Vercel-based)
+  // Pairing (Railway-based)
   // ─────────────────────────────────────────────
 
-  /// Register a pairing code with the Vercel relay (parent side)
+  /// Register a pairing code with the Railway relay (parent side)
   Future<bool> registerPairingCode(String code) async {
     _lanDiscovery.setActivePairCode(code); // For offline LAN discovery
 
@@ -356,7 +356,7 @@ class NetworkSyncService {
         debugPrint('✅ [LAN] TCP data channel established');
         _updateState(NetworkConnectionState.lan);
       } else {
-        debugPrint('❌ [LAN] TCP connect failed — alerts will use Vercel');
+        debugPrint('❌ [LAN] TCP connect failed — alerts will use Railway');
         _updateState(NetworkConnectionState.internet);
       }
 
@@ -393,16 +393,16 @@ class NetworkSyncService {
       return _pairToken;
     }
 
-    // 3. Fallback to Vercel relay with cold-start mitigation
+    // 3. Fallback to Railway relay with cold-start mitigation
     try {
-      // ─── Pre-warm Vercel to avoid cold start ────────────────────────────────
+      // ─── Pre-warm Railway to avoid cold start ────────────────────────────────
       // Send a lightweight GET ping 1 second before the real POST to wake up
       // the serverless function. This reduces latency from 5-10s to <500ms.
       unawaited(Future.delayed(const Duration(seconds: 1), () async {
         try {
           await http.get(Uri.parse('$_relayBaseUrl/api/pair/ping'))
               .timeout(const Duration(seconds: 3));
-          print('🔥 Vercel pre-warmed');
+          print('🔥 Railway pre-warmed');
         } catch (e) {
           // Ignore errors — pre-warming is best-effort
         }
@@ -434,12 +434,12 @@ class NetworkSyncService {
 
         // ─── Notify both screens simultaneously ───────────────────────────────
         _pairingCompleteController.add({
-          'method': 'vercel',
+          'method': 'railway',
           'pairToken': token,
           'role': 'child',
         });
 
-        print('🔗 Pairing claimed via Vercel relay!');
+        print('🔗 Pairing claimed via Railway relay!');
         return token;
       } else {
         print('❌ Claim failed: ${response.body}');
@@ -509,7 +509,7 @@ class NetworkSyncService {
 
           // ─── Notify both screens immediately ─────────────────────────────────
           _pairingCompleteController.add({
-            'method': 'vercel',
+            'method': 'railway',
             'pairToken': token,
             'role': 'parent',
           });
@@ -649,16 +649,16 @@ class NetworkSyncService {
       return;
     }
 
-    // ── Vercel relay fallback ──────────────────────────────
+    // ── Railway relay fallback ──────────────────────────────
     if (!delivered) {
-      debugPrint('🌐 [PUSH ALERT] Trying Vercel relay...');
+      debugPrint('🌐 [PUSH ALERT] Trying Railway relay...');
       try {
         delivered = await _pushAlertToRelay(alert, itemId);
         debugPrint(delivered
-            ? '✅ [PUSH ALERT] Vercel delivery SUCCESS'
-            : '❌ [PUSH ALERT] Vercel delivery FAILED');
+            ? '✅ [PUSH ALERT] Railway delivery SUCCESS'
+            : '❌ [PUSH ALERT] Railway delivery FAILED');
       } catch (e) {
-        debugPrint('❌ [PUSH ALERT] Vercel exception: $e');
+        debugPrint('❌ [PUSH ALERT] Railway exception: $e');
       }
     }
 
@@ -684,7 +684,7 @@ class NetworkSyncService {
     }
   }
 
-  /// Push alert summary to Vercel relay
+  /// Push alert summary to Railway relay
   /// Returns true if the relay accepted the alert (HTTP 201)
   Future<bool> _pushAlertToRelay(NetworkAlertSummary alert, [String? itemId]) async {
     // ── Bug Fix #2: Relay circuit breaker ────────────────────────────────────
@@ -747,7 +747,7 @@ class NetworkSyncService {
         _relayConsecutive404s = 0; // Reset on success
         return true;
       } else if (response.statusCode == 404 && response.body.contains('DEPLOYMENT_NOT_FOUND')) {
-        // Specific Vercel deployment error — trip circuit breaker
+        // Specific Railway deployment error — trip circuit breaker
         _relayConsecutive404s++;
         debugPrint('⚠️ [RELAY] DEPLOYMENT_NOT_FOUND ($_relayConsecutive404s/$_relayCircuitThreshold)');
         if (_relayConsecutive404s >= _relayCircuitThreshold) {
@@ -760,7 +760,7 @@ class NetworkSyncService {
         return false;
       }
     } on TimeoutException {
-      debugPrint('❌ [RELAY] Timeout — Vercel not responding');
+      debugPrint('❌ [RELAY] Timeout — Railway not responding');
       return false;
     } catch (e) {
       debugPrint('❌ [RELAY] Exception: $e');
@@ -818,7 +818,7 @@ class NetworkSyncService {
   // ─────────────────────────────────────────────
 
   Future<void> pushHistory(WebHistory history, [String? itemId]) async {
-    // We only push history to Vercel Relay for MVP, 
+    // We only push history to Railway Relay for MVP, 
     // unless LAN data allows it. LAN is skipped for history right now, 
     // but could be added later.
     if (_pairToken.isEmpty) return;
@@ -1084,7 +1084,7 @@ class NetworkSyncService {
         
         _consecutiveFailures = 0;
       } else if (response.statusCode == 404 && response.body.contains('DEPLOYMENT_NOT_FOUND')) {
-        // Specific Vercel deployment error — trip circuit breaker
+        // Specific Railway deployment error — trip circuit breaker
         _relayConsecutive404s++;
         debugPrint('⚠️ [RELAY] POLL DEPLOYMENT_NOT_FOUND ($_relayConsecutive404s/$_relayCircuitThreshold)');
         if (_relayConsecutive404s >= _relayCircuitThreshold) {
