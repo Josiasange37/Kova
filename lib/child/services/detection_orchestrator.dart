@@ -281,8 +281,10 @@ class DetectionOrchestrator {
       createdAt: DateTime.now(),
     ));
 
-    // Show notification
-    await _showAlertNotification(appKey, severity, alertId, text);
+    // Show notification only for medium+ severity (not low)
+    if (severity != 'low' && severity != 'safe') {
+      await _showAlertNotification(appKey, severity, alertId, text);
+    }
 
     // For critical only: await delivery BEFORE blocking so crash can't kill the alert
     // HIGH severity also gets immediate sync but no blocking overlay
@@ -425,7 +427,10 @@ class DetectionOrchestrator {
       createdAt: DateTime.now(),
     ));
 
-    await _showAlertNotification(appKey, severity, alertId, 'Conversation batch');
+    // Show notification only for medium+ severity (not low)
+    if (severity != 'low' && severity != 'safe') {
+      await _showAlertNotification(appKey, severity, alertId, 'Conversation batch');
+    }
 
     // For critical/high: await delivery BEFORE blocking so crash can't kill the alert
     if (severity == 'critical' || severity == 'high') {

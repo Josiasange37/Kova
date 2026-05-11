@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:kova/core/app_mode.dart';
 import 'package:kova/core/constants.dart';
 import 'dart:math';
 
@@ -19,6 +20,8 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
   late Animation<double> _detailsFade;
   late Animation<double> _previewFade;
   late Animation<double> _actionsFade;
+
+  bool _contentUnlocked = false;
 
   @override
   void initState() {
@@ -48,13 +51,17 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
     super.dispose();
   }
 
-  void _showPinDialog() {
-    showModalBottomSheet(
+  void _showPinDialog() async {
+    final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => const _PinEntrySheet(),
     );
+
+    if (result == true && mounted) {
+      setState(() => _contentUnlocked = true);
+    }
   }
 
   @override
@@ -361,6 +368,68 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
   // ──  Content Preview
   // ═══════════════════════════════════════════
   Widget _buildContentPreview() {
+    // If unlocked, show actual content
+    if (_contentUnlocked) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Content preview',
+            style: GoogleFonts.nunito(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: KovaColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Actual content card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: KovaColors.cardWhite,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: KovaColors.divider),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.visibility_rounded,
+                      size: 20,
+                      color: KovaColors.success,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Content unlocked',
+                      style: GoogleFonts.nunito(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: KovaColors.success,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Message content preview would be shown here. This includes the text that triggered the alert detection system.',
+                  style: GoogleFonts.nunito(
+                    fontSize: 14,
+                    color: KovaColors.textPrimary,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Locked state - require PIN
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -615,15 +684,33 @@ class _PinEntrySheet extends StatefulWidget {
 class _PinEntrySheetState extends State<_PinEntrySheet> {
   String _pin = '';
   static const int _pinLength = 4;
+  bool _error = false;
+  bool _verifying = false;
 
-  void _onDigit(String digit) {
-    if (_pin.length < _pinLength) {
-      setState(() => _pin += digit);
+  void _onDigit(String digit) async {
+    if (_pin.length < _pinLength && !_verifying) {
+      setState(() {
+        _pin += digit;
+        _error = false;
+      });
+
       if (_pin.length == _pinLength) {
-        // Simulate PIN verification
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) context.pop();
-        });
+        setState(() => _verifying = true);
+
+        // Actual PIN verification
+        final isValid = await AppModeManager.verifyPin(_pin);
+
+        if (mounted) {
+          if (isValid) {
+            context.pop(true); // Return true for successful verification
+          } else {
+            setState(() {
+              _pin = '';
+              _error = true;
+              _verifying = false;
+            });
+          }
+        }
       }
     }
   }
@@ -681,16 +768,40 @@ class _PinEntrySheetState extends State<_PinEntrySheet> {
                 height: 16,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: isFilled ? KovaColors.primary : Colors.transparent,
+                  color: isFilled ? (_error ? KovaColors.danger : KovaColors.primary) : Colors.transparent,
                   border: Border.all(
-                    color: isFilled ? KovaColors.primary : KovaColors.divider,
+                    color: isFilled ? (_error ? KovaColors.danger : KovaColors.primary) : KovaColors.divider,
                     width: 2,
                   ),
                 ),
               );
             }),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 12),
+
+          // Error message
+          if (_error)
+            Text(
+              'Incorrect PIN. Try again.',
+              style: GoogleFonts.nunito(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: KovaColors.danger,
+              ),
+            )
+          else if (_verifying)
+            Text(
+              'Verifying...',
+              style: GoogleFonts.nunito(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: KovaColors.textSecondary,
+              ),
+            )
+          else
+            const SizedBox(height: 20),
+
+          const SizedBox(height: 8),
 
           // Number pad
           _buildNumberPad(),

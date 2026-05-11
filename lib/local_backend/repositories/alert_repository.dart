@@ -145,7 +145,7 @@ class AlertRepository {
     String? childId,
     bool? read,
     String? severity,
-    int limit = 50,
+    int limit = 500,  // Increased from 50 to show more alerts
     int offset = 0,
   }) async {
     final db = await _db.database;

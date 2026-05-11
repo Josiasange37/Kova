@@ -56,10 +56,9 @@ class SeverityEngine {
       return 'medium';
     }
 
-    // LOW (minor concerns only)
-    if ((unsafe > 0.25 && ctxRisk > 0.1) ||
-        (grooming > 0.15 && ctxRisk > 0.15) ||
-        ctxRisk > 0.25) {
+    // LOW (minor concerns only - very lenient threshold)
+    // Require BOTH unsafe text AND context risk to avoid false positives
+    if (unsafe > 0.35 && ctxRisk > 0.2) {
       return 'low';
     }
 
@@ -89,7 +88,7 @@ class SeverityEngine {
       'critical' => -20,
       'high' => -10,
       'medium' => -5,
-      'low' => -2,
+      'low' => -1,  // Minimal impact for low severity
       _ => 0,
     };
   }
