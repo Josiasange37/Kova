@@ -28,7 +28,7 @@ class DatabaseService {
     final path = join(dbPath, 'kova_local.db');
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createTables,
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -40,6 +40,9 @@ class DatabaseService {
               created_at      INTEGER DEFAULT (strftime('%s','now'))
             )
           ''');
+        }
+        if (oldVersion < 3) {
+          await db.execute('ALTER TABLE alerts ADD COLUMN content_preview TEXT');
         }
       },
     );
@@ -89,6 +92,7 @@ class DatabaseService {
         score_text      REAL DEFAULT 0.0,
         score_image     REAL DEFAULT 0.0,
         score_grooming  REAL DEFAULT 0.0,
+        content_preview TEXT,
         read            INTEGER DEFAULT 0,
         resolved        INTEGER DEFAULT 0,
         created_at      INTEGER DEFAULT (strftime('%s','now')),

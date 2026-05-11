@@ -14,6 +14,7 @@ class AlertModel {
   final double scoreText;
   final double scoreImage;
   final double scoreGrooming;
+  final String? contentPreview;
   final bool read;
   final bool resolved;
   final DateTime createdAt;
@@ -27,6 +28,7 @@ class AlertModel {
     required this.scoreText,
     required this.scoreImage,
     required this.scoreGrooming,
+    this.contentPreview,
     required this.read,
     required this.resolved,
     required this.createdAt,
@@ -42,6 +44,7 @@ class AlertModel {
       scoreText: (map['score_text'] as num? ?? 0).toDouble(),
       scoreImage: (map['score_image'] as num? ?? 0).toDouble(),
       scoreGrooming: (map['score_grooming'] as num? ?? 0).toDouble(),
+      contentPreview: map['content_preview'] as String?,
       read: (map['read'] as int? ?? 0) == 1,
       resolved: (map['resolved'] as int? ?? 0) == 1,
       createdAt: DateTime.fromMillisecondsSinceEpoch(
@@ -59,6 +62,7 @@ class AlertModel {
     'score_text': scoreText,
     'score_image': scoreImage,
     'score_grooming': scoreGrooming,
+    'content_preview': contentPreview,
     'read': read ? 1 : 0,
     'resolved': resolved ? 1 : 0,
     'created_at': createdAt.millisecondsSinceEpoch,
@@ -73,6 +77,7 @@ class AlertModel {
     double? scoreText,
     double? scoreImage,
     double? scoreGrooming,
+    String? contentPreview,
     bool? read,
     bool? resolved,
     DateTime? createdAt,
@@ -86,6 +91,7 @@ class AlertModel {
       scoreText: scoreText ?? this.scoreText,
       scoreImage: scoreImage ?? this.scoreImage,
       scoreGrooming: scoreGrooming ?? this.scoreGrooming,
+      contentPreview: contentPreview ?? this.contentPreview,
       read: read ?? this.read,
       resolved: resolved ?? this.resolved,
       createdAt: createdAt ?? this.createdAt,
@@ -119,6 +125,7 @@ class AlertRepository {
     required double scoreText,
     required double scoreImage,
     required double scoreGrooming,
+    String? contentPreview,
   }) async {
     final db = await _db.database;
     final id = const Uuid().v4();
@@ -132,6 +139,7 @@ class AlertRepository {
       'score_text': scoreText,
       'score_image': scoreImage,
       'score_grooming': scoreGrooming,
+      'content_preview': contentPreview,
       'read': 0,
       'resolved': 0,
       'created_at': DateTime.now().millisecondsSinceEpoch,

@@ -250,6 +250,7 @@ class DetectionOrchestrator {
           scoreText: textScores['unsafe'] ?? 0.0,
           scoreImage: 0.0,
           scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+          contentPreview: text.length > 200 ? '${text.substring(0, 200)}...' : text,
         );
         break; // Success
       } catch (e) {
@@ -276,6 +277,7 @@ class DetectionOrchestrator {
       scoreText: textScores['unsafe'] ?? 0.0,
       scoreImage: 0.0,
       scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+      contentPreview: text.length > 200 ? '${text.substring(0, 200)}...' : text,
       read: false,
       resolved: false,
       createdAt: DateTime.now(),
@@ -405,6 +407,9 @@ class DetectionOrchestrator {
       scoreText: batchResult['unsafe'] ?? 0.0,
       scoreImage: 0.0,
       scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+      contentPreview: texts.take(3).join(' | ').length > 200
+          ? '${texts.take(3).join(' | ').substring(0, 200)}...'
+          : texts.take(3).join(' | '),
     );
 
     // CRITICAL FIX: Check _childId is not null before using
@@ -422,6 +427,9 @@ class DetectionOrchestrator {
       scoreText: batchResult['unsafe'] ?? 0.0,
       scoreImage: 0.0,
       scoreGrooming: (contextResult['grooming_risk'] as num?)?.toDouble() ?? 0.0,
+      contentPreview: texts.take(3).join(' | ').length > 200
+          ? '${texts.take(3).join(' | ').substring(0, 200)}...'
+          : texts.take(3).join(' | '),
       read: false,
       resolved: false,
       createdAt: DateTime.now(),

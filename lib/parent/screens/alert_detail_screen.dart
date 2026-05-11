@@ -4,10 +4,14 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/app_mode.dart';
 import 'package:kova/core/constants.dart';
+import 'package:kova/local_backend/repositories/alert_repository.dart';
+import 'package:kova/parent/services/app_control_service.dart';
 import 'dart:math';
 
 class AlertDetailScreen extends StatefulWidget {
-  const AlertDetailScreen({super.key});
+  final AlertModel alert;
+
+  const AlertDetailScreen({super.key, required this.alert});
 
   @override
   State<AlertDetailScreen> createState() => _AlertDetailScreenState();
@@ -121,14 +125,14 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
                           opacity: _bannerFade.value,
                           child: Row(
                             children: [
-                              const Icon(
-                                Icons.music_note_rounded,
+                              Icon(
+                                _getAppIcon(widget.alert.app),
                                 size: 16,
                                 color: KovaColors.textSecondary,
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                'TikTok • Today at 14:32',
+                                '${_capitalize(widget.alert.app)} • ${_formatTime(widget.alert.createdAt)}',
                                 style: GoogleFonts.nunito(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
@@ -244,15 +248,15 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
-                color: KovaColors.danger.withValues(alpha: 0.1),
+                color: _getSeverityColor(widget.alert.severity).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                'Suspicious content',
+                widget.alert.severity.toUpperCase(),
                 style: GoogleFonts.nunito(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: KovaColors.danger,
+                  color: _getSeverityColor(widget.alert.severity),
                 ),
               ),
             ),
@@ -283,17 +287,17 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
                 height: 72,
                 child: CustomPaint(
                   painter: _ScoreRingPainter(
-                    score: 0.87,
-                    color: KovaColors.danger,
-                    bgColor: KovaColors.danger.withValues(alpha: 0.1),
+                    score: widget.alert.scoreText,
+                    color: _getSeverityColor(widget.alert.severity),
+                    bgColor: _getSeverityColor(widget.alert.severity).withValues(alpha: 0.1),
                   ),
                   child: Center(
                     child: Text(
-                      '87%',
+                      '${(widget.alert.scoreText * 100).round()}%',
                       style: GoogleFonts.nunito(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
-                        color: KovaColors.danger,
+                        color: _getSeverityColor(widget.alert.severity),
                       ),
                     ),
                   ),
@@ -415,7 +419,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Message content preview would be shown here. This includes the text that triggered the alert detection system.',
+                  widget.alert.contentPreview ?? 'No content preview available',
                   style: GoogleFonts.nunito(
                     fontSize: 14,
                     color: KovaColors.textPrimary,
@@ -528,7 +532,9 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
           ),
           const SizedBox(height: 2),
           Text(
-            'TikTok automatically blocked — 20 min',
+            widget.alert.resolved
+                ? '${_capitalize(widget.alert.app)} was blocked — resolved'
+                : '${_capitalize(widget.alert.app)} automatically blocked — 20 min',
             style: GoogleFonts.nunito(
               fontSize: 12,
               fontWeight: FontWeight.w500,
@@ -546,38 +552,39 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
   Widget _buildActionButtons() {
     return Column(
       children: [
-        // Unblock now
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: OutlinedButton(
-            onPressed: () {},
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(
-                color: KovaColors.textPrimary.withValues(alpha: 0.3),
+        // Unblock now (only if blocked)
+        if (!widget.alert.resolved)
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton(
+              onPressed: () => _showActionPinDialog('unblock'),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(
+                  color: KovaColors.textPrimary.withValues(alpha: 0.3),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(KovaRadius.pill),
+                ),
               ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(KovaRadius.pill),
-              ),
-            ),
-            child: Text(
-              'Unblock now',
-              style: GoogleFonts.nunito(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: KovaColors.textPrimary,
+              child: Text(
+                'Unblock now',
+                style: GoogleFonts.nunito(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: KovaColors.textPrimary,
+                ),
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 10),
+        if (!widget.alert.resolved) const SizedBox(height: 10),
 
         // Block permanently
         SizedBox(
           width: double.infinity,
           height: 48,
           child: ElevatedButton(
-            onPressed: () {},
+            onPressed: () => _showActionPinDialog('block'),
             style: ElevatedButton.styleFrom(
               backgroundColor: KovaColors.textPrimary,
               foregroundColor: KovaColors.textOnDark,
@@ -587,7 +594,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
               elevation: 0,
             ),
             child: Text(
-              'Block permanently',
+              widget.alert.resolved ? 'Permanently blocked' : 'Block permanently',
               style: GoogleFonts.nunito(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
@@ -618,6 +625,81 @@ class _AlertDetailScreenState extends State<AlertDetailScreen>
         ),
       ],
     );
+  }
+
+  // Helper methods
+  Color _getSeverityColor(String severity) {
+    switch (severity.toLowerCase()) {
+      case 'critical':
+      case 'high':
+        return const Color(0xFFFF5252);
+      case 'medium':
+        return const Color(0xFFFB8C00);
+      case 'low':
+        return const Color(0xFF4AC38B);
+      default:
+        return const Color(0xFF4AC38B);
+    }
+  }
+
+  IconData _getAppIcon(String appName) {
+    switch (appName.toLowerCase()) {
+      case 'whatsapp':
+        return Icons.message_rounded;
+      case 'instagram':
+        return Icons.camera_alt_rounded;
+      case 'tiktok':
+        return Icons.music_note_rounded;
+      case 'snapchat':
+        return Icons.snapchat_rounded;
+      case 'youtube':
+        return Icons.play_circle_fill_rounded;
+      case 'messenger':
+        return Icons.chat_bubble_rounded;
+      case 'facebook':
+        return Icons.facebook_rounded;
+      case 'twitter':
+      case 'x':
+        return Icons.chat_rounded;
+      default:
+        return Icons.apps_rounded;
+    }
+  }
+
+  String _capitalize(String text) {
+    if (text.isEmpty) return text;
+    return text[0].toUpperCase() + text.substring(1);
+  }
+
+  String _formatTime(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inMinutes < 1) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays == 1) return 'Yesterday';
+    return '${diff.inDays} days ago';
+  }
+
+  void _showActionPinDialog(String action) async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => const _PinEntrySheet(),
+    );
+
+    if (result == true && mounted) {
+      // PIN verified - perform action
+      final service = AppControlService();
+      if (action == 'block') {
+        await service.blockApp(widget.alert.app);
+      } else if (action == 'unblock') {
+        await service.unblockApp(widget.alert.app);
+      }
+      setState(() {}); // Refresh UI
+    }
   }
 }
 

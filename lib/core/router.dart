@@ -18,6 +18,8 @@ import 'package:kova/parent/screens/welcome_screen.dart' as parent_welcome;
 import 'package:kova/parent/screens/parent_profile_screen.dart';
 import 'package:kova/parent/screens/child_profile_screen.dart';
 import 'package:kova/parent/screens/monitored_apps_screen.dart' as parent_apps;
+import 'package:kova/parent/screens/alert_detail_screen.dart';
+import 'package:kova/local_backend/repositories/alert_repository.dart';
 import 'package:kova/parent/screens/whatsapp_connect_screen.dart';
 import 'package:kova/parent/screens/success_screen.dart';
 import 'package:kova/parent/screens/parent_permission_screen.dart';
@@ -25,7 +27,6 @@ import 'package:kova/parent/screens/accessibility_setup_screen.dart'
     as parent_accessibility;
 import 'package:kova/parent/screens/dashboard_screen.dart' as parent_dashboard;
 import 'package:kova/parent/screens/alert_history_screen.dart';
-import 'package:kova/parent/screens/alert_detail_screen.dart';
 import 'package:kova/parent/screens/app_control_screen.dart';
 import 'package:kova/parent/screens/settings_screen.dart';
 import 'package:kova/parent/screens/pin_modification_screen.dart';
@@ -175,7 +176,9 @@ GoRouter buildRouter(AppMode initialMode) {
       // Alert Detail Screen
       GoRoute(
         path: AppRoutes.alertDetail,
-        builder: (context, state) => const AlertDetailScreen(),
+        builder: (context, state) => AlertDetailScreen(
+          alert: state.extra as AlertModel,
+        ),
       ),
 
       // App Control Screen
