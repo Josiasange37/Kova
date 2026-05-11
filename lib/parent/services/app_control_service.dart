@@ -6,7 +6,7 @@ import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
 import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/shared/services/network_sync_service.dart';
-import 'package:uuid/uuid.dart';
+import 'package:kova/shared/models/network_alert.dart';
 
 class AppControlService extends ChangeNotifier {
   final _childRepo = ChildRepository();
@@ -138,8 +138,7 @@ class AppControlService extends ChangeNotifier {
       
       // Create a special alert to trigger blocking on child device
       await _networkSync.pushAlert(NetworkAlertFull(
-        id: const Uuid().v4(),
-        childId: _children.isNotEmpty ? _children.first.id : 'unknown',
+        childName: _children.isNotEmpty ? _children.first.name : 'unknown',
         app: appKey,
         alertType: 'parent_block',
         severity: 'critical',
@@ -149,7 +148,7 @@ class AppControlService extends ChangeNotifier {
         scoreImage: 0.0,
         scoreGrooming: 0.0,
         scoreDelta: -10,
-        timestamp: DateTime.now().toIso8601String(),
+        timestamp: DateTime.now(),
       ));
       
       debugPrint('✅ [APP_CONTROL] Block command sent for $appKey');
@@ -166,8 +165,7 @@ class AppControlService extends ChangeNotifier {
       
       // Create a special alert to trigger unblocking on child device
       await _networkSync.pushAlert(NetworkAlertFull(
-        id: const Uuid().v4(),
-        childId: _children.isNotEmpty ? _children.first.id : 'unknown',
+        childName: _children.isNotEmpty ? _children.first.name : 'unknown',
         app: appKey,
         alertType: 'parent_unblock',
         severity: 'safe',
@@ -177,7 +175,7 @@ class AppControlService extends ChangeNotifier {
         scoreImage: 0.0,
         scoreGrooming: 0.0,
         scoreDelta: 0,
-        timestamp: DateTime.now().toIso8601String(),
+        timestamp: DateTime.now(),
       ));
       
       debugPrint('✅ [APP_CONTROL] Unblock command sent for $appKey');
