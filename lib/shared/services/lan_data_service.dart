@@ -546,15 +546,6 @@ class LanDataService {
   // Lifecycle
   // ─────────────────────────────────────────────
 
-  void stopServer() {
-    _server?.close();
-    _server = null;
-    _activeConnection?.close();
-    _activeConnection = null;
-    _isServerRunning = false;
-    print('🖥️ LAN Data server stopped');
-  }
-
   void disconnectClient() {
     stopHeartbeat();
     _clientSocket?.close();
