@@ -122,4 +122,130 @@ router.post('/connect', async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// RELAY ENDPOINTS (for Flutter app compatibility)
+// These provide temporary storage for pairing codes when LAN is unavailable
+// ═══════════════════════════════════════════════════════════════════════════
+
+const relayStore = new Map(); // code -> { parentDeviceId, childDeviceId, pairToken, timestamp }
+const RELAY_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// ── POST /api/pair/register ──
+// Parent registers a pairing code with the relay
+router.post('/register', async (req, res) => {
+  try {
+    const { code, parentDeviceId } = req.body;
+    
+    if (!code || !parentDeviceId) {
+      return res.status(400).json({ error: 'code and parentDeviceId required' });
+    }
+    
+    // Clean up expired entries
+    const now = Date.now();
+    for (const [key, value] of relayStore.entries()) {
+      if (now - value.timestamp > RELAY_TTL_MS) {
+        relayStore.delete(key);
+      }
+    }
+    
+    // Store the pairing request
+    relayStore.set(code, {
+      code,
+      parentDeviceId,
+      childDeviceId: null,
+      pairToken: null,
+      timestamp: now,
+      status: 'waiting'
+    });
+    
+    console.log(`📡 Pair code registered: ${code}`);
+    res.status(201).json({ success: true, code });
+  } catch (err) {
+    console.error('Pair register error:', err);
+    res.status(500).json({ error: 'Failed to register code' });
+  }
+});
+
+// ── POST /api/pair/claim ──
+// Child claims a pairing code and gets the pair token
+router.post('/claim', async (req, res) => {
+  try {
+    const { code, childDeviceId } = req.body;
+    
+    if (!code || !childDeviceId) {
+      return res.status(400).json({ error: 'code and childDeviceId required' });
+    }
+    
+    const entry = relayStore.get(code);
+    
+    if (!entry) {
+      return res.status(404).json({ error: 'Code not found or expired' });
+    }
+    
+    // Check if expired
+    if (Date.now() - entry.timestamp > RELAY_TTL_MS) {
+      relayStore.delete(code);
+      return res.status(404).json({ error: 'Code expired' });
+    }
+    
+    // Generate pair token if not already done
+    if (!entry.pairToken) {
+      entry.pairToken = uuidv4();
+      entry.childDeviceId = childDeviceId;
+      entry.status = 'claimed';
+    }
+    
+    console.log(`🔗 Pair code claimed: ${code} -> token: ${entry.pairToken.substring(0, 8)}...`);
+    res.json({ 
+      success: true, 
+      pairToken: entry.pairToken,
+      parentDeviceId: entry.parentDeviceId 
+    });
+  } catch (err) {
+    console.error('Pair claim error:', err);
+    res.status(500).json({ error: 'Failed to claim code' });
+  }
+});
+
+// ── GET /api/pair/status ──
+// Check if a code has been claimed
+router.get('/status', async (req, res) => {
+  try {
+    const { code } = req.query;
+    
+    if (!code) {
+      return res.status(400).json({ error: 'code required' });
+    }
+    
+    const entry = relayStore.get(code);
+    
+    if (!entry) {
+      return res.status(404).json({ error: 'Code not found' });
+    }
+    
+    // Check if expired
+    if (Date.now() - entry.timestamp > RELAY_TTL_MS) {
+      relayStore.delete(code);
+      return res.status(404).json({ error: 'Code expired' });
+    }
+    
+    res.json({
+      code,
+      status: entry.status,
+      claimed: !!entry.childDeviceId,
+      pairToken: entry.pairToken,
+      childDeviceId: entry.childDeviceId
+    });
+  } catch (err) {
+    console.error('Pair status error:', err);
+    res.status(500).json({ error: 'Failed to check status' });
+  }
+});
+
+// ── GET /api/pair/ping ──
+// Keep-alive endpoint for pre-warming
+router.get('/ping', (req, res) => {
+  res.json({ status: 'ok', service: 'kova-relay' });
+});
+
 module.exports = router;
