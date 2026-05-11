@@ -189,26 +189,40 @@ class ParentPermissionService {
     try {
       final sdk = await _getSdkVersion();
       
-      // Android 13+ check
+      // Add small delay to ensure system has persisted permission state
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      // Android 13+ check - NEARBY_WIFI_DEVICES
       if (sdk >= 33) {
-        if (await Permission.nearbyWifiDevices.isGranted) return true;
+        final nearbyStatus = await Permission.nearbyWifiDevices.status;
+        debugPrint('📍 [PERMISSION] nearbyWifiDevices status: $nearbyStatus');
+        if (nearbyStatus.isGranted) return true;
+        // Also check if permanently denied - don't keep asking
+        if (nearbyStatus.isPermanentlyDenied) {
+          debugPrint('📍 [PERMISSION] nearbyWifiDevices permanently denied - skipping');
+          return true; // Treat as optional permission
+        }
       }
       
-      // Android 12+ check (Bluetooth)
+      // Android 12+ check (Bluetooth permissions as fallback)
       if (sdk >= 31) {
-        if (await Permission.bluetoothScan.isGranted || 
-            await Permission.bluetoothConnect.isGranted) return true;
+        final btScanStatus = await Permission.bluetoothScan.status;
+        final btConnectStatus = await Permission.bluetoothConnect.status;
+        debugPrint('📍 [PERMISSION] bluetoothScan: $btScanStatus, bluetoothConnect: $btConnectStatus');
+        if (btScanStatus.isGranted || btConnectStatus.isGranted) return true;
       }
       
       // Fallback: Check location (required for LAN discovery on Android 11 and below)
       // Also used as a fallback on some OS skins
-      if (await Permission.location.isGranted || 
-          await Permission.locationWhenInUse.isGranted) return true;
+      final locationStatus = await Permission.location.status;
+      final locationWhenInUseStatus = await Permission.locationWhenInUse.status;
+      debugPrint('📍 [PERMISSION] location: $locationStatus, locationWhenInUse: $locationWhenInUseStatus');
+      if (locationStatus.isGranted || locationWhenInUseStatus.isGranted) return true;
           
       return false;
     } catch (e) {
       debugPrint('⚠️ Nearby WiFi permission check error: $e');
-      return true; // Don't block user on error
+      return true; // Don't block user on error - treat as optional
     }
   }
 

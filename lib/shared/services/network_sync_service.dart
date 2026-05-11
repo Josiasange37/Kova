@@ -83,7 +83,8 @@ class NetworkSyncService {
   int _relayConsecutive404s = 0;
   DateTime? _relayCircuitOpenedAt;
   static const _relayCircuitThreshold = 3;
-  static const _relayCircuitCooldown = Duration(minutes: 5);
+  // REDUCED for demo: was 5 minutes, now 30 seconds to recover faster
+  static const _relayCircuitCooldown = Duration(seconds: 30);
 
   // ── Bug Fix: Alert deduplication ───────────────────────────────────────────
   // Prevents the same (app+alertType) from being pushed multiple times within
@@ -562,10 +563,29 @@ class NetworkSyncService {
           _lastReconnectAttempt = now;
           debugPrint('🔁 [PUSH ALERT] LAN down — starting reconnect...');
           try {
+            // First, try to rediscover parent via LAN discovery
+            final discoveredParent = _lanDiscovery.pairedPeer;
+            if (discoveredParent != null) {
+              debugPrint('🔍 [PUSH ALERT] Found parent via discovery: ${discoveredParent.ipAddress}:${discoveredParent.port}');
+              final connected = await _lanData.connectToParent(
+                discoveredParent.ipAddress, 
+                discoveredParent.port, 
+                _pairToken
+              );
+              if (connected) {
+                debugPrint('✅ [PUSH ALERT] Connected to discovered parent');
+                _lanConsecutiveRefusals = 0;
+                _activeReconnect!.complete(true);
+                return;
+              }
+            }
+            
+            // Fallback: try last known IP
             await _lanData.attemptReconnect();
             await Future.delayed(const Duration(milliseconds: 300));
             if (_lanData.isConnected) {
               _lanConsecutiveRefusals = 0; // Reset on success
+              debugPrint('✅ [PUSH ALERT] Reconnected via last known IP');
             } else {
               _lanConsecutiveRefusals++;
               // Bug Fix #3: Clear stale IP after N consecutive failures
@@ -573,6 +593,24 @@ class NetworkSyncService {
                 debugPrint('🗑️ [PUSH ALERT] Stale LAN IP detected ($_lanConsecutiveRefusals failures) — clearing peer info');
                 await LocalStorage.clearLastChildPeer();
                 _lanConsecutiveRefusals = 0;
+                // After clearing, wait for discovery to find parent again
+                debugPrint('⏳ [PUSH ALERT] Waiting for LAN discovery to find parent...');
+                await Future.delayed(const Duration(seconds: 2));
+                // Try discovery one more time
+                final newParent = _lanDiscovery.pairedPeer;
+                if (newParent != null) {
+                  debugPrint('🔍 [PUSH ALERT] Found new parent after discovery: ${newParent.ipAddress}');
+                  final connected = await _lanData.connectToParent(
+                    newParent.ipAddress,
+                    newParent.port,
+                    _pairToken
+                  );
+                  if (connected) {
+                    debugPrint('✅ [PUSH ALERT] Connected to newly discovered parent');
+                    _activeReconnect!.complete(true);
+                    return;
+                  }
+                }
               }
             }
             _activeReconnect!.complete(_lanData.isConnected);
@@ -651,11 +689,12 @@ class NetworkSyncService {
   Future<bool> _pushAlertToRelay(NetworkAlertSummary alert, [String? itemId]) async {
     // ── Bug Fix #2: Relay circuit breaker ────────────────────────────────────
     // If we've seen N consecutive 404 (DEPLOYMENT_NOT_FOUND) responses, stop
-    // hitting the relay for 5 minutes to avoid log spam and battery drain.
+    // hitting the relay for cooldown period to avoid log spam and battery drain.
     if (_relayCircuitOpenedAt != null) {
       final elapsed = DateTime.now().difference(_relayCircuitOpenedAt!);
       if (elapsed < _relayCircuitCooldown) {
-        debugPrint('🔌 [RELAY] Circuit breaker OPEN — skipping relay (${_relayCircuitCooldown.inMinutes - elapsed.inMinutes}min remaining)');
+        final remainingSecs = _relayCircuitCooldown.inSeconds - elapsed.inSeconds;
+        debugPrint('🔌 [RELAY] Circuit breaker OPEN — skipping relay (${remainingSecs}s remaining)');
         return false;
       } else {
         // Cooldown expired, try again

@@ -48,6 +48,12 @@ class BlockOverlayActivity : Activity() {
         private var lastLaunchTimestamp: Long = 0L
         private const val RELAUNCH_DEBOUNCE_MS = 1500L
 
+        // ── Max relaunch attempts per block ──
+        // Prevents watchdog from spamming overlay when user keeps dismissing
+        private const val MAX_RELAUNCHES = 2
+        private const val PREFS_KEY_RELAUNCH_COUNT = "overlay_relaunch_count"
+        private const val PREFS_KEY_LAST_BLOCK_PKG = "overlay_last_block_pkg"
+
         @Volatile
         private var currentlyBlockedPackage: String? = null
 
@@ -59,6 +65,7 @@ class BlockOverlayActivity : Activity() {
         /**
          * Launch or re-launch the block overlay.
          * Safe to call multiple times — debounce prevents infinite loops.
+         * NEW: Limits relaunches to MAX_RELAUNCHES per block to prevent spam.
          */
         fun start(context: Context, packageName: String, reason: String?) {
             val now = System.currentTimeMillis()
@@ -76,8 +83,18 @@ class BlockOverlayActivity : Activity() {
                 return
             }
 
+            // Check relaunch limit — prevent watchdog from spamming overlay
+            val relaunchCount = getRelaunchCount(context, packageName)
+            if (relaunchCount >= MAX_RELAUNCHES) {
+                Log.w(TAG, "Max relaunches ($MAX_RELAUNCHES) reached for $packageName — blocking silently without overlay")
+                // Still persist block state so app remains blocked, but don't show overlay
+                persistBlockState(context, packageName, reason ?: "App is blocked for your safety")
+                return
+            }
+
             lastLaunchTimestamp = now
             currentlyBlockedPackage = packageName
+            incrementRelaunchCount(context, packageName)
 
             // Persist block state so the ForegroundService watchdog can detect and re-launch
             persistBlockState(context, packageName, reason ?: "App is blocked for your safety")
@@ -96,6 +113,33 @@ class BlockOverlayActivity : Activity() {
         }
 
         /**
+         * Get the number of times overlay has been launched for this package.
+         * Resets when package changes or block expires.
+         */
+        private fun getRelaunchCount(context: Context, packageName: String): Int {
+            val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            val lastPkg = prefs.getString(PREFS_KEY_LAST_BLOCK_PKG, null)
+            // Reset count if different package
+            if (lastPkg != packageName) {
+                prefs.edit().putInt(PREFS_KEY_RELAUNCH_COUNT, 0).putString(PREFS_KEY_LAST_BLOCK_PKG, packageName).apply()
+                return 0
+            }
+            return prefs.getInt(PREFS_KEY_RELAUNCH_COUNT, 0)
+        }
+
+        /**
+         * Increment relaunch counter.
+         */
+        private fun incrementRelaunchCount(context: Context, packageName: String) {
+            val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            val current = getRelaunchCount(context, packageName)
+            prefs.edit()
+                .putInt(PREFS_KEY_RELAUNCH_COUNT, current + 1)
+                .putString(PREFS_KEY_LAST_BLOCK_PKG, packageName)
+                .apply()
+        }
+
+        /**
          * Save block state to SharedPreferences.
          * The ForegroundService watchdog reads this to re-launch the overlay
          * if the OS kills this Activity while the block is still active.
@@ -111,6 +155,7 @@ class BlockOverlayActivity : Activity() {
 
         /**
          * Clear block state — called when block is legitimately finished.
+         * Also clears relaunch counter so next block starts fresh.
          */
         fun clearBlockState(context: Context) {
             val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -118,12 +163,15 @@ class BlockOverlayActivity : Activity() {
                 .remove("active_block_package")
                 .remove("active_block_reason")
                 .remove("active_block_expiry")
+                .remove(PREFS_KEY_RELAUNCH_COUNT)
+                .remove(PREFS_KEY_LAST_BLOCK_PKG)
                 .apply()
         }
 
         /**
          * Check if there's a currently active block that hasn't expired.
          * Used by the ForegroundService watchdog to decide whether to re-launch.
+         * Also resets relaunch count if block has expired.
          */
         fun getActiveBlock(context: Context): Triple<String, String, Long>? {
             val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -133,7 +181,7 @@ class BlockOverlayActivity : Activity() {
             val now = System.currentTimeMillis()
 
             if (now >= expiry) {
-                // Block has expired — clean up
+                // Block has expired — clean up including relaunch count
                 clearBlockState(context)
                 return null
             }
