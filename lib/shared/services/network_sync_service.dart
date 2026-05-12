@@ -152,8 +152,8 @@ class NetworkSyncService {
 
         debugPrint('📨 [NETWORK SYNC] UDP alert received from ${udpAlert['deviceId']}');
 
-        // Convert to NetworkAlertSummary and broadcast to UI
-        final alert = NetworkAlertSummary.fromJson(alertData);
+        // Convert to NetworkAlertFull and broadcast to UI
+        final alert = NetworkAlertFull.fromJson(alertData);
         _alertReceivedController.add(alert);
       } catch (e) {
         debugPrint('⚠️ [NETWORK SYNC] Failed to process UDP alert: $e');
@@ -688,7 +688,7 @@ class NetworkSyncService {
 
   /// Push alert summary to Railway relay
   /// Returns true if the relay accepted the alert (HTTP 201)
-  Future<bool> _pushAlertToRelay(NetworkAlertSummary alert, [String? itemId]) async {
+  Future<bool> _pushAlertToRelay(NetworkAlertFull alert, [String? itemId]) async {
     // ── Bug Fix #2: Relay circuit breaker ────────────────────────────────────
     // If we've seen N consecutive 404 (DEPLOYMENT_NOT_FOUND) responses, stop
     // hitting the relay for cooldown period to avoid log spam and battery drain.
@@ -714,17 +714,9 @@ class NetworkSyncService {
     _cryptoService ??= CryptoService(_pairToken);
 
     try {
-      final summary = NetworkAlertSummary(
-        severity: alert.severity,
-        app: alert.app,
-        alertType: alert.alertType,
-        childName: alert.childName,
-        timestamp: alert.timestamp,
-      );
-
-      final jsonStr = jsonEncode(summary.toJson());
+      final jsonStr = jsonEncode(alert.toJson());
       final encrypted = _cryptoService!.encryptPayload(jsonStr);
-      debugPrint('📤 [ALERT PIPELINE] Encrypting alert for relay: ${summary.app} - ${summary.alertType}');
+      debugPrint('📤 [ALERT PIPELINE] Encrypting alert for relay: ${alert.app} - ${alert.alertType}');
 
       final url = Uri.parse('$_relayBaseUrl/api/alert/push');
       debugPrint('🌐 [RELAY] POST $url');
@@ -1051,7 +1043,7 @@ class NetworkSyncService {
           if (isTestAlert || (encryptedData.isEmpty && map['app'] != null)) {
             // Unencrypted test alert — parse directly
             try {
-              final alert = NetworkAlertSummary(
+              final alert = NetworkAlertFull(
                 severity: map['severity'] as String? ?? 'high',
                 app: map['app'] as String? ?? 'Test',
                 alertType: map['alertType'] as String? ?? 'test_alert',
@@ -1059,6 +1051,10 @@ class NetworkSyncService {
                 timestamp: map['timestamp'] != null
                     ? DateTime.tryParse(map['timestamp'] as String) ?? DateTime.now()
                     : DateTime.now(),
+                aiConfidence: 0.95,
+                scoreText: 0.8,
+                scoreImage: 0.0,
+                scoreGrooming: 0.0,
               );
               _alertReceivedController.add(alert);
               debugPrint('🧪 [POLL] Test alert received: ${alert.app} - ${alert.severity}');
@@ -1071,7 +1067,7 @@ class NetworkSyncService {
             if (decryptedStr.isNotEmpty) {
               try {
                 final summaryJson = jsonDecode(decryptedStr) as Map<String, dynamic>;
-                final alert = NetworkAlertSummary.fromJson(summaryJson);
+                final alert = NetworkAlertFull.fromJson(summaryJson);
                 _alertReceivedController.add(alert);
                 
                 if (map['id'] != null) {

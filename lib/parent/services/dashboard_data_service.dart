@@ -106,35 +106,6 @@ class DashboardDataService extends ChangeNotifier {
       debugPrint('  severity = ${alert.severity}');
       debugPrint('  app      = ${alert.app}');
 
-      _alerts?.insert(0, AlertModel(
-        id: '',
-        childId: '',
-        app: alert.app ?? '',
-        type: alert.alertType ?? '',
-        severity: alert.severity ?? 'medium',
-        read: false,
-        createdAt: DateTime.now(),
-        resolved: false,
-        scoreGrooming: alert is NetworkAlertFull ? alert.scoreGrooming : 0.0,
-        scoreImage: alert is NetworkAlertFull ? alert.scoreImage : 0.0,
-        scoreText: alert is NetworkAlertFull ? alert.scoreText : 0.0,
-      ));
-      notifyListeners();
-
-      // Show system notification
-      try {
-        final title = alert.severity == 'critical'
-            ? '🚨 ALERTE CRITIQUE — ${alert.childName ?? "Enfant"}'
-            : '⚠️ Alerte KOVA — ${alert.childName ?? "Enfant"}';
-        final body =
-            'Activité suspecte sur ${alert.app ?? "une application"}';
-
-        await NotificationService.showAlert(title, body);
-        debugPrint('✅ [PARENT] System notification shown');
-      } catch (e) {
-        debugPrint('❌ [PARENT] Notification failed: $e');
-      }
-
       await _handleRemoteAlert(alert);
     });
 
@@ -193,7 +164,12 @@ class DashboardDataService extends ChangeNotifier {
           _          => 'KOVA — Alerte pour $childName',
         };
 
-        final body = 'Activité suspecte détectée sur $app. Vérifiez maintenant.';
+        final String body;
+        if (alert is NetworkAlertFull && alert.contentPreview != null && alert.contentPreview!.isNotEmpty) {
+          body = 'Activité suspecte sur $app: "${alert.contentPreview}"';
+        } else {
+          body = 'Activité suspecte détectée sur $app. Vérifiez maintenant.';
+        }
 
         await NotificationService.showAlert(title, body, alertId: alertId);
         debugPrint('🔔 [PARENT] Notification shown: $title');

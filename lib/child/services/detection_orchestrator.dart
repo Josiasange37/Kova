@@ -40,6 +40,8 @@ class DetectionOrchestrator {
   final _alertStreamController = StreamController<AlertModel>.broadcast();
   Stream<AlertModel> get onNewAlert => _alertStreamController.stream;
   
+  StreamSubscription<NetworkAlertSummary>? _networkAlertSub;
+  
   bool _active = false;
   String? _childId;
   String? _lastUrl;
@@ -90,6 +92,19 @@ class DetectionOrchestrator {
     _cachedChild = await _childRepo.getById(_childId!);
     _childCacheTime = DateTime.now();
 
+    // Listen for parent-initiated block/unblock commands
+    _networkAlertSub?.cancel();
+    _networkAlertSub = _networkSync.onAlertReceived.listen((alert) {
+      if (!_active) return;
+      if (alert.alertType == 'parent_block' && alert.app != null) {
+        debugPrint('🚫 [CHILD/BG] Received parent block command for ${alert.app}');
+        safeBlockApp(alert.app!);
+      } else if (alert.alertType == 'parent_unblock' && alert.app != null) {
+        debugPrint('🔓 [CHILD/BG] Received parent unblock command for ${alert.app}');
+        unblockApp(alert.app!);
+      }
+    });
+
     // Initialize bridge (registers handlers on 3 channels)
     MonitoringBridge.init();
 
@@ -102,6 +117,7 @@ class DetectionOrchestrator {
     _blockedApps.clear();
     _cachedChild = null;
     _childCacheTime = null;
+    _networkAlertSub?.cancel();
     _tfLiteAnalyzer.close();
     MonitoringBridge.reset();
     
