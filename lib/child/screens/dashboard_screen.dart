@@ -1,17 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:kova/core/app_mode.dart';
-import 'package:kova/core/constants.dart';
-import 'package:kova/core/router.dart';
 import 'package:kova/child/services/detection_orchestrator.dart';
 import 'package:kova/local_backend/repositories/child_repository.dart';
 import 'package:kova/local_backend/repositories/alert_repository.dart';
-import 'package:kova/local_backend/database/database_service.dart';
-import 'package:kova/shared/services/local_storage.dart';
 import 'package:kova/shared/services/network_sync_service.dart';
 import 'package:kova/shared/models/network_alert.dart';
-import 'package:intl/intl.dart';
 import 'dart:async';
 
 class DashboardScreen extends StatefulWidget {
@@ -90,451 +84,420 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
+        backgroundColor: Color(0xFFF6F6F6),
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
-    final childName = _child?.name ?? 'Child';
-    final initial = childName.isNotEmpty ? childName[0].toUpperCase() : 'C';
+    final childName = _child?.name ?? 'Alex';
+    final score = _child?.score ?? 92;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F6F6),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Custom App Bar
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24.0,
-                vertical: 16.0,
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Text(
+                'Hello $childName 👋',
+                style: GoogleFonts.inter(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF2C2C54),
+                ),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFF1E2A5D),
-                    ),
-                    child: Center(
-                      child: Text(
-                        initial,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
+              const SizedBox(height: 4),
+              Text(
+                "Here's how you're doing",
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  color: const Color(0xFF888899),
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // Score Ring
+              Center(
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: 160,
+                      height: 160,
+                      child: CustomPaint(
+                        painter: SegmentedRingPainter(
+                          score: score,
+                          activeColor: const Color(0xFF7E3FF2),
+                          inactiveColor: const Color(0xFFE8E8EE),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '$score',
+                                style: GoogleFonts.inter(
+                                  fontSize: 48,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF7E3FF2),
+                                  height: 1.1,
+                                ),
+                              ),
+                              Text(
+                                '/100',
+                                style: GoogleFonts.inter(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF888899),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      _getScoreText(score),
+                      style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF7E3FF2),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // "This week" Chart
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.02),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'This week',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF2C2C54),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _buildChartBar('Mon', 100, const Color(0xFF1CB476)),
+                        _buildChartBar('Tue', 100, const Color(0xFF1CB476)),
+                        _buildChartBar('Wed', 100, const Color(0xFF1CB476)),
+                        _buildChartBar('Thu', 100, const Color(0xFFF59E0B)),
+                        _buildChartBar('Fri', 100, const Color(0xFF1CB476)),
+                        _buildChartBar('Sat', 10, const Color(0xFF5B7FFF)),
+                        _buildChartBar('Sun', 10, const Color(0xFFD1D5DB)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 32),
+
+              // "Your badges"
+              Text(
+                'Your badges',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF2C2C54),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildBadge(
+                      '5-Day Streak',
+                      Icons.star_border,
+                      const Color(0xFF8B5CF6),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Welcome, $childName',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF1E2A5D),
-                          ),
-                        ),
-                        const Text(
-                          'Protected by your parents',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Color(0xFF6B7280),
-                          ),
-                        ),
-                      ],
+                    child: _buildBadge(
+                      'Top Scorer',
+                      Icons.emoji_events_outlined,
+                      const Color(0xFFF59E0B),
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildBadge(
+                      'Kind Words',
+                      Icons.favorite_border,
+                      const Color(0xFFEC4899),
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.02),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.battery_charging_full,
-                          color: Color(0xFF10B981),
-                          size: 16,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          '85%',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    onPressed: _showLogoutDialog,
-                    icon: const Icon(
-                      Icons.logout_outlined,
-                      color: Color(0xFF6B7280),
-                      size: 20,
-                    ),
-                    tooltip: 'Logout',
                   ),
                 ],
               ),
-            ),
+              const SizedBox(height: 32),
 
-            const SizedBox(height: 24),
-
-            // Main Status Card
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1E2A5D),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF1E2A5D).withValues(alpha: 0.2),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(
-                      Icons.shield_outlined,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'All systems active',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Your device is connected and monitoring is active in the background.',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 14,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
+              // "Keep going to unlock"
+              Text(
+                'Keep going to unlock',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF2C2C54),
                 ),
               ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Quick Actions
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0),
-              child: Row(
+              const SizedBox(height: 16),
+              Row(
                 children: [
                   Expanded(
-                    child: _buildActionBtn(
-                      icon: Icons.access_time,
-                      label: 'Screen Time',
-                      color: const Color(0xFFF3E8FF),
-                      iconColor: const Color(0xFF9333EA),
+                    child: _buildLockedBadge(
+                      'Week\nChampion',
+                      Icons.workspace_premium_outlined,
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: _buildActionBtn(
-                      icon: Icons.rule,
-                      label: 'Rules',
-                      color: const Color(0xFFE0E7FF),
-                      iconColor: const Color(0xFF4F46E5),
+                    child: _buildLockedBadge(
+                      'Perfect\nWeek',
+                      Icons.bolt_outlined,
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: _buildActionBtn(
-                      icon: Icons.chat_bubble_outline,
-                      label: 'Ask Parent',
-                      color: const Color(0xFFDCFCE7),
-                      iconColor: const Color(0xFF16A34A),
+                    child: _buildLockedBadge(
+                      '100 Club',
+                      Icons.adjust,
                     ),
                   ),
                 ],
               ),
-            ),
+              const SizedBox(height: 32),
 
-            const SizedBox(height: 32),
-
-            // Recent Activity
-            Expanded(
-              child: Container(
+              // Bottom Banner
+              Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(32),
-                    topRight: Radius.circular(32),
+                padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF8B5CF6), Color(0xFFF59E0B)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Recent Activity',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF1E2A5D),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {},
-                          child: const Text(
-                            'See All',
-                            style: TextStyle(
-                              color: Color(0xFF4F46E5),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
+                child: Center(
+                  child: Text(
+                    'Keep it up and earn your\nweekly badge! 🌟',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                      height: 1.4,
                     ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: _recentAlerts.isEmpty 
-                        ? const Center(
-                            child: Text(
-                              'No recent activity',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          )
-                        : ListView.builder(
-                            physics: const BouncingScrollPhysics(),
-                            itemCount: _recentAlerts.length,
-                            itemBuilder: (context, index) {
-                              final alert = _recentAlerts[index];
-                              return _buildActivityItem(
-                                icon: _getIconForAlert(alert.type),
-                                title: alert.app,
-                                time: _formatTime(alert.createdAt),
-                                status: alert.type,
-                                statusColor: alert.isCritical ? const Color(0xFFEF4444) : const Color(0xFF10B981),
-                              );
-                            },
-                          ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  IconData _getIconForAlert(String type) {
-    if (type.contains('blocked')) return Icons.block;
-    if (type.contains('time')) return Icons.timer_outlined;
-    if (type.contains('app')) return Icons.apps;
-    return Icons.chat_bubble_outline;
+  String _getScoreText(int score) {
+    if (score >= 90) return 'Excellent';
+    if (score >= 80) return 'Great';
+    if (score >= 70) return 'Good';
+    if (score >= 50) return 'Needs Work';
+    return 'Warning';
   }
 
-  String _formatTime(DateTime time) {
-    final now = DateTime.now();
-    final difference = now.difference(time);
-    if (difference.inMinutes < 60) {
-      if (difference.inMinutes <= 1) return 'Just now';
-      return '${difference.inMinutes} minutes ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours} hours ago';
-    } else {
-      return DateFormat('MMM d, yyyy').format(time);
-    }
-  }
+  Widget _buildChartBar(String day, double heightPct, Color color) {
+    final double maxHeight = 100.0;
+    final double actualHeight = (heightPct / 100.0) * maxHeight;
 
-  Future<void> _showLogoutDialog() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text(
-          'Logout?',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: Color(0xFFEF4444),
-          ),
-        ),
-        content: const Text(
-          'This will clear all your data and return to the login screen.\n\n'
-          'Your parent will need to set up the connection again.',
-          style: TextStyle(fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text(
-              'Logout',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        // Clear database
-        final db = DatabaseService();
-        await db.reset();
-        
-        // Clear all local storage
-        await LocalStorage.clear();
-        
-        if (mounted) {
-          // Navigate to splash screen
-          context.go(AppRoutes.splash);
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Logout failed: $e'),
-              backgroundColor: const Color(0xFFEF4444),
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  Widget _buildActionBtn({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required Color iconColor,
-  }) {
     return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Container(
-          width: 56,
-          height: 56,
+          width: 36,
+          height: actualHeight,
           decoration: BoxDecoration(
             color: color,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: iconColor),
         ),
         const SizedBox(height: 8),
         Text(
-          label,
-          style: const TextStyle(
+          day,
+          style: GoogleFonts.inter(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: Color(0xFF111827),
+            color: const Color(0xFF888899),
           ),
-          textAlign: TextAlign.center,
         ),
       ],
     );
   }
 
-  Widget _buildActivityItem({
-    required IconData icon,
-    required String title,
-    required String time,
-    required String status,
-    required Color statusColor,
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 20.0),
-        child: Row(
+  Widget _buildBadge(String title, IconData icon, Color bgColor) {
+    return AspectRatio(
+      aspectRatio: 0.9,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F4F0),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, size: 20, color: const Color(0xFF6B7280)),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    time,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            Icon(icon, color: Colors.white, size: 36),
+            const SizedBox(height: 8),
             Text(
-              status,
-              style: TextStyle(
+              title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 11,
                 fontWeight: FontWeight.w500,
-                fontSize: 13,
-                color: statusColor,
+                color: Colors.white,
+                height: 1.2,
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildLockedBadge(String title, IconData icon) {
+    return AspectRatio(
+      aspectRatio: 0.9,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE2E8F0),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 0,
+              right: 8,
+              child: const Icon(
+                Icons.lock_outline,
+                size: 12,
+                color: Color(0xFF94A3B8),
+              ),
+            ),
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, color: const Color(0xFF94A3B8), size: 36),
+                  const SizedBox(height: 8),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF64748B),
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class SegmentedRingPainter extends CustomPainter {
+  final int score;
+  final Color activeColor;
+  final Color inactiveColor;
+
+  SegmentedRingPainter({
+    required this.score,
+    required this.activeColor,
+    required this.inactiveColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokeWidth = 14.0;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+    
+    final bgPaint = Paint()
+      ..color = inactiveColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    // Draw full background ring
+    canvas.drawCircle(center, radius, bgPaint);
+
+    final fgPaint = Paint()
+      ..color = activeColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    // We draw 4 segments. Total active is determined by score.
+    // For 92, almost all segments are active. We'll draw 4 arcs with gaps.
+    final int totalSegments = 4;
+    final double gapAngle = 0.3; // radians
+    final double sweepAngle = (2 * 3.141592653589793 - (gapAngle * totalSegments)) / totalSegments;
+    
+    int segmentsToFill = (score / 25).ceil();
+    if (segmentsToFill > totalSegments) segmentsToFill = totalSegments;
+
+    // Start angle slightly rotated so gaps align nicely (e.g. top gap, bottom gap, sides)
+    double startAngle = -3.141592653589793 / 2 + (gapAngle / 2);
+
+    for (int i = 0; i < totalSegments; i++) {
+      if (i < segmentsToFill) {
+        canvas.drawArc(
+          Rect.fromCircle(center: center, radius: radius),
+          startAngle,
+          sweepAngle,
+          false,
+          fgPaint,
+        );
+      }
+      startAngle += sweepAngle + gapAngle;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant SegmentedRingPainter oldDelegate) {
+    return oldDelegate.score != score;
   }
 }
