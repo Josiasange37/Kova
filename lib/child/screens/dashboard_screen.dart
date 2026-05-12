@@ -26,6 +26,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   StreamSubscription<AlertModel>? _alertSub;
   StreamSubscription<NetworkAlertSummary>? _networkAlertSub;
 
+  List<double> _weeklyScores = List.filled(7, 100.0);
+  bool _has5DayStreak = false;
+  bool _isTopScorer = false;
+  bool _hasKindWords = false;
+  bool _isWeekChampion = false;
+  bool _isPerfectWeek = false;
+  bool _is100Club = false;
+
   @override
   void initState() {
     super.initState();
@@ -36,6 +44,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) {
         setState(() {
           _recentAlerts.insert(0, alert);
+          if (_child != null) _calculateStats(_recentAlerts, _child!);
         });
       }
     });
@@ -63,13 +72,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final childId = await AppModeManager.getChildId();
     if (childId != null) {
       final child = await _childRepository.getById(childId);
-      final alerts = await _alertRepository.getRecent(childId, 24);
+      final alerts = await _alertRepository.getAll(childId: childId, limit: 1000);
       if (mounted) {
         setState(() {
           _child = child;
           _recentAlerts = alerts;
           _isLoading = false;
         });
+        if (child != null) {
+          _calculateStats(alerts, child);
+        }
+      }
       }
     } else {
       if (mounted) {
@@ -204,13 +217,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        _buildChartBar('Mon', 100, const Color(0xFF1CB476)),
-                        _buildChartBar('Tue', 100, const Color(0xFF1CB476)),
-                        _buildChartBar('Wed', 100, const Color(0xFF1CB476)),
-                        _buildChartBar('Thu', 100, const Color(0xFFF59E0B)),
-                        _buildChartBar('Fri', 100, const Color(0xFF1CB476)),
-                        _buildChartBar('Sat', 10, const Color(0xFF5B7FFF)),
-                        _buildChartBar('Sun', 10, const Color(0xFFD1D5DB)),
+                        _buildChartBar('Mon', _weeklyScores[0], _getChartColor(_weeklyScores[0], 0, DateTime.now().weekday - 1)),
+                        _buildChartBar('Tue', _weeklyScores[1], _getChartColor(_weeklyScores[1], 1, DateTime.now().weekday - 1)),
+                        _buildChartBar('Wed', _weeklyScores[2], _getChartColor(_weeklyScores[2], 2, DateTime.now().weekday - 1)),
+                        _buildChartBar('Thu', _weeklyScores[3], _getChartColor(_weeklyScores[3], 3, DateTime.now().weekday - 1)),
+                        _buildChartBar('Fri', _weeklyScores[4], _getChartColor(_weeklyScores[4], 4, DateTime.now().weekday - 1)),
+                        _buildChartBar('Sat', _weeklyScores[5], _getChartColor(_weeklyScores[5], 5, DateTime.now().weekday - 1)),
+                        _buildChartBar('Sun', _weeklyScores[6], _getChartColor(_weeklyScores[6], 6, DateTime.now().weekday - 1)),
                       ],
                     ),
                   ],
@@ -231,27 +244,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _buildBadge(
-                      '5-Day Streak',
-                      Icons.star_border,
-                      const Color(0xFF8B5CF6),
-                    ),
+                    child: _has5DayStreak 
+                        ? _buildBadge('5-Day\nStreak', Icons.star_border, const Color(0xFF8B5CF6))
+                        : _buildLockedBadge('5-Day\nStreak', Icons.star_border),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _buildBadge(
-                      'Top Scorer',
-                      Icons.emoji_events_outlined,
-                      const Color(0xFFF59E0B),
-                    ),
+                    child: _isTopScorer 
+                        ? _buildBadge('Top\nScorer', Icons.emoji_events_outlined, const Color(0xFFF59E0B))
+                        : _buildLockedBadge('Top\nScorer', Icons.emoji_events_outlined),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _buildBadge(
-                      'Kind Words',
-                      Icons.favorite_border,
-                      const Color(0xFFEC4899),
-                    ),
+                    child: _hasKindWords 
+                        ? _buildBadge('Kind\nWords', Icons.favorite_border, const Color(0xFFEC4899))
+                        : _buildLockedBadge('Kind\nWords', Icons.favorite_border),
                   ),
                 ],
               ),
@@ -259,7 +266,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               // "Keep going to unlock"
               Text(
-                'Keep going to unlock',
+                'More to unlock',
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -270,24 +277,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _buildLockedBadge(
-                      'Week\nChampion',
-                      Icons.workspace_premium_outlined,
-                    ),
+                    child: _isWeekChampion 
+                        ? _buildBadge('Week\nChampion', Icons.workspace_premium_outlined, const Color(0xFF8B5CF6))
+                        : _buildLockedBadge('Week\nChampion', Icons.workspace_premium_outlined),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _buildLockedBadge(
-                      'Perfect\nWeek',
-                      Icons.bolt_outlined,
-                    ),
+                    child: _isPerfectWeek 
+                        ? _buildBadge('Perfect\nWeek', Icons.bolt_outlined, const Color(0xFFF59E0B))
+                        : _buildLockedBadge('Perfect\nWeek', Icons.bolt_outlined),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _buildLockedBadge(
-                      '100 Club',
-                      Icons.adjust,
-                    ),
+                    child: _is100Club 
+                        ? _buildBadge('100 Club', Icons.adjust, const Color(0xFFEC4899))
+                        : _buildLockedBadge('100 Club', Icons.adjust),
                   ),
                 ],
               ),
@@ -332,6 +336,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (score >= 70) return 'Good';
     if (score >= 50) return 'Needs Work';
     return 'Warning';
+  }
+
+  Color _getChartColor(double score, int index, int currentDayOfWeekIndex) {
+    if (index > currentDayOfWeekIndex) {
+      return const Color(0xFFD1D5DB); // Future days
+    }
+    if (score >= 90) return const Color(0xFF1CB476); // Green
+    if (score >= 50) return const Color(0xFFF59E0B); // Orange
+    return const Color(0xFFEF4444); // Red
+  }
+
+  void _calculateStats(List<AlertModel> alerts, ChildModel child) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    // We want Monday (1) to Sunday (7)
+    final currentDayOfWeek = now.weekday; // 1 = Monday, 7 = Sunday
+    
+    // Start of the week (Monday)
+    final startOfWeek = today.subtract(Duration(days: currentDayOfWeek - 1));
+
+    // Array to hold scores for the current week, index 0=Mon, 6=Sun
+    final weeklyScores = List.filled(7, 100.0);
+    
+    // Set future days to 10 for the chart visual
+    for (int i = currentDayOfWeek; i < 7; i++) {
+      weeklyScores[i] = 10.0;
+    }
+
+    // Array to hold scores for the past 7 rolling days (for badges)
+    final past7DaysScores = List.filled(7, 100.0);
+
+    bool hasGroomingAlerts = false;
+
+    for (final alert in alerts) {
+      if (alert.scoreGrooming > 0.0) {
+        hasGroomingAlerts = true;
+      }
+
+      final maxAlertScore = [alert.scoreText, alert.scoreImage, alert.scoreGrooming].reduce((a, b) => a > b ? a : b);
+      final scoreImpact = maxAlertScore * 100;
+
+      // Current week processing
+      if (alert.createdAt.isAfter(startOfWeek) || alert.createdAt.isAtSameMomentAs(startOfWeek)) {
+        final alertDayIndex = alert.createdAt.weekday - 1; // 0=Mon, 6=Sun
+        if (alertDayIndex <= currentDayOfWeek - 1) { // Only up to today
+          weeklyScores[alertDayIndex] -= scoreImpact;
+          if (weeklyScores[alertDayIndex] < 10.0) weeklyScores[alertDayIndex] = 10.0;
+        }
+      }
+
+      // Past 7 rolling days processing
+      final daysDiff = today.difference(DateTime(alert.createdAt.year, alert.createdAt.month, alert.createdAt.day)).inDays;
+      if (daysDiff >= 0 && daysDiff < 7) {
+        // daysDiff = 0 is today, 1 is yesterday, etc.
+        // Let's store them chronologically: index 0 is 6 days ago, index 6 is today.
+        final index = 6 - daysDiff;
+        past7DaysScores[index] -= scoreImpact;
+        if (past7DaysScores[index] < 10.0) past7DaysScores[index] = 10.0;
+      }
+    }
+
+    setState(() {
+      _weeklyScores = weeklyScores;
+      
+      // 5-Day Streak: last 5 days (indexes 2 to 6) all >= 90
+      _has5DayStreak = past7DaysScores.sublist(2).every((score) => score >= 90.0);
+      
+      // Top Scorer: Today's score == 100 or overall child score >= 90
+      _isTopScorer = past7DaysScores[6] == 100.0 || child.score >= 90;
+      
+      // Kind Words: No grooming alerts ever (or at least recently)
+      _hasKindWords = !hasGroomingAlerts;
+      
+      // Week Champion: Current week average >= 90
+      final validDays = currentDayOfWeek;
+      final weekAvg = weeklyScores.sublist(0, validDays).reduce((a, b) => a + b) / validDays;
+      _isWeekChampion = weekAvg >= 90.0;
+      
+      // Perfect Week: Current week average == 100
+      _isPerfectWeek = weekAvg == 100.0;
+      
+      // 100 Club: Overall child score == 100
+      _is100Club = child.score == 100;
+    });
   }
 
   Widget _buildChartBar(String day, double heightPct, Color color) {
