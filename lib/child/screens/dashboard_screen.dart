@@ -83,7 +83,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _calculateStats(alerts, child);
         }
       }
-      }
     } else {
       if (mounted) {
         setState(() {
