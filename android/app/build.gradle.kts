@@ -10,7 +10,7 @@ import java.io.FileInputStream
 
 android {
     namespace = "com.kova.child"
-    compileSdk = 36
+    compileSdk = 35
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

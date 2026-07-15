@@ -37,22 +37,6 @@ jobs:
           channel: 'stable'
           cache: true
 
-      # Install Android platform 36 into the runner's pre-installed SDK at
-      # /usr/local/lib/android/sdk.  The ubuntu-latest image has platforms 34,
-      # 35, build-tools, and cmdline-tools/latest pre-installed, but NOT
-      # android-36 (compileSdk=36).  Use the runner's own sdkmanager to add it.
-      - name: Install Android API 36
-        run: |
-          SDK="$ANDROID_SDK_ROOT"
-          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --licenses
-          "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" "platforms;android-36" "build-tools;35.0.0"
-          test -f "$SDK/platforms/android-36/android.jar" || {
-            echo "ERROR: android-36/android.jar not found"
-            ls -la "$SDK/platforms/" 2>/dev/null
-            exit 1
-          }
-          echo "✅ Android API 36 installed at $SDK/platforms/android-36"
-
       - name: Generate local.properties
         run: |
           FLUTTER_ROOT=$(flutter --machine --version | python3 -c "import sys,json; print(json.load(sys.stdin)['flutterRoot'])")
