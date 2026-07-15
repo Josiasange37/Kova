@@ -15,6 +15,7 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+      ANDROID_HOME: /usr/local/lib/android/sdk
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx1536M -Dorg.gradle.daemon=false"
       JAVA_TOOL_OPTIONS: "-Xmx1536M"
 
@@ -41,6 +42,24 @@ jobs:
           echo "sdk.dir=$ANDROID_SDK_ROOT" >> android/local.properties
           echo "✅ local.properties written:"
           cat android/local.properties
+
+      - name: 🔍 Diagnose Android SDK
+        run: |
+          echo "=== ENV ==="
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-<unset>}"
+          echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}"
+          echo ""
+          echo "=== local.properties ==="
+          cat android/local.properties 2>/dev/null || echo "NOT FOUND"
+          echo ""
+          echo "=== platforms ==="
+          ls -la /usr/local/lib/android/sdk/platforms/ 2>/dev/null || echo "No platforms dir"
+          echo ""
+          echo "=== android-34/android.jar ==="
+          ls -l /usr/local/lib/android/sdk/platforms/android-34/android.jar 2>/dev/null || echo "MISSING"
+          echo ""
+          echo "=== android-35/android.jar ==="
+          ls -l /usr/local/lib/android/sdk/platforms/android-35/android.jar 2>/dev/null || echo "MISSING"
 
       # ═══════════════════════════════════════════════════════════════════════
       # DIRECTIVE 2 — Release keystore signing configuration
