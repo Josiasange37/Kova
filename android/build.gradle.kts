@@ -42,7 +42,7 @@ gradle.projectsEvaluated {
         // android.jar for library modules without an explicit sdkDirectory).
         val androidExt = extensions.findByType<com.android.build.gradle.BaseExtension>()
         if (androidExt != null) {
-            androidExt.sdkDirectory = file(System.getenv("ANDROID_SDK_ROOT") ?: "/usr/local/lib/android/sdk")
+            androidExt.sdkDirectory.set(file(System.getenv("ANDROID_SDK_ROOT") ?: "/usr/local/lib/android/sdk"))
         }
     }
 }
