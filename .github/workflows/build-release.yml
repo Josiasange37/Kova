@@ -14,6 +14,7 @@ jobs:
     timeout-minutes: 60
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
       GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx1536M -Dorg.gradle.daemon=false"
       JAVA_TOOL_OPTIONS: "-Xmx1536M"
 
@@ -34,25 +35,22 @@ jobs:
           cache: true
 
       # ═══════════════════════════════════════════════════════════════════════
-      # Install Android platform 36 into the runner's pre-installed SDK.
-      # The ubuntu-latest runner has ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-      # with most platforms pre-installed (34, 35) but NOT 36 (compileSdk=36).
-      # android-actions/setup-android handles the sdkmanager call reliably.
+      # Install Android platform 36 into the runner's pre-installed SDK at
+      # /usr/local/lib/android/sdk.  The ubuntu-latest image has platforms 34,
+      # 35, build-tools, and cmdline-tools/latest pre-installed, but NOT
+      # android-36 (compileSdk=36).  Use the runner's own sdkmanager to add it.
       # ═══════════════════════════════════════════════════════════════════════
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 36
-          build-tools: '35.0.0'
-
-      - name: Verify Android SDK platform 36
+      - name: Install Android API 36
         run: |
-          test -f "$ANDROID_SDK_ROOT/platforms/android-36/android.jar" || {
-            echo "ERROR: android-36 platform not installed"
-            ls -la "$ANDROID_SDK_ROOT/platforms/" 2>/dev/null || echo "Platforms dir missing"
+          SDK="$ANDROID_SDK_ROOT"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" --licenses
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK" "platforms;android-36" "build-tools;35.0.0"
+          test -f "$SDK/platforms/android-36/android.jar" || {
+            echo "ERROR: android-36/android.jar not found"
+            ls -la "$SDK/platforms/" 2>/dev/null
             exit 1
           }
-          echo "✅ Android SDK platform 36 verified at $ANDROID_SDK_ROOT"
+          echo "✅ Android API 36 installed at $SDK/platforms/android-36"
 
       - name: Generate local.properties
         run: |
@@ -91,7 +89,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties') }}
+          key: ${{ runner.os }}-gradle-v2-${{ hashFiles('**/*.gradle.kts', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
 
