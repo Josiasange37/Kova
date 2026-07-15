@@ -44,6 +44,7 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           api-level: 36
+          build-tools: '35.0.0'
 
       - name: Verify Android SDK platform 36
         run: |
