@@ -20,19 +20,21 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-subprojects {
-    afterEvaluate {
-        // Force JVM 17 on ALL compile tasks across ALL subprojects (including
-        // plugin modules like tflite_flutter, mobile_scanner) after their own
-        // build.gradle has been evaluated, so we override any lower target.
+// Force JVM 17 on ALL Java/Kotlin compile tasks AFTER every project has been
+// evaluated. Plugin modules (tflite_flutter, mobile_scanner) set their own
+// lower JVM target in their build.gradle; projectsEvaluated guarantees our
+// override runs last and wins. Using `allprojects { afterEvaluate {} }` fails
+// here because evaluationDependsOn(":app") force-evaluates projects early.
+gradle.projectsEvaluated {
+    allprojects {
+        tasks.withType<org.gradle.api.tasks.compile.JavaCompile>().configureEach {
+            sourceCompatibility = JavaVersion.VERSION_17.toString()
+            targetCompatibility = JavaVersion.VERSION_17.toString()
+        }
         tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
             kotlinOptions {
-                jvmTarget = "17"
+                jvmTarget = JavaVersion.VERSION_17.toString()
             }
-        }
-        tasks.withType<org.gradle.api.tasks.compile.JavaCompile>().configureEach {
-            sourceCompatibility = "17"
-            targetCompatibility = "17"
         }
     }
 }
