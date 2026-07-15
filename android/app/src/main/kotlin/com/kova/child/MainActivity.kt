@@ -145,11 +145,12 @@ class MainActivity : FlutterActivity() {
               putExtra(KovaForegroundService.EXTRA_BLOCK_PACKAGE, pkg)
               putExtra(KovaForegroundService.EXTRA_BLOCK_REASON, reason)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-              startForegroundService(serviceIntent)
-            } else {
-              startService(serviceIntent)
-            }
+            // Use startService (not startForegroundService) because the service is
+            // already running from MainActivity.onCreate(). On Android 12+,
+            // startForegroundService from a backgrounded Flutter process can throw
+            // ForegroundServiceStartNotAllowedException even though the service is
+            // already foreground and only needs a new intent.
+            startService(serviceIntent)
             result.success(true)
           } else {
             result.error("INVALID_PKG", "Package name required", null)

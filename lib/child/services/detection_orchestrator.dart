@@ -94,16 +94,24 @@ class DetectionOrchestrator {
 
     // Listen for parent-initiated block/unblock commands
     _networkAlertSub?.cancel();
-    _networkAlertSub = _networkSync.onAlertReceived.listen((alert) {
-      if (!_active) return;
-      if (alert.alertType == 'parent_block' && alert.app != null) {
-        debugPrint('🚫 [CHILD/BG] Received parent block command for ${alert.app}');
-        safeBlockApp(alert.app!);
-      } else if (alert.alertType == 'parent_unblock' && alert.app != null) {
-        debugPrint('🔓 [CHILD/BG] Received parent unblock command for ${alert.app}');
-        unblockApp(alert.app!);
-      }
-    });
+    _networkAlertSub = _networkSync.onAlertReceived
+      .handleError((e, stack) {
+        debugPrint('⚠️ [CHILD/BG] Parent block stream error: $e');
+      })
+      .listen((alert) {
+        if (!_active) return;
+        if (alert.alertType == 'parent_block' && alert.app != null) {
+          debugPrint('🚫 [CHILD/BG] Received parent block command for ${alert.app}');
+          safeBlockApp(alert.app!).catchError((e) {
+            debugPrint('⚠️ [CHILD/BG] safeBlockApp failed: $e');
+          });
+        } else if (alert.alertType == 'parent_unblock' && alert.app != null) {
+          debugPrint('🔓 [CHILD/BG] Received parent unblock command for ${alert.app}');
+          unblockApp(alert.app!).catchError((e) {
+            debugPrint('⚠️ [CHILD/BG] unblockApp failed: $e');
+          });
+        }
+      });
 
     // Initialize bridge (registers handlers on 3 channels)
     MonitoringBridge.init();
@@ -244,6 +252,12 @@ class DetectionOrchestrator {
     // Skip safe content
     if (severity == 'safe') return;
 
+    // Guard: _childId must not be null before using _childId!
+    if (_childId == null) {
+      debugPrint('❌ Cannot create content alert: _childId is null');
+      return;
+    }
+
     // Update child score
     final delta = SeverityEngine.scoreDelta(severity);
     await _childRepo.updateScore(_childId!, delta);
@@ -276,12 +290,6 @@ class DetectionOrchestrator {
         }
         await Future.delayed(Duration(milliseconds: 100 * (retry + 1))); // Backoff
       }
-    }
-
-    // CRITICAL FIX: Check _childId is not null before using
-    if (_childId == null) {
-      debugPrint('❌ Cannot create alert: _childId is null');
-      return;
     }
 
     _alertStreamController.add(AlertModel(
@@ -405,6 +413,12 @@ class DetectionOrchestrator {
 
     if (severity == 'safe') return;
 
+    // Guard: _childId must not be null before using _childId!
+    if (_childId == null) {
+      debugPrint('❌ Cannot create conversation alert: _childId is null');
+      return;
+    }
+
     // Update score
     final delta = SeverityEngine.scoreDelta(severity);
     await _childRepo.updateScore(_childId!, delta);
@@ -427,12 +441,6 @@ class DetectionOrchestrator {
           ? '${texts.take(3).join(' | ').substring(0, 200)}...'
           : texts.take(3).join(' | '),
     );
-
-    // CRITICAL FIX: Check _childId is not null before using
-    if (_childId == null) {
-      debugPrint('❌ Cannot create conversation alert: _childId is null');
-      return;
-    }
 
     _alertStreamController.add(AlertModel(
       id: alertId,
@@ -610,6 +618,12 @@ class DetectionOrchestrator {
 
     final description = descriptions[type] ?? message;
 
+    // Guard: _childId must not be null before using _childId!
+    if (_childId == null) {
+      debugPrint('❌ Cannot create tamper alert: _childId is null');
+      return;
+    }
+
     // 1. Store critical alert locally
     final alertId = await _alertRepo.create(
       childId: _childId!,
@@ -620,12 +634,6 @@ class DetectionOrchestrator {
       scoreImage: 0.0,
       scoreGrooming: 0.0,
     );
-
-    // CRITICAL FIX: Check _childId is not null before using
-    if (_childId == null) {
-      debugPrint('❌ Cannot create tamper alert: _childId is null');
-      return;
-    }
 
     _alertStreamController.add(AlertModel(
       id: alertId,

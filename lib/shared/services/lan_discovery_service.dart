@@ -243,6 +243,23 @@ class LanDiscoveryService {
     } catch (e) {
       // Broadcast may fail on some networks, that's OK
     }
+    
+    // Broadcast to localhost for local testing
+    try {
+      _socket!.send(
+        data,
+        InternetAddress('127.0.0.1'),
+        _discoveryPort,
+      );
+      // For Android emulator to host
+      _socket!.send(
+        data,
+        InternetAddress('10.0.2.2'),
+        _discoveryPort,
+      );
+    } catch (e) {
+      // Ignore
+    }
   }
 
   /// Handle incoming UDP packet

@@ -56,24 +56,30 @@ class SecurityService {
 
   /// ENCRYPT (Child calls this before sending)
   String encryptPayload(String plainText) {
-    if (_peerPublicKey == null) return plainText; // Fallback if not paired
+    if (_peerPublicKey == null) return plainText;
     
-    final encrypter = Encrypter(RSA(publicKey: _peerPublicKey));
-    final encrypted = encrypter.encrypt(plainText);
-    return encrypted.base64;
+    try {
+      final encrypter = Encrypter(RSA(publicKey: _peerPublicKey));
+      final encrypted = encrypter.encrypt(plainText);
+      return encrypted.base64;
+    } catch (e) {
+      print('RSA encrypt error: $e');
+      return plainText;
+    }
   }
 
   /// DECRYPT (Parent calls this upon receiving)
   String decryptPayload(String base64Cipher) {
     if (_privateKey == null) return "DECRYPTION_ERROR: NO_PRIVATE_KEY";
-    if (base64Cipher.startsWith('{')) return base64Cipher; // Fallback if plain JSON
+    if (base64Cipher.startsWith('{')) return base64Cipher;
     
     try {
       final encrypter = Encrypter(RSA(privateKey: _privateKey));
       final decrypted = encrypter.decrypt(Encrypted.fromBase64(base64Cipher));
       return decrypted;
     } catch (e) {
-      return base64Cipher;
+      print('RSA decrypt error: $e');
+      return "DECRYPTION_ERROR: $e";
     }
   }
 

@@ -40,6 +40,36 @@ class DatabaseService {
               created_at      INTEGER DEFAULT (strftime('%s','now'))
             )
           ''');
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS app_controls (
+              id              TEXT PRIMARY KEY,
+              child_id        TEXT NOT NULL,
+              app_name        TEXT NOT NULL,
+              monitoring_enabled INTEGER DEFAULT 1,
+              block_enabled   INTEGER DEFAULT 0,
+              created_at      INTEGER DEFAULT (strftime('%s','now')),
+              FOREIGN KEY(child_id) REFERENCES children(id)
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS pending_sync (
+              id              TEXT PRIMARY KEY,
+              type            TEXT NOT NULL,
+              payload         TEXT NOT NULL,
+              created_at      INTEGER DEFAULT (strftime('%s','now'))
+            )
+          ''');
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS pairing_codes (
+              code            TEXT PRIMARY KEY,
+              used            INTEGER DEFAULT 0,
+              child_id        TEXT,
+              assigned_at     INTEGER,
+              used_at         INTEGER
+            )
+          ''');
+          // v1→v2 did not seed pairing codes; existing installs will get
+          // codes when they next call ensurePairingCodes()
         }
         if (oldVersion < 3) {
           await db.execute('ALTER TABLE alerts ADD COLUMN content_preview TEXT');

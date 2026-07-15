@@ -88,6 +88,7 @@ object KovaChannelManager {
             "notifications" -> notificationsChannel
             "keyboard"      -> keyboardChannel
             "accessibility" -> accessibilityChannel
+            "discovery"     -> MethodChannel(notificationsChannel?.binaryMessenger ?: return, "com.kova.child/discovery") // Quick fix for missing instance property
             else -> {
                 Log.e(TAG, "Unknown channel key: $channelKey")
                 return

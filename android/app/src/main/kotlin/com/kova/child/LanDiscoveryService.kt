@@ -23,8 +23,8 @@ class LanDiscoveryService : Service() {
 
     companion object {
         private const val TAG = "LanDiscoveryService"
-        private const val DISCOVERY_PORT = 5353
-        private const val BROADCAST_INTERVAL_MS = 3000L
+        private const val DISCOVERY_PORT = 18756
+        private const val BROADCAST_INTERVAL_MS = 5000L
         private const val MULTICAST_LOCK_TAG = "kova_discovery"
     }
 

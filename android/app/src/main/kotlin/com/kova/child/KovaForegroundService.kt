@@ -347,7 +347,7 @@ class KovaForegroundService : Service() {
         // Block is still active AND user is in blocked app, but overlay is NOT showing
         if (!BlockOverlayActivity.isOverlayActive) {
             Log.w(TAG, "[OVERLAY WATCHDOG] Block active for $pkg, user in app, overlay dead — re-launching!")
-            launchBlockOverlay(pkg, reason)
+            launchBlockOverlay(pkg, reason, isRelaunch = true)
         }
     }
 
@@ -469,15 +469,28 @@ class KovaForegroundService : Service() {
     // ─── Block Overlay Launcher ──────────────────────────────────────────────
     // Launches the block overlay from the service layer so it works even when
     // the Flutter engine/MainActivity are dead (background monitoring).
-    private fun launchBlockOverlay(packageName: String, reason: String = "App is blocked for your safety") {
+    // @param isRelaunch true when called from the persistence watchdog (user is
+    //                   already in the blocked app, skip HOME action).
+    private fun launchBlockOverlay(
+        packageName: String,
+        reason: String = "App is blocked for your safety",
+        isRelaunch: Boolean = false
+    ) {
         // ── Layer 1: HOME-key action (instant, ~10ms) ──────────────────────────
-        try {
-            KovaAccessibilityService.instance?.performGlobalAction(
-                android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME
-            )
-            Log.d(TAG, "[OVERLAY L1] HOME action fired for $packageName")
-        } catch (e: Exception) {
-            Log.w(TAG, "[OVERLAY L1] HOME action failed (service may be null): ${e.message}")
+        // Skip HOME on watchdog relaunches — the user is already in the blocked
+        // app (checkOverlayPersistence verified currentApp == pkg). Sending them
+        // home while the overlay is about to appear is jarring.
+        if (!isRelaunch) {
+            try {
+                KovaAccessibilityService.instance?.performGlobalAction(
+                    android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME
+                )
+                Log.d(TAG, "[OVERLAY L1] HOME action fired for $packageName")
+            } catch (e: Exception) {
+                Log.w(TAG, "[OVERLAY L1] HOME action failed (service may be null): ${e.message}")
+            }
+        } else {
+            Log.d(TAG, "[OVERLAY] Skipping HOME — watchdog relaunch for $packageName")
         }
 
         // ── Layer 2: Full-screen Activity (visual confirmation) ────────────────

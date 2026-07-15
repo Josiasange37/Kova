@@ -43,61 +43,58 @@ class BlockOverlayActivity : Activity() {
         // ── Countdown duration: 20 minutes (1200 seconds) ──
         const val COUNTDOWN_SECONDS = 1200
 
-        // ── Debounce: prevent infinite relaunch loop ──
+        // ── Exponential backoff between overlay launches (replaces hard limit) ──
+        // When the OS repeatedly kills the overlay, we back off instead of giving up.
+        // Base: 1.5s. Doubles each failed attempt. Cap: 60s.
         @Volatile
         private var lastLaunchTimestamp: Long = 0L
-        private const val RELAUNCH_DEBOUNCE_MS = 1500L
-
-        // ── Max relaunch attempts per block ──
-        // Prevents watchdog from spamming overlay when user keeps dismissing
-        private const val MAX_RELAUNCHES = 2
-        private const val PREFS_KEY_RELAUNCH_COUNT = "overlay_relaunch_count"
+        private const val RELAUNCH_BACKOFF_BASE_MS = 1500L
+        private const val RELAUNCH_BACKOFF_MAX_MS = 60_000L
+        private const val PREFS_KEY_BACKOFF_COUNT = "overlay_backoff_count"
         private const val PREFS_KEY_LAST_BLOCK_PKG = "overlay_last_block_pkg"
 
         @Volatile
         private var currentlyBlockedPackage: String? = null
 
-        // Track if overlay is currently showing — prevents new launches while active
         @Volatile
         var isOverlayActive: Boolean = false
             private set
 
         /**
-         * Launch or re-launch the block overlay.
-         * Safe to call multiple times — debounce prevents infinite loops.
-         * NEW: Limits relaunches to MAX_RELAUNCHES per block to prevent spam.
+         * Launch or re-launch the block overlay with exponential backoff.
+         * Never gives up — backoff maxes at 60s between relaunches.
          */
         fun start(context: Context, packageName: String, reason: String?) {
             val now = System.currentTimeMillis()
 
-            // Don't relaunch if already showing for this package within debounce window
-            if (currentlyBlockedPackage == packageName &&
-                now - lastLaunchTimestamp < RELAUNCH_DEBOUNCE_MS) {
-                Log.d(TAG, "Skipping duplicate launch for $packageName (debounce)")
-                return
-            }
-
-            // Don't relaunch if overlay is already active for this package
+            // Don't launch if overlay is already active for this package
             if (isOverlayActive && currentlyBlockedPackage == packageName) {
                 Log.d(TAG, "Overlay already active for $packageName — skipping")
                 return
             }
 
-            // Check relaunch limit — prevent watchdog from spamming overlay
-            val relaunchCount = getRelaunchCount(context, packageName)
-            if (relaunchCount >= MAX_RELAUNCHES) {
-                Log.w(TAG, "Max relaunches ($MAX_RELAUNCHES) reached for $packageName — blocking silently without overlay")
-                // Still persist block state so app remains blocked, but don't show overlay
-                persistBlockState(context, packageName, reason ?: "App is blocked for your safety")
-                return
+            currentlyBlockedPackage = packageName
+
+            // Persist block state unconditionally (renews expiry on each attempt)
+            persistBlockState(context, packageName, reason ?: "App is blocked for your safety")
+
+            // ── Exponential backoff ──
+            // Each failed launch increases the cooldown before the next attempt.
+            val backoffCount = getBackoffCount(context, packageName)
+            val backoffMs = (RELAUNCH_BACKOFF_BASE_MS * (1 shl backoffCount))
+                .coerceAtMost(RELAUNCH_BACKOFF_MAX_MS)
+
+            if (backoffCount > 0) {
+                val elapsed = now - lastLaunchTimestamp
+                if (elapsed < backoffMs) {
+                    Log.d(TAG, "Backoff #$backoffCount for $packageName — ${(backoffMs - elapsed) / 1000}s remaining")
+                    showFallbackNotification(context, packageName, reason)
+                    return
+                }
             }
 
             lastLaunchTimestamp = now
-            currentlyBlockedPackage = packageName
-            incrementRelaunchCount(context, packageName)
-
-            // Persist block state so the ForegroundService watchdog can detect and re-launch
-            persistBlockState(context, packageName, reason ?: "App is blocked for your safety")
+            incrementBackoffCount(context, packageName)
 
             val intent = Intent(context, BlockOverlayActivity::class.java).apply {
                 putExtra("blocked_package", packageName)
@@ -109,32 +106,92 @@ class BlockOverlayActivity : Activity() {
                     Intent.FLAG_ACTIVITY_NO_ANIMATION
                 )
             }
-            context.startActivity(intent)
+
+            try {
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start overlay Activity: ${e.message}")
+                showFallbackNotification(context, packageName, reason)
+            }
         }
 
         /**
-         * Get the number of times overlay has been launched for this package.
-         * Resets when package changes or block expires.
+         * Show a notification as fallback when the overlay Activity can't start.
+         * Creates the notification channel if needed for Android 8+.
          */
-        private fun getRelaunchCount(context: Context, packageName: String): Int {
+        private fun showFallbackNotification(context: Context, packageName: String, reason: String?) {
+            try {
+                val appName = try {
+                    val ai = context.packageManager.getApplicationInfo(packageName, 0)
+                    context.packageManager.getApplicationLabel(ai).toString()
+                } catch (e: Exception) { packageName }
+
+                // Ensure notification channel exists (Android 8+)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val channel = android.app.NotificationChannel(
+                        "kova_block_channel",
+                        "Content Blocking Alerts",
+                        android.app.NotificationManager.IMPORTANCE_HIGH
+                    ).apply {
+                        description = "Shows when harmful content is blocked"
+                    }
+                    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                    nm.createNotificationChannel(channel)
+                }
+
+                val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    android.app.Notification.Builder(context, "kova_block_channel")
+                        .setContentTitle("$appName is blocked")
+                        .setContentText(reason ?: "App is blocked for your safety")
+                        .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                        .setPriority(android.app.Notification.PRIORITY_MAX)
+                        .setOngoing(true)
+                        .setAutoCancel(false)
+                        .build()
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.app.Notification.Builder(context)
+                        .setContentTitle("$appName is blocked")
+                        .setContentText(reason ?: "App is blocked for your safety")
+                        .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                        .setPriority(android.app.Notification.PRIORITY_MAX)
+                        .setOngoing(true)
+                        .setAutoCancel(false)
+                        .build()
+                }
+
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                nm.notify("block_fallback_${packageName.hashCode()}", 0, notification)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to show fallback notification: ${e.message}")
+            }
+        }
+
+        /**
+         * Get backoff count for this package.
+         * Resets to 0 when a different package is being blocked (new block session).
+         */
+        private fun getBackoffCount(context: Context, packageName: String): Int {
             val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             val lastPkg = prefs.getString(PREFS_KEY_LAST_BLOCK_PKG, null)
-            // Reset count if different package
             if (lastPkg != packageName) {
-                prefs.edit().putInt(PREFS_KEY_RELAUNCH_COUNT, 0).putString(PREFS_KEY_LAST_BLOCK_PKG, packageName).apply()
+                prefs.edit()
+                    .putInt(PREFS_KEY_BACKOFF_COUNT, 0)
+                    .putString(PREFS_KEY_LAST_BLOCK_PKG, packageName)
+                    .apply()
                 return 0
             }
-            return prefs.getInt(PREFS_KEY_RELAUNCH_COUNT, 0)
+            return prefs.getInt(PREFS_KEY_BACKOFF_COUNT, 0)
         }
 
         /**
-         * Increment relaunch counter.
+         * Increment backoff counter for exponential backoff.
          */
-        private fun incrementRelaunchCount(context: Context, packageName: String) {
+        private fun incrementBackoffCount(context: Context, packageName: String) {
             val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            val current = getRelaunchCount(context, packageName)
+            val current = getBackoffCount(context, packageName)
             prefs.edit()
-                .putInt(PREFS_KEY_RELAUNCH_COUNT, current + 1)
+                .putInt(PREFS_KEY_BACKOFF_COUNT, current + 1)
                 .putString(PREFS_KEY_LAST_BLOCK_PKG, packageName)
                 .apply()
         }
@@ -155,7 +212,7 @@ class BlockOverlayActivity : Activity() {
 
         /**
          * Clear block state — called when block is legitimately finished.
-         * Also clears relaunch counter so next block starts fresh.
+         * Also clears backoff counter so next block starts fresh.
          */
         fun clearBlockState(context: Context) {
             val prefs = context.getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -163,7 +220,7 @@ class BlockOverlayActivity : Activity() {
                 .remove("active_block_package")
                 .remove("active_block_reason")
                 .remove("active_block_expiry")
-                .remove(PREFS_KEY_RELAUNCH_COUNT)
+                .remove(PREFS_KEY_BACKOFF_COUNT)
                 .remove(PREFS_KEY_LAST_BLOCK_PKG)
                 .apply()
         }

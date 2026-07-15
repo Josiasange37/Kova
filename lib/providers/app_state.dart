@@ -204,7 +204,15 @@ class AppState extends ChangeNotifier {
     }
 
     // Dashboard
-    final activeChild = _children.firstWhere((c) => c.id == _activeChildId!);
+    final ChildProfile? activeChild = _children.cast<ChildProfile?>().firstWhere(
+      (c) => c?.id == _activeChildId,
+      orElse: () => _children.isNotEmpty ? _children.first : null,
+    );
+    if (activeChild == null) {
+      _dashboard = null;
+      notifyListeners();
+      return;
+    }
     _dashboard = DashboardData(
       child: DashboardChild(
         id: activeChild.id,

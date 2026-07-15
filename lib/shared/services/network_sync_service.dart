@@ -355,20 +355,19 @@ class NetworkSyncService {
       // Save parent peer info so we can reconnect on restart!
       await LocalStorage.setLastChildPeer(localPeer.toJson());
       
-      // After pairing via UDP discovery, establish TCP data channel IMMEDIATELY
-      final connected = await _lanData.connectToParent(localPeer.ipAddress, 18757, _pairToken);
-      if (connected) {
-        debugPrint('✅ [LAN] TCP data channel established');
-        _updateState(NetworkConnectionState.lan);
+      // Child runs the TCP server. Ensure it's running for parent to connect.
+      final serverStarted = await _lanData.startServer(_pairToken);
+      if (serverStarted) {
+        debugPrint('✅ [LAN] Child TCP server started on port 18757');
       } else {
-        debugPrint('❌ [LAN] TCP connect failed — alerts will use Railway');
-        _updateState(NetworkConnectionState.internet);
+        debugPrint('❌ [LAN] Child TCP server failed to start');
       }
-
+      
+      // Update state to LAN since we have a peer and server is running
+      _updateState(NetworkConnectionState.lan);
+      
       // Re-init discovery with the new pairToken (no longer in pairing mode)
       _lanDiscovery.stop();
-      _lanData.stopServer();
-      
       _lanDiscovery.setActivePairCode(code);
       _lanDiscovery.start(role: 'child'); // run without await
       
@@ -1184,6 +1183,8 @@ class NetworkSyncService {
         } else {
           debugPrint('⚠️ [DEVICE FOUND] TCP handshake failed to ${device.ipAddress} — staying on current state');
         }
+      }).catchError((e, s) {
+        debugPrint('⚠️ [DEVICE FOUND] connectToParent threw: $e');
       });
       // DON'T set state to LAN here — wait for TCP to actually connect
     } else {

@@ -33,15 +33,9 @@ class TfLiteAnalyzerService {
     if (_isInitialized) return;
 
     try {
-      // 1. Check if model files exist before loading
-      final manifest = await rootBundle.loadString('AssetManifest.json');
-      final Map<String, dynamic> manifestMap = jsonDecode(manifest);
-      
-      if (!manifestMap.containsKey('assets/ml/text_classifier_quantized.tflite')) {
-        if (kDebugMode) debugPrint('⚠️ TFLite model file not found, using keyword-only mode');
-        _isInitialized = false;
-        return;
-      }
+      // 1. We just rely on the try-catch to handle missing files
+      // rather than checking the deprecated AssetManifest.json
+      if (kDebugMode) debugPrint('Loading TFLite model...');
 
       // 2. Load vocabulary for tokenization (optional - app works without it)
       try {

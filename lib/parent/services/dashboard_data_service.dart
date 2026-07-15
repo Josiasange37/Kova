@@ -191,6 +191,10 @@ class DashboardDataService extends ChangeNotifier {
 
   // Load all dashboard data
   Future<void> loadDashboardData() async {
+    if (_loading) {
+      debugPrint('⏳ Dashboard data load already in progress, skipping concurrent call');
+      return;
+    }
     _loading = true;
     _error = null;
     notifyListeners();
