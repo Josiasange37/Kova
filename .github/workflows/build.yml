@@ -46,26 +46,46 @@ jobs:
           echo "✅ local.properties written:"
           cat android/local.properties
 
-      - name: Install Android SDK platforms
+      - name: Install Android SDK components
         run: |
           SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
           SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
           if [ -f "$SDKMANAGER" ]; then
             echo "Found sdkmanager at $SDKMANAGER"
-            echo "y" | "$SDKMANAGER" "platforms;android-34" "platforms;android-35" || echo "sdkmanager install had non-zero exit"
+            echo "y" | "$SDKMANAGER" --install \
+              "platforms;android-34" \
+              "platforms;android-35" \
+              "build-tools;34.0.0" \
+              "build-tools;35.0.0"
           else
             echo "sdkmanager not found at $SDKMANAGER — trying tools/bin/sdkmanager..."
             SDKMANAGER="$SDK_ROOT/tools/bin/sdkmanager"
             if [ -f "$SDKMANAGER" ]; then
               echo "Found sdkmanager at $SDKMANAGER"
-              echo "y" | "$SDKMANAGER" "platforms;android-34" "platforms;android-35" || echo "sdkmanager install had non-zero exit"
+              echo "y" | "$SDKMANAGER" --install \
+                "platforms;android-34" \
+                "platforms;android-35" \
+                "build-tools;34.0.0" \
+                "build-tools;35.0.0"
             else
-              echo "sdkmanager not found anywhere — continuing with pre-installed platforms"
+              echo "sdkmanager not found anywhere"
             fi
           fi
           echo ""
           echo "=== platforms after install ==="
           ls -la "$SDK_ROOT/platforms/" 2>/dev/null || echo "No platforms dir"
+          echo ""
+          echo "=== build-tools after install ==="
+          ls -la "$SDK_ROOT/build-tools/" 2>/dev/null || echo "No build-tools dir"
+          echo ""
+          if [ ! -f "$SDK_ROOT/platforms/android-34/android.jar" ]; then
+            echo "ERROR: android-34/android.jar still not found"
+            exit 1
+          fi
+          if [ ! -f "$SDK_ROOT/platforms/android-35/android.jar" ]; then
+            echo "ERROR: android-35/android.jar still not found"
+            exit 1
+          fi
 
       - name: Diagnose Android SDK
         run: |
