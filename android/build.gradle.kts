@@ -3,6 +3,18 @@ allprojects {
         google()
         mavenCentral()
     }
+
+    // Force consistent JVM target across all subprojects (including plugin modules
+    // like tflite_flutter) to prevent Java 11 / Kotlin 17 mismatch.
+    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+        kotlinOptions {
+            jvmTarget = "17"
+        }
+    }
+    tasks.withType<JavaCompile>().configureEach {
+        sourceCompatibility = JavaVersion.VERSION_17.toString()
+        targetCompatibility = JavaVersion.VERSION_17.toString()
+    }
 }
 
 val newBuildDir: Directory =
