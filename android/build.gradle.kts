@@ -36,6 +36,14 @@ gradle.projectsEvaluated {
                 jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.fromTarget("17"))
             }
         }
+
+        // Force Android SDK root for ALL subprojects (plugins from pub cache
+        // inherit the root project's local.properties but AGP may not resolve
+        // android.jar for library modules without an explicit sdkDirectory).
+        val androidExt = extensions.findByType<com.android.build.gradle.BaseExtension>()
+        if (androidExt != null) {
+            androidExt.sdkDirectory = file(System.getenv("ANDROID_SDK_ROOT") ?: "/usr/local/lib/android/sdk")
+        }
     }
 }
 

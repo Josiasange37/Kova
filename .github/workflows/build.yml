@@ -46,8 +46,30 @@ jobs:
           echo "✅ local.properties written:"
           cat android/local.properties
 
-      - name: 🔍 Diagnose Android SDK
+      - name: Install Android SDK platforms
         run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ -f "$SDKMANAGER" ]; then
+            echo "Found sdkmanager at $SDKMANAGER"
+            echo "y" | "$SDKMANAGER" "platforms;android-34" "platforms;android-35" || echo "sdkmanager install had non-zero exit"
+          else
+            echo "sdkmanager not found at $SDKMANAGER — trying tools/bin/sdkmanager..."
+            SDKMANAGER="$SDK_ROOT/tools/bin/sdkmanager"
+            if [ -f "$SDKMANAGER" ]; then
+              echo "Found sdkmanager at $SDKMANAGER"
+              echo "y" | "$SDKMANAGER" "platforms;android-34" "platforms;android-35" || echo "sdkmanager install had non-zero exit"
+            else
+              echo "sdkmanager not found anywhere — continuing with pre-installed platforms"
+            fi
+          fi
+          echo ""
+          echo "=== platforms after install ==="
+          ls -la "$SDK_ROOT/platforms/" 2>/dev/null || echo "No platforms dir"
+
+      - name: Diagnose Android SDK
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
           echo "=== ENV ==="
           echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-<unset>}"
           echo "ANDROID_HOME=${ANDROID_HOME:-<unset>}"
@@ -56,13 +78,30 @@ jobs:
           cat android/local.properties 2>/dev/null || echo "NOT FOUND"
           echo ""
           echo "=== platforms ==="
-          ls -la /usr/local/lib/android/sdk/platforms/ 2>/dev/null || echo "No platforms dir"
+          ls -la "$SDK_ROOT/platforms/" 2>/dev/null || echo "No platforms dir"
           echo ""
           echo "=== android-34/android.jar ==="
-          ls -l /usr/local/lib/android/sdk/platforms/android-34/android.jar 2>/dev/null || echo "MISSING"
+          if [ -f "$SDK_ROOT/platforms/android-34/android.jar" ]; then
+            echo "PRESENT"
+            ls -l "$SDK_ROOT/platforms/android-34/android.jar"
+          else
+            echo "MISSING at $SDK_ROOT/platforms/android-34/android.jar"
+          fi
           echo ""
           echo "=== android-35/android.jar ==="
-          ls -l /usr/local/lib/android/sdk/platforms/android-35/android.jar 2>/dev/null || echo "MISSING"
+          if [ -f "$SDK_ROOT/platforms/android-35/android.jar" ]; then
+            echo "PRESENT"
+            ls -l "$SDK_ROOT/platforms/android-35/android.jar"
+          else
+            echo "MISSING at $SDK_ROOT/platforms/android-35/android.jar"
+          fi
+          echo ""
+          if [ ! -f "$SDK_ROOT/platforms/android-34/android.jar" ]; then
+            echo "CRITICAL: android-34/android.jar is missing!"
+          fi
+          if [ ! -f "$SDK_ROOT/platforms/android-35/android.jar" ]; then
+            echo "CRITICAL: android-35/android.jar is missing!"
+          fi
 
       # ═══════════════════════════════════════════════════════════════════════
       # DIRECTIVE 2 — Release keystore signing configuration
