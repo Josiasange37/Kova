@@ -1,3 +1,11 @@
+// Force Android SDK root for ALL projects (checked first by AGP's
+// SdkDirectoryProperty before local.properties and env vars). Plugin
+// subprojects from pub cache declare their own AGP version in buildscript
+// blocks; setting this at the settings level guarantees it's available to
+// every subproject before its build.gradle is evaluated.
+gradle.startParameter.projectProperties["android.sdkDirectory"] =
+    System.getenv("ANDROID_SDK_ROOT") ?: "/usr/local/lib/android/sdk"
+
 pluginManagement {
     val flutterSdkPath =
         run {
