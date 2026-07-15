@@ -48,44 +48,47 @@ jobs:
 
       - name: Install Android SDK components
         run: |
+          set -e
           SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
-          SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          if [ -f "$SDKMANAGER" ]; then
-            echo "Found sdkmanager at $SDKMANAGER"
-            echo "y" | "$SDKMANAGER" --install \
-              "platforms;android-34" \
-              "platforms;android-35" \
-              "build-tools;34.0.0" \
-              "build-tools;35.0.0"
+          mkdir -p "$SDK_ROOT"
+
+          if [ ! -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "cmdline-tools not found — downloading..."
+            TMP_ZIP="/tmp/cmdline-tools.zip"
+            wget -q --show-progress https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O "$TMP_ZIP"
+            unzip -q "$TMP_ZIP" -d /tmp/cmdline-tools
+            mkdir -p "$SDK_ROOT/cmdline-tools/latest"
+            mv /tmp/cmdline-tools/cmdline-tools/* "$SDK_ROOT/cmdline-tools/latest/"
+            rm -rf /tmp/cmdline-tools "$TMP_ZIP"
           else
-            echo "sdkmanager not found at $SDKMANAGER — trying tools/bin/sdkmanager..."
-            SDKMANAGER="$SDK_ROOT/tools/bin/sdkmanager"
-            if [ -f "$SDKMANAGER" ]; then
-              echo "Found sdkmanager at $SDKMANAGER"
-              echo "y" | "$SDKMANAGER" --install \
-                "platforms;android-34" \
-                "platforms;android-35" \
-                "build-tools;34.0.0" \
-                "build-tools;35.0.0"
-            else
-              echo "sdkmanager not found anywhere"
-            fi
+            echo "cmdline-tools already present"
           fi
-          echo ""
+
+          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+
+          yes | sdkmanager --sdk_root="$SDK_ROOT" --install "platform-tools" \
+            "platforms;android-34" \
+            "platforms;android-35" \
+            "build-tools;34.0.0" \
+            "build-tools;35.0.0"
+
+          yes | sdkmanager --sdk_root="$SDK_ROOT" --licenses || true
+
           echo "=== platforms after install ==="
           ls -la "$SDK_ROOT/platforms/" 2>/dev/null || echo "No platforms dir"
-          echo ""
+
           echo "=== build-tools after install ==="
           ls -la "$SDK_ROOT/build-tools/" 2>/dev/null || echo "No build-tools dir"
-          echo ""
+
           if [ ! -f "$SDK_ROOT/platforms/android-34/android.jar" ]; then
-            echo "ERROR: android-34/android.jar still not found"
+            echo "ERROR: android-34/android.jar still not found at $SDK_ROOT/platforms/android-34/android.jar"
             exit 1
           fi
           if [ ! -f "$SDK_ROOT/platforms/android-35/android.jar" ]; then
-            echo "ERROR: android-35/android.jar still not found"
+            echo "ERROR: android-35/android.jar still not found at $SDK_ROOT/platforms/android-35/android.jar"
             exit 1
           fi
+          echo "Android SDK components installed and verified"
 
       - name: Diagnose Android SDK
         run: |
