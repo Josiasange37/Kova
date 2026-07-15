@@ -3,18 +3,6 @@ allprojects {
         google()
         mavenCentral()
     }
-
-    // Force consistent JVM target across all subprojects (including plugin modules
-    // like tflite_flutter, mobile_scanner) to prevent Java 1.8 / Kotlin 17 mismatch.
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
-        kotlinOptions {
-            jvmTarget = "17"
-        }
-    }
-    tasks.withType<org.gradle.api.tasks.compile.JavaCompile>().configureEach {
-        sourceCompatibility = "17"
-        targetCompatibility = "17"
-    }
 }
 
 val newBuildDir: Directory =
@@ -27,8 +15,26 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+
 subprojects {
     project.evaluationDependsOn(":app")
+}
+
+subprojects {
+    afterEvaluate {
+        // Force JVM 17 on ALL compile tasks across ALL subprojects (including
+        // plugin modules like tflite_flutter, mobile_scanner) after their own
+        // build.gradle has been evaluated, so we override any lower target.
+        tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+            kotlinOptions {
+                jvmTarget = "17"
+            }
+        }
+        tasks.withType<org.gradle.api.tasks.compile.JavaCompile>().configureEach {
+            sourceCompatibility = "17"
+            targetCompatibility = "17"
+        }
+    }
 }
 
 tasks.register<Delete>("clean") {
