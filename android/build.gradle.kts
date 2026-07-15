@@ -5,15 +5,15 @@ allprojects {
     }
 
     // Force consistent JVM target across all subprojects (including plugin modules
-    // like tflite_flutter) to prevent Java 11 / Kotlin 17 mismatch.
+    // like tflite_flutter, mobile_scanner) to prevent Java 1.8 / Kotlin 17 mismatch.
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
         kotlinOptions {
             jvmTarget = "17"
         }
     }
-    tasks.withType<JavaCompile>().configureEach {
-        sourceCompatibility = JavaVersion.VERSION_17.toString()
-        targetCompatibility = JavaVersion.VERSION_17.toString()
+    tasks.withType<org.gradle.api.tasks.compile.JavaCompile>().configureEach {
+        sourceCompatibility = "17"
+        targetCompatibility = "17"
     }
 }
 
