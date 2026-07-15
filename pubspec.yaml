@@ -39,7 +39,7 @@ dependencies:
   mobile_scanner: ^7.2.1
 
   # Notifications
-  flutter_local_notifications: ^17.0.0
+  flutter_local_notifications: ^20.0.0
 
   # Permissions
   permission_handler: ^11.0.1

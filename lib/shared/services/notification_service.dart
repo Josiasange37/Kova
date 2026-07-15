@@ -28,7 +28,7 @@ class NotificationService {
     );
 
     await _notificationsPlugin.initialize(
-      initSettings,
+      settings: initSettings,
       onDidReceiveNotificationResponse: (response) {
         // Broadcast the payload when notification is tapped
         _onNotificationClick.add(response.payload);
@@ -76,11 +76,11 @@ class NotificationService {
     );
 
     await _notificationsPlugin.show(
-      alertId?.hashCode ?? 0,
-      title,
-      body,
-      details,
-      payload: alertId, // Pass the alertId as payload
+      id: alertId?.hashCode ?? 0,
+      title: title,
+      body: body,
+      notificationDetails: details,
+      payload: alertId,
     );
   }
 
@@ -111,17 +111,17 @@ class NotificationService {
     );
 
     await _notificationsPlugin.show(
-      alertId?.hashCode ?? DateTime.now().millisecond,
-      title,
-      body,
-      details,
+      id: alertId?.hashCode ?? DateTime.now().millisecond,
+      title: title,
+      body: body,
+      notificationDetails: details,
       payload: alertId,
     );
   }
 
   /// Cancel a notification
   static Future<void> cancel(int id) async {
-    await _notificationsPlugin.cancel(id);
+    await _notificationsPlugin.cancel(id: id);
   }
 
   /// Cancel all notifications
