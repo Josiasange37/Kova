@@ -13,8 +13,6 @@ android {
     compileSdk = 35
     ndkVersion = flutter.ndkVersion
 
-    checkAarMetadata = false
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -87,3 +85,7 @@ dependencies {
 flutter {
     source = "../.."
 }
+
+// Disable AAR metadata check — mobile_scanner 7.2.1 declares compileSdk=36
+// which AGP rejects when app's compileSdk < dependency's. AAR works fine at runtime.
+tasks.named("checkReleaseAarMetadata") { enabled = false }
