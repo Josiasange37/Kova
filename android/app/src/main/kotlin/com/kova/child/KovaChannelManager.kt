@@ -9,10 +9,11 @@ import io.flutter.embedding.engine.FlutterEngine
 /**
  * KovaChannelManager — Singleton for all native → Flutter communication.
  *
- * Three channels (matching Dart side):
+ * Four channels (matching Dart side):
  *   'com.kova.child/notifications'  → incoming messages from NotificationListener
  *   'com.kova.child/keyboard'       → outgoing text from InputMethodService
  *   'com.kova.child/accessibility'  → metadata from AccessibilityService
+ *   'com.kova.child/discovery'      → nearby-device discovery events
  *
  * Services call KovaChannelManager.send(channelKey, payload) and
  * this class handles queueing if the engine isn't ready yet.
@@ -25,11 +26,13 @@ object KovaChannelManager {
     private const val CHANNEL_NOTIFICATIONS = "com.kova.child/notifications"
     private const val CHANNEL_KEYBOARD      = "com.kova.child/keyboard"
     private const val CHANNEL_ACCESSIBILITY = "com.kova.child/accessibility"
+    private const val CHANNEL_DISCOVERY     = "com.kova.child/discovery"
 
     // Flutter channel instances (set when engine is available)
     private var notificationsChannel: MethodChannel? = null
     private var keyboardChannel: MethodChannel? = null
     private var accessibilityChannel: MethodChannel? = null
+    private var discoveryChannel: MethodChannel? = null
 
     // Queue for messages sent before the engine is ready
     private val pendingMessages = mutableListOf<Pair<String, Map<String, Any?>>>()
@@ -45,6 +48,7 @@ object KovaChannelManager {
         notificationsChannel = MethodChannel(messenger, CHANNEL_NOTIFICATIONS)
         keyboardChannel      = MethodChannel(messenger, CHANNEL_KEYBOARD)
         accessibilityChannel = MethodChannel(messenger, CHANNEL_ACCESSIBILITY)
+        discoveryChannel     = MethodChannel(messenger, CHANNEL_DISCOVERY)
 
         isReady = true
         Log.d(TAG, "✅ Channels registered (${pendingMessages.size} pending)")
@@ -65,13 +69,14 @@ object KovaChannelManager {
         notificationsChannel = null
         keyboardChannel = null
         accessibilityChannel = null
+        discoveryChannel = null
         Log.d(TAG, "❌ Channels unregistered")
     }
 
     /**
      * Send a payload to Flutter.
      *
-     * @param channelKey One of: "notifications", "keyboard", "accessibility"
+     * @param channelKey One of: "notifications", "keyboard", "accessibility", "discovery"
      * @param payload    Map of key-value data
      */
     fun send(channelKey: String, payload: Map<String, Any?>) {
@@ -88,7 +93,7 @@ object KovaChannelManager {
             "notifications" -> notificationsChannel
             "keyboard"      -> keyboardChannel
             "accessibility" -> accessibilityChannel
-            "discovery"     -> MethodChannel(notificationsChannel?.binaryMessenger ?: return, "com.kova.child/discovery") // Quick fix for missing instance property
+            "discovery"     -> discoveryChannel
             else -> {
                 Log.e(TAG, "Unknown channel key: $channelKey")
                 return
